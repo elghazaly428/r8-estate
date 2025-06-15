@@ -4,6 +4,8 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('Missing Supabase environment variables. Please check your .env file.')
+  console.error('Required variables: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY')
   throw new Error('Missing Supabase environment variables')
 }
 
@@ -339,15 +341,19 @@ export const getCompanyCount = async (): Promise<number> => {
     return count || 0;
   } catch (error: any) {
     console.error('Error fetching company count:', error);
-    if (error.message?.includes('fetch')) {
-      console.error('Network error - check Supabase URL and connectivity')
-    }
     return 0;
   }
 };
 
 export const getAllCompanies = async (): Promise<Company[]> => {
   try {
+    // Check if environment variables are available
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error('Supabase environment variables are not configured properly');
+      console.error('Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in your .env file');
+      return [];
+    }
+
     console.log('Attempting to fetch companies from:', supabaseUrl)
     
     const { data, error } = await supabase
@@ -363,7 +369,17 @@ export const getAllCompanies = async (): Promise<Company[]> => {
         details: error.details,
         hint: error.hint
       })
-      throw error;
+      
+      // Provide helpful error messages based on error type
+      if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+        console.error('Network connectivity issue detected. Please check:');
+        console.error('1. Your internet connection');
+        console.error('2. Supabase project status at https://supabase.com/dashboard');
+        console.error('3. CORS settings in your Supabase project (add http://localhost:5173 to allowed origins)');
+        console.error('4. Environment variables in .env file');
+      }
+      
+      return [];
     }
 
     console.log('Successfully fetched companies:', data?.length || 0)
@@ -372,13 +388,12 @@ export const getAllCompanies = async (): Promise<Company[]> => {
     console.error('Error fetching companies:', error);
     
     // Provide more specific error information
-    if (error.message?.includes('fetch')) {
-      console.error('Network connectivity issue detected')
-      console.error('Check:')
-      console.error('1. Supabase URL:', supabaseUrl)
-      console.error('2. Internet connectivity')
-      console.error('3. Supabase project status')
-      console.error('4. CORS settings in Supabase dashboard')
+    if (error.message?.includes('fetch') || error.name === 'TypeError') {
+      console.error('This appears to be a network connectivity issue. Please verify:');
+      console.error('1. Your .env file contains valid VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
+      console.error('2. Your Supabase project is active and accessible');
+      console.error('3. CORS is properly configured in your Supabase project settings');
+      console.error('4. Your internet connection is stable');
     }
     
     return [];
@@ -387,6 +402,13 @@ export const getAllCompanies = async (): Promise<Company[]> => {
 
 export const getAllCategories = async (): Promise<Category[]> => {
   try {
+    // Check if environment variables are available
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error('Supabase environment variables are not configured properly');
+      console.error('Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in your .env file');
+      return [];
+    }
+
     const { data, error } = await supabase
       .from('categories')
       .select('*')
@@ -394,15 +416,31 @@ export const getAllCategories = async (): Promise<Category[]> => {
 
     if (error) {
       console.error('Supabase error in getAllCategories:', error)
-      throw error;
+      
+      // Provide helpful error messages based on error type
+      if (error.message?.includes('Failed to fetch') || error.message?.includes('NetworkError')) {
+        console.error('Network connectivity issue detected. Please check:');
+        console.error('1. Your internet connection');
+        console.error('2. Supabase project status at https://supabase.com/dashboard');
+        console.error('3. CORS settings in your Supabase project (add http://localhost:5173 to allowed origins)');
+        console.error('4. Environment variables in .env file');
+      }
+      
+      return [];
     }
 
     return data || [];
   } catch (error: any) {
     console.error('Error fetching categories:', error);
-    if (error.message?.includes('fetch')) {
-      console.error('Network error - check Supabase URL and connectivity')
+    
+    if (error.message?.includes('fetch') || error.name === 'TypeError') {
+      console.error('This appears to be a network connectivity issue. Please verify:');
+      console.error('1. Your .env file contains valid VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
+      console.error('2. Your Supabase project is active and accessible');
+      console.error('3. CORS is properly configured in your Supabase project settings');
+      console.error('4. Your internet connection is stable');
     }
+    
     return [];
   }
 };
@@ -422,9 +460,6 @@ export const getCategoryCompanyCount = async (categoryId: number): Promise<numbe
     return count || 0;
   } catch (error: any) {
     console.error('Error fetching category company count:', error);
-    if (error.message?.includes('fetch')) {
-      console.error('Network error - check Supabase URL and connectivity')
-    }
     return 0;
   }
 };
@@ -445,9 +480,6 @@ export const searchCompanies = async (query: string): Promise<Company[]> => {
     return data || [];
   } catch (error: any) {
     console.error('Error searching companies:', error);
-    if (error.message?.includes('fetch')) {
-      console.error('Network error - check Supabase URL and connectivity')
-    }
     return [];
   }
 };
@@ -467,9 +499,6 @@ export const searchCompaniesWithRatings = async (query: string): Promise<Company
     return data || [];
   } catch (error: any) {
     console.error('Error searching companies with ratings:', error);
-    if (error.message?.includes('fetch')) {
-      console.error('Network error - check Supabase URL and connectivity')
-    }
     return [];
   }
 };
@@ -493,9 +522,6 @@ export const getCompanyById = async (id: number): Promise<Company | null> => {
     return data;
   } catch (error: any) {
     console.error('Error fetching company by ID:', error);
-    if (error.message?.includes('fetch')) {
-      console.error('Network error - check Supabase URL and connectivity')
-    }
     return null;
   }
 };
@@ -519,9 +545,6 @@ export const getCompanyWithCategoryById = async (id: number): Promise<CompanyWit
     return data;
   } catch (error: any) {
     console.error('Error fetching company with category by ID:', error);
-    if (error.message?.includes('fetch')) {
-      console.error('Network error - check Supabase URL and connectivity')
-    }
     return null;
   }
 };
@@ -644,9 +667,6 @@ export const getReviewsByCompanyId = async (companyId: number, userId?: string):
     return reviewsWithVotes;
   } catch (error: any) {
     console.error('Error fetching reviews by company ID:', error);
-    if (error.message?.includes('fetch')) {
-      console.error('Network error - check Supabase URL and connectivity')
-    }
     return [];
   }
 };
@@ -708,9 +728,6 @@ export const toggleReviewVote = async (reviewId: number, userId: string): Promis
     }
   } catch (error: any) {
     console.error('Error toggling review vote:', error);
-    if (error.message?.includes('fetch')) {
-      console.error('Network error - check Supabase URL and connectivity')
-    }
     return { success: false, isVoted: false, voteCount: 0 };
   }
 };
@@ -772,9 +789,6 @@ export const toggleReplyVote = async (replyId: string, userId: string): Promise<
     }
   } catch (error: any) {
     console.error('Error toggling reply vote:', error);
-    if (error.message?.includes('fetch')) {
-      console.error('Network error - check Supabase URL and connectivity')
-    }
     return { success: false, isVoted: false, voteCount: 0 };
   }
 };
@@ -806,9 +820,6 @@ export const submitReport = async (
     }
   } catch (error: any) {
     console.error('Error submitting report:', error);
-    if (error.message?.includes('fetch')) {
-      console.error('Network error - check Supabase URL and connectivity')
-    }
     return { success: false, error: error.message };
   }
 };
@@ -840,9 +851,6 @@ export const submitReplyReport = async (
     }
   } catch (error: any) {
     console.error('Error submitting reply report:', error);
-    if (error.message?.includes('fetch')) {
-      console.error('Network error - check Supabase URL and connectivity')
-    }
     return { success: false, error: error.message };
   }
 };
@@ -865,9 +873,6 @@ export const isCompanyRepresentative = async (companyId: number, userId: string)
     return data && data.length > 0;
   } catch (error: any) {
     console.error('Error checking company representative:', error);
-    if (error.message?.includes('fetch')) {
-      console.error('Network error - check Supabase URL and connectivity')
-    }
     return false;
   }
 };
@@ -897,9 +902,6 @@ export const submitCompanyReply = async (
     return { success: true, reply: data };
   } catch (error: any) {
     console.error('Error submitting company reply:', error);
-    if (error.message?.includes('fetch')) {
-      console.error('Network error - check Supabase URL and connectivity')
-    }
     return { success: false, error: error.message };
   }
 };
@@ -920,9 +922,6 @@ export const claimCompany = async (companyId: number): Promise<{ success: boolea
     return { success: true };
   } catch (error: any) {
     console.error('Error claiming company:', error);
-    if (error.message?.includes('fetch')) {
-      console.error('Network error - check Supabase URL and connectivity')
-    }
     return { success: false, error: error.message };
   }
 };
