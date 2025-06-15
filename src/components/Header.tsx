@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Globe, Menu, X, Home, Grid3X3, Settings, LogOut, Building2, Shield, Info, CreditCard, Bell } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase, getUnreadNotificationCount, getRecentNotifications, Notification } from '../lib/supabase';
 
@@ -19,7 +18,6 @@ interface UserProfile {
 }
 
 const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate }) => {
-  const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isCompanyRepresentative, setIsCompanyRepresentative] = useState(false);
@@ -28,7 +26,6 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
   const [unreadCount, setUnreadCount] = useState(0);
   const [recentNotifications, setRecentNotifications] = useState<Notification[]>([]);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { user, isAuthenticated, signOut, loading } = useAuth();
 
   const text = {
@@ -167,11 +164,8 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
   }, []);
 
   const handleNavigation = (page: string) => {
-    // Use React Router navigation
-    if (page === 'home') {
-      navigate('/');
-    } else {
-      navigate(`/${page}`);
+    if (onNavigate) {
+      onNavigate(page);
     }
     setIsMenuOpen(false);
     setIsNotificationDropdownOpen(false);
@@ -184,7 +178,7 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
     try {
       await signOut();
       // Navigate to home after successful logout
-      navigate('/');
+      handleNavigation('home');
     } catch (error) {
       console.error('Logout failed:', error);
       alert('Logout failed. Please try again.');

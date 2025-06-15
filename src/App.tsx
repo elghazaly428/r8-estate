@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import Header from './components/Header';
 import SearchBar from './components/SearchBar';
 import CategoryGrid from './components/CategoryGrid';
@@ -21,14 +20,13 @@ import Terms from './components/Terms';
 import Privacy from './components/Privacy';
 import Contact from './components/Contact';
 import Notifications from './components/Notifications';
-import ProtectedRoute from './components/ProtectedRoute';
 
-// Home Page Component
-const HomePage: React.FC<{ language: 'ar' | 'en'; onLanguageChange: (lang: 'ar' | 'en') => void }> = ({ 
-  language, 
-  onLanguageChange 
-}) => {
-  const navigate = useNavigate();
+function App() {
+  const [language, setLanguage] = useState<'ar' | 'en'>('ar');
+  const [currentPage, setCurrentPage] = useState<'home' | 'search' | 'signup' | 'login' | 'company' | 'categories' | 'write-review' | 'dashboard' | 'company-dashboard' | 'admin' | 'about' | 'pricing' | 'terms' | 'privacy' | 'contact' | 'notifications'>('home');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
 
   const text = {
     ar: {
@@ -42,33 +40,160 @@ const HomePage: React.FC<{ language: 'ar' | 'en'; onLanguageChange: (lang: 'ar' 
   };
 
   const handleNavigation = (page: string, companyId?: number, categoryId?: number) => {
+    setCurrentPage(page as 'home' | 'search' | 'signup' | 'login' | 'company' | 'categories' | 'write-review' | 'dashboard' | 'company-dashboard' | 'admin' | 'about' | 'pricing' | 'terms' | 'privacy' | 'contact' | 'notifications');
     if (page === 'company' && companyId) {
-      navigate(`/company/${companyId}`);
-    } else if (page === 'search' && categoryId) {
-      navigate(`/search?category=${categoryId}`);
-    } else if (page === 'write-review' && companyId) {
-      navigate(`/write-review/${companyId}`);
-    } else {
-      navigate(`/${page}`);
+      setSelectedCompanyId(companyId);
+    }
+    if (page === 'search' && categoryId) {
+      setSelectedCategoryId(categoryId);
+      setSearchQuery(''); // Clear search query when filtering by category
+    }
+    if (page === 'write-review' && companyId) {
+      setSelectedCompanyId(companyId);
     }
   };
 
   const handleSearch = (query: string) => {
-    if (query.startsWith('category:')) {
-      const categoryId = query.replace('category:', '');
-      navigate(`/search?category=${categoryId}`);
-    } else {
-      navigate(`/search?q=${encodeURIComponent(query)}`);
-    }
+    setSearchQuery(query);
+    setSelectedCategoryId(null); // Clear category filter when searching
+    setCurrentPage('search');
   };
 
   const handleCompanySelect = (companyId: number) => {
-    navigate(`/company/${companyId}`);
+    setSelectedCompanyId(companyId);
+    setCurrentPage('company');
   };
+
+  // Show Notifications page
+  if (currentPage === 'notifications') {
+    return <Notifications 
+      language={language} 
+      onLanguageChange={setLanguage} 
+      onNavigate={handleNavigation}
+    />;
+  }
+
+  // Show Contact page
+  if (currentPage === 'contact') {
+    return <Contact 
+      language={language} 
+      onLanguageChange={setLanguage} 
+      onNavigate={handleNavigation}
+    />;
+  }
+
+  // Show Privacy page
+  if (currentPage === 'privacy') {
+    return <Privacy 
+      language={language} 
+      onLanguageChange={setLanguage} 
+      onNavigate={handleNavigation}
+    />;
+  }
+
+  // Show Terms page
+  if (currentPage === 'terms') {
+    return <Terms 
+      language={language} 
+      onLanguageChange={setLanguage} 
+      onNavigate={handleNavigation}
+    />;
+  }
+
+  // Show Pricing page
+  if (currentPage === 'pricing') {
+    return <Pricing 
+      language={language} 
+      onLanguageChange={setLanguage} 
+      onNavigate={handleNavigation}
+    />;
+  }
+
+  // Show About page
+  if (currentPage === 'about') {
+    return <About 
+      language={language} 
+      onLanguageChange={setLanguage} 
+      onNavigate={handleNavigation}
+    />;
+  }
+
+  // Show Admin Dashboard page
+  if (currentPage === 'admin') {
+    return <AdminDashboard 
+      language={language} 
+      onLanguageChange={setLanguage} 
+      onNavigate={handleNavigation}
+    />;
+  }
+
+  // Show Company Dashboard page
+  if (currentPage === 'company-dashboard') {
+    return <CompanyDashboard 
+      language={language} 
+      onLanguageChange={setLanguage} 
+      onNavigate={handleNavigation}
+    />;
+  }
+
+  // Show Dashboard page
+  if (currentPage === 'dashboard') {
+    return <Dashboard 
+      language={language} 
+      onLanguageChange={setLanguage} 
+      onNavigate={handleNavigation}
+    />;
+  }
+
+  // Show Write Review page
+  if (currentPage === 'write-review') {
+    return <WriteReview 
+      language={language} 
+      onLanguageChange={setLanguage} 
+      onNavigate={handleNavigation}
+      companyId={selectedCompanyId}
+    />;
+  }
+
+  // Show Categories page
+  if (currentPage === 'categories') {
+    return <Categories language={language} onLanguageChange={setLanguage} onNavigate={handleNavigation} />;
+  }
+
+  // Show Company Profile page
+  if (currentPage === 'company') {
+    return <CompanyProfile 
+      language={language} 
+      onLanguageChange={setLanguage} 
+      onNavigate={handleNavigation}
+      companyId={selectedCompanyId}
+    />;
+  }
+
+  // Show Login page
+  if (currentPage === 'login') {
+    return <Login language={language} onLanguageChange={setLanguage} onNavigate={handleNavigation} />;
+  }
+
+  // Show SignUp page
+  if (currentPage === 'signup') {
+    return <SignUp language={language} onLanguageChange={setLanguage} onNavigate={handleNavigation} />;
+  }
+
+  // Show Search Results page
+  if (currentPage === 'search') {
+    return <SearchResults 
+      language={language} 
+      onLanguageChange={setLanguage} 
+      onNavigate={handleNavigation}
+      searchQuery={searchQuery}
+      categoryId={selectedCategoryId}
+    />;
+  }
 
   return (
     <div className={`min-h-screen ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
-      <Header language={language} onLanguageChange={onLanguageChange} onNavigate={handleNavigation} />
+      <Header language={language} onLanguageChange={setLanguage} onNavigate={handleNavigation} />
       
       {/* Hero Section */}
       <section className="bg-gradient-to-br from-primary-50 to-blue-50 py-20">
@@ -97,186 +222,6 @@ const HomePage: React.FC<{ language: 'ar' | 'en'; onLanguageChange: (lang: 'ar' 
       <RecentReviews language={language} onNavigate={handleNavigation} />
       <Footer language={language} onNavigate={handleNavigation} />
     </div>
-  );
-};
-
-// Wrapper components for pages that need URL parameters
-const CompanyProfileWrapper: React.FC<{ language: 'ar' | 'en'; onLanguageChange: (lang: 'ar' | 'en') => void }> = ({ 
-  language, 
-  onLanguageChange 
-}) => {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  
-  const handleNavigation = (page: string, companyId?: number) => {
-    if (page === 'company' && companyId) {
-      navigate(`/company/${companyId}`);
-    } else if (page === 'write-review' && companyId) {
-      navigate(`/write-review/${companyId}`);
-    } else {
-      navigate(`/${page}`);
-    }
-  };
-
-  return (
-    <CompanyProfile 
-      language={language} 
-      onLanguageChange={onLanguageChange} 
-      onNavigate={handleNavigation}
-      companyId={id ? parseInt(id) : null}
-    />
-  );
-};
-
-const WriteReviewWrapper: React.FC<{ language: 'ar' | 'en'; onLanguageChange: (lang: 'ar' | 'en') => void }> = ({ 
-  language, 
-  onLanguageChange 
-}) => {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  
-  const handleNavigation = (page: string, companyId?: number) => {
-    if (page === 'company' && companyId) {
-      navigate(`/company/${companyId}`);
-    } else {
-      navigate(`/${page}`);
-    }
-  };
-
-  return (
-    <WriteReview 
-      language={language} 
-      onLanguageChange={onLanguageChange} 
-      onNavigate={handleNavigation}
-      companyId={id ? parseInt(id) : null}
-    />
-  );
-};
-
-const SearchResultsWrapper: React.FC<{ language: 'ar' | 'en'; onLanguageChange: (lang: 'ar' | 'en') => void }> = ({ 
-  language, 
-  onLanguageChange 
-}) => {
-  const navigate = useNavigate();
-  const searchParams = new URLSearchParams(window.location.search);
-  const searchQuery = searchParams.get('q') || '';
-  const categoryId = searchParams.get('category') ? parseInt(searchParams.get('category')!) : null;
-  
-  const handleNavigation = (page: string, companyId?: number) => {
-    if (page === 'company' && companyId) {
-      navigate(`/company/${companyId}`);
-    } else {
-      navigate(`/${page}`);
-    }
-  };
-
-  return (
-    <SearchResults 
-      language={language} 
-      onLanguageChange={onLanguageChange} 
-      onNavigate={handleNavigation}
-      searchQuery={searchQuery}
-      categoryId={categoryId}
-    />
-  );
-};
-
-// Main App Component
-function App() {
-  const [language, setLanguage] = useState<'ar' | 'en'>('ar');
-
-  // Navigation handler for components that don't use React Router directly
-  const createNavigationHandler = () => {
-    return (page: string, companyId?: number, categoryId?: number) => {
-      if (page === 'company' && companyId) {
-        window.location.href = `/company/${companyId}`;
-      } else if (page === 'search' && categoryId) {
-        window.location.href = `/search?category=${categoryId}`;
-      } else if (page === 'write-review' && companyId) {
-        window.location.href = `/write-review/${companyId}`;
-      } else {
-        window.location.href = `/${page}`;
-      }
-    };
-  };
-
-  return (
-    <Router>
-      <Routes>
-        {/* Public Routes */}
-        <Route 
-          path="/" 
-          element={<HomePage language={language} onLanguageChange={setLanguage} />} 
-        />
-        <Route 
-          path="/login" 
-          element={<Login language={language} onLanguageChange={setLanguage} onNavigate={createNavigationHandler()} />} 
-        />
-        <Route 
-          path="/signup" 
-          element={<SignUp language={language} onLanguageChange={setLanguage} onNavigate={createNavigationHandler()} />} 
-        />
-        <Route 
-          path="/company/:id" 
-          element={<CompanyProfileWrapper language={language} onLanguageChange={setLanguage} />} 
-        />
-        <Route 
-          path="/search" 
-          element={<SearchResultsWrapper language={language} onLanguageChange={setLanguage} />} 
-        />
-        <Route 
-          path="/categories" 
-          element={<Categories language={language} onLanguageChange={setLanguage} onNavigate={createNavigationHandler()} />} 
-        />
-        <Route 
-          path="/about" 
-          element={<About language={language} onLanguageChange={setLanguage} onNavigate={createNavigationHandler()} />} 
-        />
-        <Route 
-          path="/pricing" 
-          element={<Pricing language={language} onLanguageChange={setLanguage} onNavigate={createNavigationHandler()} />} 
-        />
-        <Route 
-          path="/terms" 
-          element={<Terms language={language} onLanguageChange={setLanguage} onNavigate={createNavigationHandler()} />} 
-        />
-        <Route 
-          path="/privacy" 
-          element={<Privacy language={language} onLanguageChange={setLanguage} onNavigate={createNavigationHandler()} />} 
-        />
-        <Route 
-          path="/contact" 
-          element={<Contact language={language} onLanguageChange={setLanguage} onNavigate={createNavigationHandler()} />} 
-        />
-
-        {/* Protected Routes */}
-        <Route element={<ProtectedRoute />}>
-          <Route 
-            path="/dashboard" 
-            element={<Dashboard language={language} onLanguageChange={setLanguage} onNavigate={createNavigationHandler()} />} 
-          />
-          <Route 
-            path="/company-dashboard" 
-            element={<CompanyDashboard language={language} onLanguageChange={setLanguage} onNavigate={createNavigationHandler()} />} 
-          />
-          <Route 
-            path="/admin" 
-            element={<AdminDashboard language={language} onLanguageChange={setLanguage} onNavigate={createNavigationHandler()} />} 
-          />
-          <Route 
-            path="/notifications" 
-            element={<Notifications language={language} onLanguageChange={setLanguage} onNavigate={createNavigationHandler()} />} 
-          />
-          <Route 
-            path="/write-review/:id" 
-            element={<WriteReviewWrapper language={language} onLanguageChange={setLanguage} />} 
-          />
-        </Route>
-
-        {/* Catch all route - redirect to home */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Router>
   );
 }
 

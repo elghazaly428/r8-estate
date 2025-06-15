@@ -151,6 +151,7 @@ export interface ReplyReport {
 export interface Notification {
   id: string
   recipient_profile_id: string
+  type: string
   message: string
   link_url: string | null
   is_read: boolean
@@ -174,39 +175,9 @@ export interface CompanyReplyWithVotes extends CompanyReply {
   user_has_voted?: boolean
 }
 
-// Enhanced error handling function
-const handleSupabaseError = (error: any, operation: string) => {
-  console.error(`Supabase error in ${operation}:`, error);
-  
-  if (error.message?.includes('fetch')) {
-    console.error('Network connectivity issue detected');
-    console.error('Troubleshooting steps:');
-    console.error('1. Check Supabase URL:', supabaseUrl);
-    console.error('2. Verify internet connectivity');
-    console.error('3. Check Supabase project status at https://status.supabase.com/');
-    console.error('4. Verify CORS settings in Supabase dashboard');
-    console.error('5. Ensure localhost:5173 is added to allowed origins');
-  }
-  
-  if (error.code) {
-    console.error('Error code:', error.code);
-  }
-  
-  if (error.details) {
-    console.error('Error details:', error.details);
-  }
-  
-  if (error.hint) {
-    console.error('Error hint:', error.hint);
-  }
-};
-
-// Notification functions with enhanced error handling
+// Notification functions
 export const getUnreadNotificationCount = async (userId: string): Promise<number> => {
   try {
-    console.log('Fetching unread notification count for user:', userId);
-    console.log('Using Supabase URL:', supabaseUrl);
-    
     const { count, error } = await supabase
       .from('notifications')
       .select('*', { count: 'exact', head: true })
@@ -214,24 +185,19 @@ export const getUnreadNotificationCount = async (userId: string): Promise<number
       .eq('is_read', false);
 
     if (error) {
-      handleSupabaseError(error, 'getUnreadNotificationCount');
+      console.error('Error fetching unread notification count:', error);
       throw error;
     }
 
-    console.log('Successfully fetched unread notification count:', count);
     return count || 0;
   } catch (error: any) {
     console.error('Error in getUnreadNotificationCount:', error);
-    handleSupabaseError(error, 'getUnreadNotificationCount');
     return 0;
   }
 };
 
 export const getRecentNotifications = async (userId: string, limit: number = 5): Promise<Notification[]> => {
   try {
-    console.log('Fetching recent notifications for user:', userId, 'limit:', limit);
-    console.log('Using Supabase URL:', supabaseUrl);
-    
     const { data, error } = await supabase
       .from('notifications')
       .select('*')
@@ -240,52 +206,33 @@ export const getRecentNotifications = async (userId: string, limit: number = 5):
       .limit(limit);
 
     if (error) {
-      handleSupabaseError(error, 'getRecentNotifications');
+      console.error('Error fetching recent notifications:', error);
       throw error;
     }
 
-    console.log('Successfully fetched recent notifications:', data?.length || 0);
     return data || [];
   } catch (error: any) {
     console.error('Error in getRecentNotifications:', error);
-    handleSupabaseError(error, 'getRecentNotifications');
     return [];
   }
 };
 
 export const getAllNotifications = async (userId: string, page: number = 1, pageSize: number = 20): Promise<{ notifications: Notification[]; totalCount: number }> => {
   try {
-    console.log('Fetching all notifications for user:', userId, 'page:', page, 'pageSize:', pageSize);
-    console.log('Using Supabase URL:', supabaseUrl);
-    console.log('Environment check - URL exists:', !!supabaseUrl, 'Key exists:', !!supabaseAnonKey);
-    
     const offset = (page - 1) * pageSize;
 
-    // Test connection first
-    console.log('Testing Supabase connection...');
-    const connectionTest = await testConnection();
-    if (!connectionTest.success) {
-      console.error('Connection test failed:', connectionTest.error);
-      throw new Error(`Connection failed: ${connectionTest.error}`);
-    }
-    console.log('Connection test passed');
-
     // Get total count
-    console.log('Fetching notification count...');
     const { count, error: countError } = await supabase
       .from('notifications')
       .select('*', { count: 'exact', head: true })
       .eq('recipient_profile_id', userId);
 
     if (countError) {
-      handleSupabaseError(countError, 'getAllNotifications (count)');
+      console.error('Error fetching notification count:', countError);
       throw countError;
     }
 
-    console.log('Total notification count:', count);
-
     // Get paginated notifications
-    console.log('Fetching paginated notifications...');
     const { data, error } = await supabase
       .from('notifications')
       .select('*')
@@ -294,26 +241,22 @@ export const getAllNotifications = async (userId: string, page: number = 1, page
       .range(offset, offset + pageSize - 1);
 
     if (error) {
-      handleSupabaseError(error, 'getAllNotifications (data)');
+      console.error('Error fetching notifications:', error);
       throw error;
     }
 
-    console.log('Successfully fetched notifications:', data?.length || 0);
     return {
       notifications: data || [],
       totalCount: count || 0
     };
   } catch (error: any) {
     console.error('Error in getAllNotifications:', error);
-    handleSupabaseError(error, 'getAllNotifications');
     return { notifications: [], totalCount: 0 };
   }
 };
 
 export const markNotificationAsRead = async (notificationId: string, userId: string): Promise<{ success: boolean; error?: string }> => {
   try {
-    console.log('Marking notification as read:', notificationId, 'for user:', userId);
-    
     const { error } = await supabase
       .from('notifications')
       .update({ is_read: true })
@@ -321,23 +264,19 @@ export const markNotificationAsRead = async (notificationId: string, userId: str
       .eq('recipient_profile_id', userId);
 
     if (error) {
-      handleSupabaseError(error, 'markNotificationAsRead');
+      console.error('Error marking notification as read:', error);
       return { success: false, error: error.message };
     }
 
-    console.log('Successfully marked notification as read');
     return { success: true };
   } catch (error: any) {
     console.error('Error in markNotificationAsRead:', error);
-    handleSupabaseError(error, 'markNotificationAsRead');
     return { success: false, error: error.message };
   }
 };
 
 export const markAllNotificationsAsRead = async (userId: string): Promise<{ success: boolean; error?: string }> => {
   try {
-    console.log('Marking all notifications as read for user:', userId);
-    
     const { error } = await supabase
       .from('notifications')
       .update({ is_read: true })
@@ -345,15 +284,13 @@ export const markAllNotificationsAsRead = async (userId: string): Promise<{ succ
       .eq('is_read', false);
 
     if (error) {
-      handleSupabaseError(error, 'markAllNotificationsAsRead');
+      console.error('Error marking all notifications as read:', error);
       return { success: false, error: error.message };
     }
 
-    console.log('Successfully marked all notifications as read');
     return { success: true };
   } catch (error: any) {
     console.error('Error in markAllNotificationsAsRead:', error);
-    handleSupabaseError(error, 'markAllNotificationsAsRead');
     return { success: false, error: error.message };
   }
 };
@@ -365,27 +302,24 @@ export const createNotification = async (
   linkUrl?: string
 ): Promise<{ success: boolean; error?: string }> => {
   try {
-    console.log('Creating notification for user:', recipientId, 'type:', type);
-    
     const { error } = await supabase
       .from('notifications')
       .insert({
         recipient_profile_id: recipientId,
+        type,
         message,
         link_url: linkUrl || null,
         is_read: false
       });
 
     if (error) {
-      handleSupabaseError(error, 'createNotification');
+      console.error('Error creating notification:', error);
       return { success: false, error: error.message };
     }
 
-    console.log('Successfully created notification');
     return { success: true };
   } catch (error: any) {
     console.error('Error in createNotification:', error);
-    handleSupabaseError(error, 'createNotification');
     return { success: false, error: error.message };
   }
 };
@@ -398,14 +332,16 @@ export const getCompanyCount = async (): Promise<number> => {
       .select('*', { count: 'exact', head: true });
 
     if (error) {
-      handleSupabaseError(error, 'getCompanyCount');
+      console.error('Supabase error in getCompanyCount:', error)
       throw error;
     }
 
     return count || 0;
   } catch (error: any) {
     console.error('Error fetching company count:', error);
-    handleSupabaseError(error, 'getCompanyCount');
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
     return 0;
   }
 };
@@ -420,7 +356,13 @@ export const getAllCompanies = async (): Promise<Company[]> => {
       .order('created_at', { ascending: false });
 
     if (error) {
-      handleSupabaseError(error, 'getAllCompanies');
+      console.error('Supabase error in getAllCompanies:', error)
+      console.error('Error details:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      })
       throw error;
     }
 
@@ -428,7 +370,17 @@ export const getAllCompanies = async (): Promise<Company[]> => {
     return data || [];
   } catch (error: any) {
     console.error('Error fetching companies:', error);
-    handleSupabaseError(error, 'getAllCompanies');
+    
+    // Provide more specific error information
+    if (error.message?.includes('fetch')) {
+      console.error('Network connectivity issue detected')
+      console.error('Check:')
+      console.error('1. Supabase URL:', supabaseUrl)
+      console.error('2. Internet connectivity')
+      console.error('3. Supabase project status')
+      console.error('4. CORS settings in Supabase dashboard')
+    }
+    
     return [];
   }
 };
@@ -441,14 +393,16 @@ export const getAllCategories = async (): Promise<Category[]> => {
       .order('name', { ascending: true });
 
     if (error) {
-      handleSupabaseError(error, 'getAllCategories');
+      console.error('Supabase error in getAllCategories:', error)
       throw error;
     }
 
     return data || [];
   } catch (error: any) {
     console.error('Error fetching categories:', error);
-    handleSupabaseError(error, 'getAllCategories');
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
     return [];
   }
 };
@@ -461,14 +415,16 @@ export const getCategoryCompanyCount = async (categoryId: number): Promise<numbe
       .eq('category_id', categoryId);
 
     if (error) {
-      handleSupabaseError(error, 'getCategoryCompanyCount');
+      console.error('Supabase error in getCategoryCompanyCount:', error)
       throw error;
     }
 
     return count || 0;
   } catch (error: any) {
     console.error('Error fetching category company count:', error);
-    handleSupabaseError(error, 'getCategoryCompanyCount');
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
     return 0;
   }
 };
@@ -482,14 +438,16 @@ export const searchCompanies = async (query: string): Promise<Company[]> => {
       .order('created_at', { ascending: false });
 
     if (error) {
-      handleSupabaseError(error, 'searchCompanies');
+      console.error('Supabase error in searchCompanies:', error)
       throw error;
     }
 
     return data || [];
   } catch (error: any) {
     console.error('Error searching companies:', error);
-    handleSupabaseError(error, 'searchCompanies');
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
     return [];
   }
 };
@@ -502,14 +460,16 @@ export const searchCompaniesWithRatings = async (query: string): Promise<Company
     });
 
     if (error) {
-      handleSupabaseError(error, 'searchCompaniesWithRatings');
+      console.error('Supabase error in searchCompaniesWithRatings:', error)
       throw error;
     }
 
     return data || [];
   } catch (error: any) {
     console.error('Error searching companies with ratings:', error);
-    handleSupabaseError(error, 'searchCompaniesWithRatings');
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
     return [];
   }
 };
@@ -526,14 +486,16 @@ export const getCompanyById = async (id: number): Promise<Company | null> => {
       if (error.code === 'PGRST116') {
         return null; // Company not found
       }
-      handleSupabaseError(error, 'getCompanyById');
+      console.error('Supabase error in getCompanyById:', error)
       throw error;
     }
 
     return data;
   } catch (error: any) {
     console.error('Error fetching company by ID:', error);
-    handleSupabaseError(error, 'getCompanyById');
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
     return null;
   }
 };
@@ -550,14 +512,16 @@ export const getCompanyWithCategoryById = async (id: number): Promise<CompanyWit
       if (error.code === 'PGRST116') {
         return null; // Company not found
       }
-      handleSupabaseError(error, 'getCompanyWithCategoryById');
+      console.error('Supabase error in getCompanyWithCategoryById:', error)
       throw error;
     }
 
     return data;
   } catch (error: any) {
     console.error('Error fetching company with category by ID:', error);
-    handleSupabaseError(error, 'getCompanyWithCategoryById');
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
     return null;
   }
 };
@@ -572,7 +536,7 @@ export const getReviewsByCompanyId = async (companyId: number, userId?: string):
       .order('created_at', { ascending: false });
 
     if (error) {
-      handleSupabaseError(error, 'getReviewsByCompanyId');
+      console.error('Supabase error in getReviewsByCompanyId:', error)
       throw error;
     }
 
@@ -680,7 +644,9 @@ export const getReviewsByCompanyId = async (companyId: number, userId?: string):
     return reviewsWithVotes;
   } catch (error: any) {
     console.error('Error fetching reviews by company ID:', error);
-    handleSupabaseError(error, 'getReviewsByCompanyId');
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
     return [];
   }
 };
@@ -697,7 +663,7 @@ export const toggleReviewVote = async (reviewId: number, userId: string): Promis
       .limit(1);
 
     if (checkError) {
-      handleSupabaseError(checkError, 'toggleReviewVote (check)');
+      console.error('Supabase error in toggleReviewVote (check):', checkError)
       throw checkError;
     }
 
@@ -710,7 +676,7 @@ export const toggleReviewVote = async (reviewId: number, userId: string): Promis
         .eq('profile_id', userId);
 
       if (deleteError) {
-        handleSupabaseError(deleteError, 'toggleReviewVote (delete)');
+        console.error('Supabase error in toggleReviewVote (delete):', deleteError)
         throw deleteError;
       }
 
@@ -728,7 +694,7 @@ export const toggleReviewVote = async (reviewId: number, userId: string): Promis
         .insert([{ review_id: reviewId, profile_id: userId }]);
 
       if (insertError) {
-        handleSupabaseError(insertError, 'toggleReviewVote (insert)');
+        console.error('Supabase error in toggleReviewVote (insert):', insertError)
         throw insertError;
       }
 
@@ -742,7 +708,9 @@ export const toggleReviewVote = async (reviewId: number, userId: string): Promis
     }
   } catch (error: any) {
     console.error('Error toggling review vote:', error);
-    handleSupabaseError(error, 'toggleReviewVote');
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
     return { success: false, isVoted: false, voteCount: 0 };
   }
 };
@@ -759,7 +727,7 @@ export const toggleReplyVote = async (replyId: string, userId: string): Promise<
       .limit(1);
 
     if (checkError) {
-      handleSupabaseError(checkError, 'toggleReplyVote (check)');
+      console.error('Supabase error in toggleReplyVote (check):', checkError)
       throw checkError;
     }
 
@@ -772,7 +740,7 @@ export const toggleReplyVote = async (replyId: string, userId: string): Promise<
         .eq('profile_id', userId);
 
       if (deleteError) {
-        handleSupabaseError(deleteError, 'toggleReplyVote (delete)');
+        console.error('Supabase error in toggleReplyVote (delete):', deleteError)
         throw deleteError;
       }
 
@@ -790,7 +758,7 @@ export const toggleReplyVote = async (replyId: string, userId: string): Promise<
         .insert([{ reply_id: replyId, profile_id: userId }]);
 
       if (insertError) {
-        handleSupabaseError(insertError, 'toggleReplyVote (insert)');
+        console.error('Supabase error in toggleReplyVote (insert):', insertError)
         throw insertError;
       }
 
@@ -804,7 +772,9 @@ export const toggleReplyVote = async (replyId: string, userId: string): Promise<
     }
   } catch (error: any) {
     console.error('Error toggling reply vote:', error);
-    handleSupabaseError(error, 'toggleReplyVote');
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
     return { success: false, isVoted: false, voteCount: 0 };
   }
 };
@@ -825,7 +795,7 @@ export const submitReport = async (
     });
 
     if (error) {
-      handleSupabaseError(error, 'submitReport');
+      console.error('Supabase error in submitReport:', error)
       throw error;
     }
 
@@ -836,7 +806,9 @@ export const submitReport = async (
     }
   } catch (error: any) {
     console.error('Error submitting report:', error);
-    handleSupabaseError(error, 'submitReport');
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
     return { success: false, error: error.message };
   }
 };
@@ -857,7 +829,7 @@ export const submitReplyReport = async (
     });
 
     if (error) {
-      handleSupabaseError(error, 'submitReplyReport');
+      console.error('Supabase error in submitReplyReport:', error)
       throw error;
     }
 
@@ -868,7 +840,9 @@ export const submitReplyReport = async (
     }
   } catch (error: any) {
     console.error('Error submitting reply report:', error);
-    handleSupabaseError(error, 'submitReplyReport');
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
     return { success: false, error: error.message };
   }
 };
@@ -884,14 +858,16 @@ export const isCompanyRepresentative = async (companyId: number, userId: string)
       .limit(1);
 
     if (error) {
-      handleSupabaseError(error, 'isCompanyRepresentative');
+      console.error('Supabase error in isCompanyRepresentative:', error)
       throw error;
     }
 
     return data && data.length > 0;
   } catch (error: any) {
     console.error('Error checking company representative:', error);
-    handleSupabaseError(error, 'isCompanyRepresentative');
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
     return false;
   }
 };
@@ -914,14 +890,16 @@ export const submitCompanyReply = async (
       .single();
 
     if (error) {
-      handleSupabaseError(error, 'submitCompanyReply');
+      console.error('Supabase error in submitCompanyReply:', error)
       throw error;
     }
 
     return { success: true, reply: data };
   } catch (error: any) {
     console.error('Error submitting company reply:', error);
-    handleSupabaseError(error, 'submitCompanyReply');
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
     return { success: false, error: error.message };
   }
 };
@@ -935,14 +913,16 @@ export const claimCompany = async (companyId: number): Promise<{ success: boolea
       .eq('id', companyId);
 
     if (error) {
-      handleSupabaseError(error, 'claimCompany');
+      console.error('Supabase error in claimCompany:', error)
       throw error;
     }
 
     return { success: true };
   } catch (error: any) {
     console.error('Error claiming company:', error);
-    handleSupabaseError(error, 'claimCompany');
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
     return { success: false, error: error.message };
   }
 };
