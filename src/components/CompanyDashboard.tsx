@@ -23,7 +23,8 @@ import {
   Edit,
   X,
   CheckCircle,
-  AlertTriangle
+  AlertTriangle,
+  Eye
 } from 'lucide-react';
 import Header from './Header';
 import Footer from './Footer';
@@ -33,7 +34,7 @@ import { supabase, CompanyWithCategory, ReviewWithProfile } from '../lib/supabas
 interface CompanyDashboardProps {
   language: 'ar' | 'en';
   onLanguageChange: (lang: 'ar' | 'en') => void;
-  onNavigate: (page: string) => void;
+  onNavigate: (page: string, companyId?: number) => void;
 }
 
 interface CompanyStats {
@@ -81,6 +82,7 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ language, onLanguag
       reviews: 'التقييمات',
       companyProfile: 'الملف الشخصي للشركة',
       subscription: 'الاشتراك',
+      viewPublicProfile: 'عرض الملف الشخصي العام',
       
       // Overview
       totalReviews: 'إجمالي التقييمات',
@@ -153,6 +155,7 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ language, onLanguag
       reviews: 'Reviews',
       companyProfile: 'Company Profile',
       subscription: 'Subscription',
+      viewPublicProfile: 'View Public Profile',
       
       // Overview
       totalReviews: 'Total Reviews',
@@ -1105,6 +1108,16 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ language, onLanguag
                 >
                   <CreditCard className="h-5 w-5" />
                   <span className="font-medium">{text[language].subscription}</span>
+                </button>
+
+                {/* View Public Profile Link */}
+                <button
+                  onClick={() => company && onNavigate('company', company.id)}
+                  className="w-full flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-lg text-right transition-all duration-200 text-gray-700 hover:bg-gray-50 border-t border-gray-100 mt-4 pt-4"
+                >
+                  <Eye className="h-5 w-5" />
+                  <span className="font-medium">{text[language].viewPublicProfile}</span>
+                  <ExternalLink className="h-4 w-4 ml-auto rtl:mr-auto rtl:ml-0" />
                 </button>
               </nav>
             </div>
