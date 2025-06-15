@@ -24,6 +24,7 @@ import {
   EyeOff,
   Trash2
 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import Header from './Header';
 import Footer from './Footer';
 import { 
@@ -62,7 +63,6 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isRepresentative, setIsRepresentative] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
   // Reply states
   const [replyingToReviewId, setReplyingToReviewId] = useState<number | null>(null);
@@ -252,16 +252,6 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
     fetchCompanyData();
   }, [companyId, user]);
 
-  // Toast auto-hide
-  useEffect(() => {
-    if (toast) {
-      const timer = setTimeout(() => {
-        setToast(null);
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [toast]);
-
   const renderStars = (rating: number | null) => {
     const stars = [];
     const ratingValue = rating || 0;
@@ -334,7 +324,7 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
 
   const handleVoteToggle = async (reviewId: number) => {
     if (!user) {
-      setToast({ message: text[language].loginToVote, type: 'error' });
+      toast.error(text[language].loginToVote);
       return;
     }
 
@@ -350,13 +340,13 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
       }
     } catch (error) {
       console.error('Error toggling vote:', error);
-      setToast({ message: text[language].errorOccurred, type: 'error' });
+      toast.error(text[language].errorOccurred);
     }
   };
 
   const handleReplyVoteToggle = async (replyId: string) => {
     if (!user) {
-      setToast({ message: text[language].loginToVote, type: 'error' });
+      toast.error(text[language].loginToVote);
       return;
     }
 
@@ -373,13 +363,13 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
       }
     } catch (error) {
       console.error('Error toggling reply vote:', error);
-      setToast({ message: text[language].errorOccurred, type: 'error' });
+      toast.error(text[language].errorOccurred);
     }
   };
 
   const openReportModal = (type: 'review' | 'reply', targetId: number | string) => {
     if (!user) {
-      setToast({ message: text[language].loginToReport, type: 'error' });
+      toast.error(text[language].loginToReport);
       return;
     }
 
@@ -424,14 +414,14 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
       }
 
       if (result.success) {
-        setToast({ message: text[language].reportSubmitted, type: 'success' });
+        toast.success(text[language].reportSubmitted);
         closeReportModal();
       } else {
-        setToast({ message: result.error || text[language].errorOccurred, type: 'error' });
+        toast.error(result.error || text[language].errorOccurred);
       }
     } catch (error) {
       console.error('Error submitting report:', error);
-      setToast({ message: text[language].errorOccurred, type: 'error' });
+      toast.error(text[language].errorOccurred);
     }
   };
 
@@ -470,10 +460,10 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
 
       setReplyingToReviewId(null);
       setReplyText('');
-      setToast({ message: text[language].replySubmitted, type: 'success' });
+      toast.success(text[language].replySubmitted);
     } catch (error: any) {
       console.error('Error submitting reply:', error);
-      setToast({ message: text[language].replyError, type: 'error' });
+      toast.error(text[language].replyError);
     } finally {
       setSubmittingReply(false);
     }
@@ -493,10 +483,10 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
 
       // Remove from local state
       setReviews(prev => prev.filter(review => review.id !== reviewId));
-      setToast({ message: text[language].contentHidden, type: 'success' });
+      toast.success(text[language].contentHidden);
     } catch (error: any) {
       console.error('Error hiding review:', error);
-      setToast({ message: text[language].hideError, type: 'error' });
+      toast.error(text[language].hideError);
     }
   };
 
@@ -535,10 +525,10 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
 
       // Remove from local state
       setReviews(prev => prev.filter(review => review.id !== reviewId));
-      setToast({ message: text[language].contentDeleted, type: 'success' });
+      toast.success(text[language].contentDeleted);
     } catch (error: any) {
       console.error('Error deleting review:', error);
-      setToast({ message: text[language].deleteError, type: 'error' });
+      toast.error(text[language].deleteError);
     }
   };
 
@@ -559,10 +549,10 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
           ? { ...review, company_reply: null }
           : review
       ));
-      setToast({ message: text[language].contentHidden, type: 'success' });
+      toast.success(text[language].contentHidden);
     } catch (error: any) {
       console.error('Error hiding reply:', error);
-      setToast({ message: text[language].hideError, type: 'error' });
+      toast.error(text[language].hideError);
     }
   };
 
@@ -612,10 +602,10 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
           ? { ...review, company_reply: null }
           : review
       ));
-      setToast({ message: text[language].contentDeleted, type: 'success' });
+      toast.success(text[language].contentDeleted);
     } catch (error: any) {
       console.error('Error deleting reply:', error);
-      setToast({ message: text[language].deleteError, type: 'error' });
+      toast.error(text[language].deleteError);
     }
   };
 
@@ -672,20 +662,6 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
     <div className={`min-h-screen bg-gray-50 ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <Header language={language} onLanguageChange={onLanguageChange} onNavigate={onNavigate} />
       
-      {/* Toast Notification */}
-      {toast && (
-        <div className={`fixed top-20 right-4 rtl:left-4 rtl:right-auto z-50 p-4 rounded-lg shadow-lg ${
-          toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'
-        } text-white flex items-center space-x-2 rtl:space-x-reverse animate-slide-up`}>
-          {toast.type === 'success' ? (
-            <CheckCircle className="h-5 w-5" />
-          ) : (
-            <AlertTriangle className="h-5 w-5" />
-          )}
-          <span>{toast.message}</span>
-        </div>
-      )}
-
       {/* Report Modal */}
       {reportModal.isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">

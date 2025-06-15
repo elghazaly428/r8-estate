@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Toaster } from 'react-hot-toast';
 import Header from './components/Header';
 import SearchBar from './components/SearchBar';
 import CategoryGrid from './components/CategoryGrid';
@@ -66,162 +67,642 @@ function App() {
 
   // Show Notifications page
   if (currentPage === 'notifications') {
-    return <Notifications 
-      language={language} 
-      onLanguageChange={setLanguage} 
-      onNavigate={handleNavigation}
-    />;
+    return (
+      <>
+        <Notifications 
+          language={language} 
+          onLanguageChange={setLanguage} 
+          onNavigate={handleNavigation}
+        />
+        <Toaster
+          position={language === 'ar' ? 'bottom-left' : 'bottom-right'}
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#2D3748',
+              color: '#FFFFFF',
+              fontFamily: 'Cairo, sans-serif',
+              fontSize: '14px',
+              borderRadius: '8px',
+              padding: '12px 16px',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10B981',
+                secondary: '#FFFFFF',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#EF4444',
+                secondary: '#FFFFFF',
+              },
+            },
+          }}
+        />
+      </>
+    );
   }
 
   // Show Contact page
   if (currentPage === 'contact') {
-    return <Contact 
-      language={language} 
-      onLanguageChange={setLanguage} 
-      onNavigate={handleNavigation}
-    />;
+    return (
+      <>
+        <Contact 
+          language={language} 
+          onLanguageChange={setLanguage} 
+          onNavigate={handleNavigation}
+        />
+        <Toaster
+          position={language === 'ar' ? 'bottom-left' : 'bottom-right'}
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#2D3748',
+              color: '#FFFFFF',
+              fontFamily: 'Cairo, sans-serif',
+              fontSize: '14px',
+              borderRadius: '8px',
+              padding: '12px 16px',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10B981',
+                secondary: '#FFFFFF',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#EF4444',
+                secondary: '#FFFFFF',
+              },
+            },
+          }}
+        />
+      </>
+    );
   }
 
   // Show Privacy page
   if (currentPage === 'privacy') {
-    return <Privacy 
-      language={language} 
-      onLanguageChange={setLanguage} 
-      onNavigate={handleNavigation}
-    />;
+    return (
+      <>
+        <Privacy 
+          language={language} 
+          onLanguageChange={setLanguage} 
+          onNavigate={handleNavigation}
+        />
+        <Toaster
+          position={language === 'ar' ? 'bottom-left' : 'bottom-right'}
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#2D3748',
+              color: '#FFFFFF',
+              fontFamily: 'Cairo, sans-serif',
+              fontSize: '14px',
+              borderRadius: '8px',
+              padding: '12px 16px',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10B981',
+                secondary: '#FFFFFF',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#EF4444',
+                secondary: '#FFFFFF',
+              },
+            },
+          }}
+        />
+      </>
+    );
   }
 
   // Show Terms page
   if (currentPage === 'terms') {
-    return <Terms 
-      language={language} 
-      onLanguageChange={setLanguage} 
-      onNavigate={handleNavigation}
-    />;
+    return (
+      <>
+        <Terms 
+          language={language} 
+          onLanguageChange={setLanguage} 
+          onNavigate={handleNavigation}
+        />
+        <Toaster
+          position={language === 'ar' ? 'bottom-left' : 'bottom-right'}
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#2D3748',
+              color: '#FFFFFF',
+              fontFamily: 'Cairo, sans-serif',
+              fontSize: '14px',
+              borderRadius: '8px',
+              padding: '12px 16px',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10B981',
+                secondary: '#FFFFFF',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#EF4444',
+                secondary: '#FFFFFF',
+              },
+            },
+          }}
+        />
+      </>
+    );
   }
 
   // Show Pricing page
   if (currentPage === 'pricing') {
-    return <Pricing 
-      language={language} 
-      onLanguageChange={setLanguage} 
-      onNavigate={handleNavigation}
-    />;
+    return (
+      <>
+        <Pricing 
+          language={language} 
+          onLanguageChange={setLanguage} 
+          onNavigate={handleNavigation}
+        />
+        <Toaster
+          position={language === 'ar' ? 'bottom-left' : 'bottom-right'}
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#2D3748',
+              color: '#FFFFFF',
+              fontFamily: 'Cairo, sans-serif',
+              fontSize: '14px',
+              borderRadius: '8px',
+              padding: '12px 16px',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10B981',
+                secondary: '#FFFFFF',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#EF4444',
+                secondary: '#FFFFFF',
+              },
+            },
+          }}
+        />
+      </>
+    );
   }
 
   // Show About page
   if (currentPage === 'about') {
-    return <About 
-      language={language} 
-      onLanguageChange={setLanguage} 
-      onNavigate={handleNavigation}
-    />;
+    return (
+      <>
+        <About 
+          language={language} 
+          onLanguageChange={setLanguage} 
+          onNavigate={handleNavigation}
+        />
+        <Toaster
+          position={language === 'ar' ? 'bottom-left' : 'bottom-right'}
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#2D3748',
+              color: '#FFFFFF',
+              fontFamily: 'Cairo, sans-serif',
+              fontSize: '14px',
+              borderRadius: '8px',
+              padding: '12px 16px',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10B981',
+                secondary: '#FFFFFF',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#EF4444',
+                secondary: '#FFFFFF',
+              },
+            },
+          }}
+        />
+      </>
+    );
   }
 
   // Show Admin Dashboard page
   if (currentPage === 'admin') {
-    return <AdminDashboard 
-      language={language} 
-      onLanguageChange={setLanguage} 
-      onNavigate={handleNavigation}
-    />;
+    return (
+      <>
+        <AdminDashboard 
+          language={language} 
+          onLanguageChange={setLanguage} 
+          onNavigate={handleNavigation}
+        />
+        <Toaster
+          position={language === 'ar' ? 'bottom-left' : 'bottom-right'}
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#2D3748',
+              color: '#FFFFFF',
+              fontFamily: 'Cairo, sans-serif',
+              fontSize: '14px',
+              borderRadius: '8px',
+              padding: '12px 16px',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10B981',
+                secondary: '#FFFFFF',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#EF4444',
+                secondary: '#FFFFFF',
+              },
+            },
+          }}
+        />
+      </>
+    );
   }
 
   // Show Company Dashboard page
   if (currentPage === 'company-dashboard') {
-    return <CompanyDashboard 
-      language={language} 
-      onLanguageChange={setLanguage} 
-      onNavigate={handleNavigation}
-    />;
+    return (
+      <>
+        <CompanyDashboard 
+          language={language} 
+          onLanguageChange={setLanguage} 
+          onNavigate={handleNavigation}
+        />
+        <Toaster
+          position={language === 'ar' ? 'bottom-left' : 'bottom-right'}
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#2D3748',
+              color: '#FFFFFF',
+              fontFamily: 'Cairo, sans-serif',
+              fontSize: '14px',
+              borderRadius: '8px',
+              padding: '12px 16px',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10B981',
+                secondary: '#FFFFFF',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#EF4444',
+                secondary: '#FFFFFF',
+              },
+            },
+          }}
+        />
+      </>
+    );
   }
 
   // Show Dashboard page
   if (currentPage === 'dashboard') {
-    return <Dashboard 
-      language={language} 
-      onLanguageChange={setLanguage} 
-      onNavigate={handleNavigation}
-    />;
+    return (
+      <>
+        <Dashboard 
+          language={language} 
+          onLanguageChange={setLanguage} 
+          onNavigate={handleNavigation}
+        />
+        <Toaster
+          position={language === 'ar' ? 'bottom-left' : 'bottom-right'}
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#2D3748',
+              color: '#FFFFFF',
+              fontFamily: 'Cairo, sans-serif',
+              fontSize: '14px',
+              borderRadius: '8px',
+              padding: '12px 16px',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10B981',
+                secondary: '#FFFFFF',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#EF4444',
+                secondary: '#FFFFFF',
+              },
+            },
+          }}
+        />
+      </>
+    );
   }
 
   // Show Write Review page
   if (currentPage === 'write-review') {
-    return <WriteReview 
-      language={language} 
-      onLanguageChange={setLanguage} 
-      onNavigate={handleNavigation}
-      companyId={selectedCompanyId}
-    />;
+    return (
+      <>
+        <WriteReview 
+          language={language} 
+          onLanguageChange={setLanguage} 
+          onNavigate={handleNavigation}
+          companyId={selectedCompanyId}
+        />
+        <Toaster
+          position={language === 'ar' ? 'bottom-left' : 'bottom-right'}
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#2D3748',
+              color: '#FFFFFF',
+              fontFamily: 'Cairo, sans-serif',
+              fontSize: '14px',
+              borderRadius: '8px',
+              padding: '12px 16px',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10B981',
+                secondary: '#FFFFFF',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#EF4444',
+                secondary: '#FFFFFF',
+              },
+            },
+          }}
+        />
+      </>
+    );
   }
 
   // Show Categories page
   if (currentPage === 'categories') {
-    return <Categories language={language} onLanguageChange={setLanguage} onNavigate={handleNavigation} />;
+    return (
+      <>
+        <Categories language={language} onLanguageChange={setLanguage} onNavigate={handleNavigation} />
+        <Toaster
+          position={language === 'ar' ? 'bottom-left' : 'bottom-right'}
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#2D3748',
+              color: '#FFFFFF',
+              fontFamily: 'Cairo, sans-serif',
+              fontSize: '14px',
+              borderRadius: '8px',
+              padding: '12px 16px',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10B981',
+                secondary: '#FFFFFF',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#EF4444',
+                secondary: '#FFFFFF',
+              },
+            },
+          }}
+        />
+      </>
+    );
   }
 
   // Show Company Profile page
   if (currentPage === 'company') {
-    return <CompanyProfile 
-      language={language} 
-      onLanguageChange={setLanguage} 
-      onNavigate={handleNavigation}
-      companyId={selectedCompanyId}
-    />;
+    return (
+      <>
+        <CompanyProfile 
+          language={language} 
+          onLanguageChange={setLanguage} 
+          onNavigate={handleNavigation}
+          companyId={selectedCompanyId}
+        />
+        <Toaster
+          position={language === 'ar' ? 'bottom-left' : 'bottom-right'}
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#2D3748',
+              color: '#FFFFFF',
+              fontFamily: 'Cairo, sans-serif',
+              fontSize: '14px',
+              borderRadius: '8px',
+              padding: '12px 16px',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10B981',
+                secondary: '#FFFFFF',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#EF4444',
+                secondary: '#FFFFFF',
+              },
+            },
+          }}
+        />
+      </>
+    );
   }
 
   // Show Login page
   if (currentPage === 'login') {
-    return <Login language={language} onLanguageChange={setLanguage} onNavigate={handleNavigation} />;
+    return (
+      <>
+        <Login language={language} onLanguageChange={setLanguage} onNavigate={handleNavigation} />
+        <Toaster
+          position={language === 'ar' ? 'bottom-left' : 'bottom-right'}
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#2D3748',
+              color: '#FFFFFF',
+              fontFamily: 'Cairo, sans-serif',
+              fontSize: '14px',
+              borderRadius: '8px',
+              padding: '12px 16px',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10B981',
+                secondary: '#FFFFFF',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#EF4444',
+                secondary: '#FFFFFF',
+              },
+            },
+          }}
+        />
+      </>
+    );
   }
 
   // Show SignUp page
   if (currentPage === 'signup') {
-    return <SignUp language={language} onLanguageChange={setLanguage} onNavigate={handleNavigation} />;
+    return (
+      <>
+        <SignUp language={language} onLanguageChange={setLanguage} onNavigate={handleNavigation} />
+        <Toaster
+          position={language === 'ar' ? 'bottom-left' : 'bottom-right'}
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#2D3748',
+              color: '#FFFFFF',
+              fontFamily: 'Cairo, sans-serif',
+              fontSize: '14px',
+              borderRadius: '8px',
+              padding: '12px 16px',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10B981',
+                secondary: '#FFFFFF',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#EF4444',
+                secondary: '#FFFFFF',
+              },
+            },
+          }}
+        />
+      </>
+    );
   }
 
   // Show Search Results page
   if (currentPage === 'search') {
-    return <SearchResults 
-      language={language} 
-      onLanguageChange={setLanguage} 
-      onNavigate={handleNavigation}
-      searchQuery={searchQuery}
-      categoryId={selectedCategoryId}
-    />;
+    return (
+      <>
+        <SearchResults 
+          language={language} 
+          onLanguageChange={setLanguage} 
+          onNavigate={handleNavigation}
+          searchQuery={searchQuery}
+          categoryId={selectedCategoryId}
+        />
+        <Toaster
+          position={language === 'ar' ? 'bottom-left' : 'bottom-right'}
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#2D3748',
+              color: '#FFFFFF',
+              fontFamily: 'Cairo, sans-serif',
+              fontSize: '14px',
+              borderRadius: '8px',
+              padding: '12px 16px',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10B981',
+                secondary: '#FFFFFF',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#EF4444',
+                secondary: '#FFFFFF',
+              },
+            },
+          }}
+        />
+      </>
+    );
   }
 
   return (
-    <div className={`min-h-screen ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
-      <Header language={language} onLanguageChange={setLanguage} onNavigate={handleNavigation} />
-      
-      {/* Hero Section */}
-      <section className="bg-gradient-to-br from-primary-50 to-blue-50 py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-dark-500 mb-6 leading-tight animate-fade-in">
-              {text[language].heroTitle}
-            </h1>
-            <p className="text-xl text-gray-600 mb-8 animate-slide-up">
-              {text[language].heroSubtitle}
-            </p>
+    <>
+      <div className={`min-h-screen ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
+        <Header language={language} onLanguageChange={setLanguage} onNavigate={handleNavigation} />
+        
+        {/* Hero Section */}
+        <section className="bg-gradient-to-br from-primary-50 to-blue-50 py-20">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-12">
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-dark-500 mb-6 leading-tight animate-fade-in">
+                {text[language].heroTitle}
+              </h1>
+              <p className="text-xl text-gray-600 mb-8 animate-slide-up">
+                {text[language].heroSubtitle}
+              </p>
+            </div>
+            
+            <div className="animate-slide-up">
+              <SearchBar 
+                language={language} 
+                onSearch={handleSearch} 
+                onCompanySelect={handleCompanySelect}
+              />
+            </div>
           </div>
-          
-          <div className="animate-slide-up">
-            <SearchBar 
-              language={language} 
-              onSearch={handleSearch} 
-              onCompanySelect={handleCompanySelect}
-            />
-          </div>
-        </div>
-      </section>
+        </section>
 
-      <CategoryGrid language={language} onNavigate={handleNavigation} />
-      <FeaturedCompanies language={language} onNavigate={handleNavigation} />
-      <RecentReviews language={language} onNavigate={handleNavigation} />
-      <Footer language={language} onNavigate={handleNavigation} />
-    </div>
+        <CategoryGrid language={language} onNavigate={handleNavigation} />
+        <FeaturedCompanies language={language} onNavigate={handleNavigation} />
+        <RecentReviews language={language} onNavigate={handleNavigation} />
+        <Footer language={language} onNavigate={handleNavigation} />
+      </div>
+      
+      {/* Global Toast Provider */}
+      <Toaster
+        position={language === 'ar' ? 'bottom-left' : 'bottom-right'}
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#2D3748',
+            color: '#FFFFFF',
+            fontFamily: 'Cairo, sans-serif',
+            fontSize: '14px',
+            borderRadius: '8px',
+            padding: '12px 16px',
+          },
+          success: {
+            iconTheme: {
+              primary: '#10B981',
+              secondary: '#FFFFFF',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#EF4444',
+              secondary: '#FFFFFF',
+            },
+          },
+        }}
+      />
+    </>
   );
 }
 

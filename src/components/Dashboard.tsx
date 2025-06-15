@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { User, Star, FileText, Settings, Edit, Trash2, Save, AlertTriangle, CheckCircle, Upload, Camera } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import Header from './Header';
 import Footer from './Footer';
 import { useAuth } from '../hooks/useAuth';
@@ -40,7 +41,6 @@ const Dashboard: React.FC<DashboardProps> = ({ language, onLanguageChange, onNav
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Form states
@@ -156,16 +156,6 @@ const Dashboard: React.FC<DashboardProps> = ({ language, onLanguageChange, onNav
     }
   }, [user]);
 
-  // Toast auto-hide
-  useEffect(() => {
-    if (toast) {
-      const timer = setTimeout(() => {
-        setToast(null);
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [toast]);
-
   const fetchUserData = async () => {
     if (!user) return;
 
@@ -236,7 +226,7 @@ const Dashboard: React.FC<DashboardProps> = ({ language, onLanguageChange, onNav
       setUserReviews(reviewsWithReplyStatus);
     } catch (error: any) {
       console.error('Error fetching user data:', error);
-      setToast({ message: text[language].profileUpdateError, type: 'error' });
+      toast.error(text[language].profileUpdateError);
     } finally {
       setLoading(false);
     }
@@ -245,7 +235,7 @@ const Dashboard: React.FC<DashboardProps> = ({ language, onLanguageChange, onNav
   const handleDeleteReview = async (reviewId: number, hasCompanyReply: boolean) => {
     // Check if review has company reply
     if (hasCompanyReply) {
-      setToast({ message: text[language].cannotDeleteWithReply, type: 'error' });
+      toast.error(text[language].cannotDeleteWithReply);
       return;
     }
 
@@ -266,7 +256,7 @@ const Dashboard: React.FC<DashboardProps> = ({ language, onLanguageChange, onNav
       }
 
       if (replyCheck && replyCheck.length > 0) {
-        setToast({ message: text[language].cannotDeleteWithReply, type: 'error' });
+        toast.error(text[language].cannotDeleteWithReply);
         return;
       }
 
@@ -283,16 +273,16 @@ const Dashboard: React.FC<DashboardProps> = ({ language, onLanguageChange, onNav
 
       // Remove from local state
       setUserReviews(prev => prev.filter(review => review.id !== reviewId));
-      setToast({ message: text[language].deleteSuccess, type: 'success' });
+      toast.success(text[language].deleteSuccess);
     } catch (error: any) {
       console.error('Error deleting review:', error);
-      setToast({ message: text[language].deleteError, type: 'error' });
+      toast.error(text[language].deleteError);
     }
   };
 
   const handleEditReview = (reviewId: number, hasCompanyReply: boolean) => {
     if (hasCompanyReply) {
-      setToast({ message: text[language].cannotEditWithReply, type: 'error' });
+      toast.error(text[language].cannotEditWithReply);
       return;
     }
     
@@ -307,14 +297,14 @@ const Dashboard: React.FC<DashboardProps> = ({ language, onLanguageChange, onNav
     // Validate file type
     const allowedTypes = ['image/png', 'image/jpg', 'image/jpeg'];
     if (!allowedTypes.includes(file.type)) {
-      setToast({ message: text[language].invalidFileType, type: 'error' });
+      toast.error(text[language].invalidFileType);
       return;
     }
 
     // Validate file size (5MB max)
     const maxSize = 5 * 1024 * 1024; // 5MB in bytes
     if (file.size > maxSize) {
-      setToast({ message: text[language].fileTooLarge, type: 'error' });
+      toast.error(text[language].fileTooLarge);
       return;
     }
 
@@ -363,10 +353,10 @@ const Dashboard: React.FC<DashboardProps> = ({ language, onLanguageChange, onNav
         updated_at: new Date().toISOString()
       } : null);
 
-      setToast({ message: text[language].avatarUpdateSuccess, type: 'success' });
+      toast.success(text[language].avatarUpdateSuccess);
     } catch (error: any) {
       console.error('Error uploading avatar:', error);
-      setToast({ message: text[language].avatarUpdateError, type: 'error' });
+      toast.error(text[language].avatarUpdateError);
     } finally {
       setUploadingAvatar(false);
       // Reset file input
@@ -380,7 +370,7 @@ const Dashboard: React.FC<DashboardProps> = ({ language, onLanguageChange, onNav
     e.preventDefault();
     
     if (!user || !profileForm.firstName.trim() || !profileForm.lastName.trim()) {
-      setToast({ message: text[language].fillAllFields, type: 'error' });
+      toast.error(text[language].fillAllFields);
       return;
     }
 
@@ -408,10 +398,10 @@ const Dashboard: React.FC<DashboardProps> = ({ language, onLanguageChange, onNav
         updated_at: new Date().toISOString()
       } : null);
 
-      setToast({ message: text[language].profileUpdateSuccess, type: 'success' });
+      toast.success(text[language].profileUpdateSuccess);
     } catch (error: any) {
       console.error('Error updating profile:', error);
-      setToast({ message: text[language].profileUpdateError, type: 'error' });
+      toast.error(text[language].profileUpdateError);
     } finally {
       setSaving(false);
     }
@@ -421,12 +411,12 @@ const Dashboard: React.FC<DashboardProps> = ({ language, onLanguageChange, onNav
     e.preventDefault();
     
     if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
-      setToast({ message: text[language].fillAllFields, type: 'error' });
+      toast.error(text[language].fillAllFields);
       return;
     }
 
     if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setToast({ message: text[language].passwordMismatch, type: 'error' });
+      toast.error(text[language].passwordMismatch);
       return;
     }
 
@@ -448,10 +438,10 @@ const Dashboard: React.FC<DashboardProps> = ({ language, onLanguageChange, onNav
         confirmPassword: ''
       });
 
-      setToast({ message: text[language].passwordUpdateSuccess, type: 'success' });
+      toast.success(text[language].passwordUpdateSuccess);
     } catch (error: any) {
       console.error('Error updating password:', error);
-      setToast({ message: text[language].passwordUpdateError, type: 'error' });
+      toast.error(text[language].passwordUpdateError);
     } finally {
       setSaving(false);
     }
@@ -562,20 +552,6 @@ const Dashboard: React.FC<DashboardProps> = ({ language, onLanguageChange, onNav
   return (
     <div className={`min-h-screen bg-gray-50 ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <Header language={language} onLanguageChange={onLanguageChange} onNavigate={onNavigate} />
-      
-      {/* Toast Notification */}
-      {toast && (
-        <div className={`fixed top-20 right-4 rtl:left-4 rtl:right-auto z-50 p-4 rounded-lg shadow-lg ${
-          toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'
-        } text-white flex items-center space-x-2 rtl:space-x-reverse animate-slide-up`}>
-          {toast.type === 'success' ? (
-            <CheckCircle className="h-5 w-5" />
-          ) : (
-            <AlertTriangle className="h-5 w-5" />
-          )}
-          <span>{toast.message}</span>
-        </div>
-      )}
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Page Header */}
@@ -757,6 +733,7 @@ const Dashboard: React.FC<DashboardProps> = ({ language, onLanguageChange, onNav
                           </div>
                         )}
                       </div>
+                      
                       
                       {/* Upload Button */}
                       <div>

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, Mail, Lock, Home, Grid3X3, RefreshCw } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 
 interface LoginProps {
@@ -72,7 +73,7 @@ const Login: React.FC<LoginProps> = ({ language, onLanguageChange, onNavigate })
 
   const handleResendConfirmation = async () => {
     if (!formData.email) {
-      alert(text[language].fillAllFields);
+      toast.error(text[language].fillAllFields);
       return;
     }
 
@@ -88,11 +89,11 @@ const Login: React.FC<LoginProps> = ({ language, onLanguageChange, onNavigate })
         throw error;
       }
 
-      alert(text[language].confirmationResent);
+      toast.success(text[language].confirmationResent);
       setShowResendOption(false);
     } catch (error: any) {
       console.error('Resend confirmation error:', error);
-      alert(text[language].resendFailed);
+      toast.error(text[language].resendFailed);
     } finally {
       setIsResendingConfirmation(false);
     }
@@ -106,7 +107,7 @@ const Login: React.FC<LoginProps> = ({ language, onLanguageChange, onNavigate })
 
     // Validate form data
     if (!formData.email || !formData.password) {
-      alert(text[language].fillAllFields);
+      toast.error(text[language].fillAllFields);
       return;
     }
 
@@ -127,7 +128,7 @@ const Login: React.FC<LoginProps> = ({ language, onLanguageChange, onNavigate })
 
       // If login is successful, show success message and redirect to homepage
       if (data.user) {
-        alert(text[language].loginSuccess);
+        toast.success(text[language].loginSuccess);
         onNavigate('home');
       }
     } catch (error: any) {
@@ -136,11 +137,11 @@ const Login: React.FC<LoginProps> = ({ language, onLanguageChange, onNavigate })
       
       // Check for specific email confirmation error
       if (error.message && (error.message.includes('Email not confirmed') || error.code === 'email_not_confirmed')) {
-        alert(text[language].emailNotConfirmed);
+        toast.error(text[language].emailNotConfirmed);
         setShowResendOption(true);
       } else {
         const errorMessage = error.message || 'An unexpected error occurred';
-        alert(`Login failed: ${errorMessage}`);
+        toast.error(`Login failed: ${errorMessage}`);
       }
     } finally {
       setIsLoading(false);

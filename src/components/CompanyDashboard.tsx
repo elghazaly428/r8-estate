@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   Eye
 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import Header from './Header';
 import Footer from './Footer';
 import { useAuth } from '../hooks/useAuth';
@@ -71,9 +72,6 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ language, onLanguag
   const [submittingReply, setSubmittingReply] = useState(false);
   const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
   const [editReplyText, setEditReplyText] = useState('');
-  
-  // Toast state
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const text = {
     ar: {
@@ -332,16 +330,6 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ language, onLanguag
     checkAccessAndFetchData();
   }, [user, authLoading, onNavigate]);
 
-  // Toast auto-hide
-  useEffect(() => {
-    if (toast) {
-      const timer = setTimeout(() => {
-        setToast(null);
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [toast]);
-
   const renderStars = (rating: number) => {
     const stars = [];
     for (let i = 0; i < 5; i++) {
@@ -403,10 +391,10 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ language, onLanguag
 
       setReplyingToReviewId(null);
       setReplyText('');
-      setToast({ message: text[language].replySubmitted, type: 'success' });
+      toast.success(text[language].replySubmitted);
     } catch (error: any) {
       console.error('Error submitting reply:', error);
-      setToast({ message: text[language].errorOccurred, type: 'error' });
+      toast.error(text[language].errorOccurred);
     } finally {
       setSubmittingReply(false);
     }
@@ -437,10 +425,10 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ language, onLanguag
 
       setEditingReplyId(null);
       setEditReplyText('');
-      setToast({ message: text[language].replyUpdated, type: 'success' });
+      toast.success(text[language].replyUpdated);
     } catch (error: any) {
       console.error('Error updating reply:', error);
-      setToast({ message: text[language].errorOccurred, type: 'error' });
+      toast.error(text[language].errorOccurred);
     } finally {
       setSubmittingReply(false);
     }
@@ -473,10 +461,10 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ language, onLanguag
         description: profileForm.description.trim() || null
       } : null);
 
-      setToast({ message: text[language].profileUpdated, type: 'success' });
+      toast.success(text[language].profileUpdated);
     } catch (error: any) {
       console.error('Error updating company profile:', error);
-      setToast({ message: text[language].errorOccurred, type: 'error' });
+      toast.error(text[language].errorOccurred);
     } finally {
       setSubmittingReply(false);
     }
@@ -1041,20 +1029,6 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ language, onLanguag
   return (
     <div className={`min-h-screen bg-gray-50 ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <Header language={language} onLanguageChange={onLanguageChange} onNavigate={onNavigate} />
-      
-      {/* Toast Notification */}
-      {toast && (
-        <div className={`fixed top-20 right-4 rtl:left-4 rtl:right-auto z-50 p-4 rounded-lg shadow-lg ${
-          toast.type === 'success' ? 'bg-green-500' : 'bg-red-500'
-        } text-white flex items-center space-x-2 rtl:space-x-reverse animate-slide-up`}>
-          {toast.type === 'success' ? (
-            <CheckCircle className="h-5 w-5" />
-          ) : (
-            <AlertTriangle className="h-5 w-5" />
-          )}
-          <span>{toast.message}</span>
-        </div>
-      )}
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">

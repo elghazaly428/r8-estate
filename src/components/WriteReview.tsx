@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   CheckCircle
 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import Header from './Header';
 import Footer from './Footer';
 import { supabase, getCompanyById, Company } from '../lib/supabase';
@@ -220,12 +221,12 @@ const WriteReview: React.FC<WriteReviewProps> = ({
     const { ratingCommunication, ratingResponsiveness, ratingValue, ratingFriendliness, termsAccepted } = formData;
     
     if (!ratingCommunication || !ratingResponsiveness || !ratingValue || !ratingFriendliness) {
-      alert(text[language].fillAllRatings);
+      toast.error(text[language].fillAllRatings);
       return;
     }
 
     if (!termsAccepted) {
-      alert(text[language].acceptTerms);
+      toast.error(text[language].acceptTerms);
       return;
     }
 
@@ -261,11 +262,11 @@ const WriteReview: React.FC<WriteReviewProps> = ({
       }
 
       // Success - show message and redirect
-      alert(text[language].reviewSubmitted);
+      toast.success(text[language].reviewSubmitted);
       onNavigate('company', companyId!);
     } catch (error: any) {
       console.error('Error submitting review:', error);
-      alert(`${text[language].errorSubmitting}: ${error.message}`);
+      toast.error(`${text[language].errorSubmitting}: ${error.message}`);
     } finally {
       setSubmitting(false);
     }

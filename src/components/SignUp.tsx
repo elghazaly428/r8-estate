@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, User, Mail, Lock, Home, Grid3X3 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
 
 interface SignUpProps {
@@ -76,12 +77,12 @@ const SignUp: React.FC<SignUpProps> = ({ language, onLanguageChange, onNavigate 
 
     // Validate form data
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.password || !formData.confirmPassword) {
-      alert(text[language].fillAllFields);
+      toast.error(text[language].fillAllFields);
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      alert(text[language].passwordMismatch);
+      toast.error(text[language].passwordMismatch);
       return;
     }
 
@@ -117,7 +118,7 @@ const SignUp: React.FC<SignUpProps> = ({ language, onLanguageChange, onNavigate 
         }
 
         // Success message
-        alert(text[language].successMessage);
+        toast.success(text[language].successMessage);
         
         // Reset form
         setFormData({
@@ -133,7 +134,7 @@ const SignUp: React.FC<SignUpProps> = ({ language, onLanguageChange, onNavigate 
     } catch (error: any) {
       // Display error message to user
       console.error('Sign up error:', error);
-      alert(`Error: ${error.message || 'An unexpected error occurred'}`);
+      toast.error(`Error: ${error.message || 'An unexpected error occurred'}`);
     } finally {
       setIsLoading(false);
     }

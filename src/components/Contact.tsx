@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Mail, Phone, MapPin, Send, MessageSquare, User, FileText } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 import Header from './Header';
 import Footer from './Footer';
 
@@ -38,7 +39,8 @@ const Contact: React.FC<ContactProps> = ({ language, onLanguageChange, onNavigat
       businessHours: 'ساعات العمل',
       workingHours: 'الأحد - الخميس: 9:00 ص - 6:00 م',
       responseTime: 'وقت الاستجابة',
-      responseTimeText: 'نرد عادة خلال 24 ساعة'
+      responseTimeText: 'نرد عادة خلال 24 ساعة',
+      messageSent: 'شكراً لك! تم إرسال رسالتك.'
     },
     en: {
       title: 'Contact Us',
@@ -60,7 +62,8 @@ const Contact: React.FC<ContactProps> = ({ language, onLanguageChange, onNavigat
       businessHours: 'Business Hours',
       workingHours: 'Sunday - Thursday: 9:00 AM - 6:00 PM',
       responseTime: 'Response Time',
-      responseTimeText: 'We usually respond within 24 hours'
+      responseTimeText: 'We usually respond within 24 hours',
+      messageSent: 'Thank you! Your message has been sent.'
     }
   };
 
@@ -74,7 +77,7 @@ const Contact: React.FC<ContactProps> = ({ language, onLanguageChange, onNavigat
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // This is a placeholder - no actual functionality
-    alert(language === 'ar' ? 'شكراً لك! تم إرسال رسالتك.' : 'Thank you! Your message has been sent.');
+    toast.success(text[language].messageSent);
     setFormData({ name: '', email: '', subject: '', message: '' });
   };
 
