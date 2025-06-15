@@ -36,7 +36,8 @@ import {
   isCompanyRepresentative,
   CompanyWithCategory,
   ReviewWithProfile,
-  supabase
+  supabase,
+  createNotification
 } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 
@@ -299,12 +300,12 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
     } else {
       if (diffMinutes < 1) return text[language].now;
       if (diffMinutes < 60) {
-        return diffMinutes === 1 ? `1 ${text[language].minute}` : `${diffMinutes} ${text[language].minutes}`;
+        return diffMinutes === 1 ? '1 minute ago' : `${diffMinutes} minutes ago`;
       }
       if (diffHours < 24) {
-        return diffHours === 1 ? `1 ${text[language].hour}` : `${diffHours} ${text[language].hours}`;
+        return diffHours === 1 ? '1 hour ago' : `${diffHours} hours ago`;
       }
-      return diffDays === 1 ? `1 ${text[language].day}` : `${diffDays} ${text[language].days}`;
+      return diffDays === 1 ? '1 day ago' : `${diffDays} days ago`;
     }
   };
 
@@ -477,7 +478,7 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
     }
   };
 
-  // Admin functions
+  // Admin functions with proper notification handling
   const handleHideReview = async (reviewId: number) => {
     if (!confirm(text[language].confirmHide)) return;
 
@@ -499,6 +500,14 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
   };
 
   const handleDeleteReview = async (reviewId: number) => {
+    // Step A: Read and Store Information First
+    const reviewToDelete = reviews.find(review => review.id === reviewId);
+    if (!reviewToDelete) return;
+
+    const authorIdToNotify = reviewToDelete.profile_id;
+    const companyName = company?.name || 'الشركة';
+    
+    // Step B: Confirm and Delete
     if (!confirm(text[language].confirmDelete)) return;
 
     try {
@@ -508,6 +517,20 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
         .eq('id', reviewId);
 
       if (error) throw error;
+
+      // Step C: Create the Notification
+      if (authorIdToNotify) {
+        const notificationMessage = language === 'ar' 
+          ? `تم حذف تقييمك لشركة ${companyName} من قبل الإدارة`
+          : `Your review for ${companyName} has been deleted by administration`;
+
+        await createNotification(
+          authorIdToNotify,
+          'review_deleted',
+          notificationMessage,
+          `/company/${companyId}`
+        );
+      }
 
       // Remove from local state
       setReviews(prev => prev.filter(review => review.id !== reviewId));
@@ -543,6 +566,14 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
   };
 
   const handleDeleteReply = async (replyId: string, reviewId: number) => {
+    // Step A: Read and Store Information First
+    const reviewWithReply = reviews.find(review => review.id === reviewId);
+    if (!reviewWithReply?.company_reply) return;
+
+    const authorIdToNotify = reviewWithReply.company_reply.profile_id;
+    const companyName = company?.name || 'الشركة';
+    
+    // Step B: Confirm and Delete
     if (!confirm(text[language].confirmDelete)) return;
 
     try {
@@ -552,6 +583,20 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
         .eq('id', replyId);
 
       if (error) throw error;
+
+      // Step C: Create the Notification
+      if (authorIdToNotify) {
+        const notificationMessage = language === 'ar' 
+          ? `تم حذف ردك على تقييم شركة ${companyName} من قبل الإدارة`
+          : `Your reply on ${companyName} review has been deleted by administration`;
+
+        await createNotification(
+          authorIdToNotify,
+          'reply_deleted',
+          notificationMessage,
+          `/company/${companyId}`
+        );
+      }
 
       // Update local state to remove the reply
       setReviews(prev => prev.map(review => 
