@@ -238,11 +238,11 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ language, onLanguag
         setError(null);
 
         // Step B: Perform strict query - check if user is a company representative
-        const { data: representativeData, error: repError } = await supabase
+        const { data: representativeDataArray, error: repError } = await supabase
           .from('company_representatives')
           .select('company_id')
           .eq('profile_id', user.id) // STRICT filter: only exact match with current user ID
-          .maybeSingle();
+          .limit(1);
 
         if (repError) {
           console.error('Error checking company representative:', repError);
@@ -250,7 +250,7 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ language, onLanguag
         }
 
         // Step C: Implement access control logic
-        if (!representativeData) {
+        if (!representativeDataArray || representativeDataArray.length === 0) {
           // NO MATCH found - user is not a company representative
           // Immediately redirect to standard user dashboard
           onNavigate('dashboard');
@@ -258,7 +258,7 @@ const CompanyDashboard: React.FC<CompanyDashboardProps> = ({ language, onLanguag
         }
 
         // ONLY proceed if record is found - user is authorized
-        const companyId = representativeData.company_id;
+        const companyId = representativeDataArray[0].company_id;
 
         // Fetch company details with category
         const { data: companyData, error: companyError } = await supabase
