@@ -1,15 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { Star, ExternalLink } from 'lucide-react';
-import { getAllCompanies, Company } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 
 interface FeaturedCompaniesProps {
   language: 'ar' | 'en';
   onNavigate: (page: string, companyId?: number) => void;
 }
 
+interface FeaturedCompany {
+  id: number;
+  name: string | null;
+  logo_url: string | null;
+  website: string | null;
+  location: string | null;
+  category_name: string | null;
+  avg_rating: number;
+  review_count: number;
+}
+
 const FeaturedCompanies: React.FC<FeaturedCompaniesProps> = ({ language, onNavigate }) => {
-  const [companies, setCompanies] = useState<Company[]>([]);
+  const [companies, setCompanies] = useState<FeaturedCompany[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const text = {
     ar: {
@@ -17,36 +29,46 @@ const FeaturedCompanies: React.FC<FeaturedCompaniesProps> = ({ language, onNavig
       reviews: 'تقييم',
       visitProfile: 'عرض الملف الشخصي',
       loading: 'جاري التحميل...',
-      noCompanies: 'لا توجد شركات متاحة'
+      noCompanies: 'لا توجد شركات متاحة',
+      errorLoading: 'خطأ في تحميل الشركات'
     },
     en: {
       title: 'Featured Companies',
       reviews: 'reviews',
       visitProfile: 'View Profile',
       loading: 'Loading...',
-      noCompanies: 'No companies available'
+      noCompanies: 'No companies available',
+      errorLoading: 'Error loading companies'
     }
   };
 
   useEffect(() => {
-    const fetchCompanies = async () => {
+    const fetchFeaturedCompanies = async () => {
       try {
         setLoading(true);
-        const allCompanies = await getAllCompanies();
-        // Take first 4 companies for featured section
-        setCompanies(allCompanies.slice(0, 4));
-      } catch (error) {
-        console.error('Error fetching companies:', error);
-        setCompanies([]);
+        setError(null);
+
+        // Call the get_featured_companies RPC function
+        const { data, error } = await supabase.rpc('get_featured_companies');
+
+        if (error) {
+          console.error('Error fetching featured companies:', error);
+          throw error;
+        }
+
+        setCompanies(data || []);
+      } catch (error: any) {
+        console.error('Error in fetchFeaturedCompanies:', error);
+        setError(error.message || 'Failed to load companies');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchCompanies();
+    fetchFeaturedCompanies();
   }, []);
 
-  const renderStars = (rating: number = 4.5) => {
+  const renderStars = (rating: number) => {
     const stars = [];
     const fullStars = Math.floor(rating);
     const hasHalfStar = rating % 1 !== 0;
@@ -78,6 +100,13 @@ const FeaturedCompanies: React.FC<FeaturedCompaniesProps> = ({ language, onNavig
     return stars;
   };
 
+  const formatReviewCount = (count: number): string => {
+    if (count >= 1000) {
+      return `${Math.floor(count / 1000)}K`;
+    }
+    return count.toString();
+  };
+
   if (loading) {
     return (
       <section className="py-16 bg-white">
@@ -96,6 +125,24 @@ const FeaturedCompanies: React.FC<FeaturedCompaniesProps> = ({ language, onNavig
     );
   }
 
+  if (error) {
+    return (
+      <section className="py-16 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-dark-500 mb-4">
+              {text[language].title}
+            </h2>
+          </div>
+          <div className="text-center py-8">
+            <div className="text-6xl mb-4">⚠️</div>
+            <p className="text-gray-500 text-lg">{text[language].errorLoading}</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   if (companies.length === 0) {
     return (
       <section className="py-16 bg-white">
@@ -106,7 +153,8 @@ const FeaturedCompanies: React.FC<FeaturedCompaniesProps> = ({ language, onNavig
             </h2>
           </div>
           <div className="text-center py-8">
-            <p className="text-gray-600">{text[language].noCompanies}</p>
+            <div className="text-6xl mb-4">🏢</div>
+            <p className="text-gray-500 text-lg">{text[language].noCompanies}</p>
           </div>
         </div>
       </section>
@@ -122,7 +170,7 @@ const FeaturedCompanies: React.FC<FeaturedCompaniesProps> = ({ language, onNavig
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {companies.map((company) => (
             <div
               key={company.id}
@@ -148,21 +196,26 @@ const FeaturedCompanies: React.FC<FeaturedCompaniesProps> = ({ language, onNavig
                 <h3 className="font-bold text-dark-500 mb-1 text-lg">
                   {company.name || 'Company Name'}
                 </h3>
-                <p className="text-gray-600 text-sm">
-                  {language === 'ar' ? 'خدمات عقارية' : 'Real Estate Services'}
+                <p className="text-gray-600 text-sm mb-2">
+                  {company.category_name || (language === 'ar' ? 'خدمات عقارية' : 'Real Estate Services')}
                 </p>
+                {company.location && (
+                  <p className="text-gray-500 text-xs">
+                    {company.location}
+                  </p>
+                )}
               </div>
 
               {/* Rating */}
               <div className="flex items-center justify-center space-x-1 rtl:space-x-reverse mb-4">
                 <div className="flex items-center space-x-1 rtl:space-x-reverse">
-                  {renderStars(4.5)}
+                  {renderStars(company.avg_rating)}
                 </div>
                 <span className="font-bold text-dark-500 mr-2 rtl:ml-2">
-                  4.5
+                  {company.avg_rating > 0 ? company.avg_rating.toFixed(1) : '0.0'}
                 </span>
                 <span className="text-gray-500 text-sm">
-                  (0 {text[language].reviews})
+                  ({formatReviewCount(company.review_count)} {text[language].reviews})
                 </span>
               </div>
 
