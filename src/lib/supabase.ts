@@ -390,12 +390,7 @@ export const isCompanyRepresentative = async (companyId: number, userId: string)
       .select('*')
       .eq('company_id', companyId)
       .eq('profile_id', userId)
-      .single();
-
-    // PGRST116 means no rows found, which is expected when user is not a representative
-    if (error && error.code === 'PGRST116') {
-      return false;
-    }
+      .maybeSingle();
 
     if (error) {
       console.error('Error checking company representative:', error);
