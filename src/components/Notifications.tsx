@@ -17,7 +17,7 @@ interface NotificationsProps {
 }
 
 const Notifications: React.FC<NotificationsProps> = ({ language, onLanguageChange, onNavigate }) => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [markingAllAsRead, setMarkingAllAsRead] = useState(false);
@@ -37,7 +37,9 @@ const Notifications: React.FC<NotificationsProps> = ({ language, onLanguageChang
       markAsUnread: 'تحديد كغير مقروء',
       loading: 'جاري التحميل...',
       loadMore: 'تحميل المزيد',
-      markingAsRead: 'جاري التحديد...'
+      markingAsRead: 'جاري التحديد...',
+      loginRequired: 'يجب تسجيل الدخول لعرض الإشعارات',
+      loginButton: 'تسجيل الدخول'
     },
     en: {
       notifications: 'Notifications',
@@ -50,15 +52,20 @@ const Notifications: React.FC<NotificationsProps> = ({ language, onLanguageChang
       markAsUnread: 'Mark as unread',
       loading: 'Loading...',
       loadMore: 'Load more',
-      markingAsRead: 'Marking as read...'
+      markingAsRead: 'Marking as read...',
+      loginRequired: 'Please log in to view notifications',
+      loginButton: 'Log In'
     }
   };
 
   // Fetch notifications when component mounts or user changes
   useEffect(() => {
     const fetchNotifications = async () => {
+      // Wait for auth to load
+      if (authLoading) return;
+      
       if (!user) {
-        onNavigate('login');
+        setLoading(false);
         return;
       }
 
@@ -76,7 +83,7 @@ const Notifications: React.FC<NotificationsProps> = ({ language, onLanguageChang
     };
 
     fetchNotifications();
-  }, [user, currentPage, onNavigate]);
+  }, [user, authLoading, currentPage]);
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -182,9 +189,46 @@ const Notifications: React.FC<NotificationsProps> = ({ language, onLanguageChang
   const unreadNotifications = notifications.filter(n => !n.is_read);
   const readNotifications = notifications.filter(n => n.is_read);
 
-  // Redirect to login if not authenticated
+  // Show loading while auth is loading
+  if (authLoading) {
+    return (
+      <div className={`min-h-screen bg-gray-50 ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
+        <Header language={language} onLanguageChange={onLanguageChange} onNavigate={onNavigate} />
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">{text[language].loading}</p>
+          </div>
+        </div>
+        <Footer language={language} onNavigate={onNavigate} />
+      </div>
+    );
+  }
+
+  // Show login prompt if not authenticated
   if (!user) {
-    return null;
+    return (
+      <div className={`min-h-screen bg-gray-50 ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
+        <Header language={language} onLanguageChange={onLanguageChange} onNavigate={onNavigate} />
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <div className="text-center max-w-md mx-auto px-4">
+            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 text-3xl mx-auto mb-6">
+              <Bell className="h-10 w-10" />
+            </div>
+            <h1 className="text-2xl font-bold text-dark-500 mb-2">
+              {text[language].loginRequired}
+            </h1>
+            <button
+              onClick={() => onNavigate('login')}
+              className="btn-primary px-6 py-3 rounded-lg font-medium text-white hover-lift"
+            >
+              {text[language].loginButton}
+            </button>
+          </div>
+        </div>
+        <Footer language={language} onNavigate={onNavigate} />
+      </div>
+    );
   }
 
   return (
