@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Globe, Menu, X, Home, Grid3X3, Settings, LogOut, Building2, Shield, Info, CreditCard, Bell } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { supabase, getUnreadNotificationCount, getRecentNotifications, Notification } from '../lib/supabase';
 
@@ -18,6 +19,7 @@ interface UserProfile {
 }
 
 const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate }) => {
+  const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isCompanyRepresentative, setIsCompanyRepresentative] = useState(false);
@@ -165,8 +167,11 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
   }, []);
 
   const handleNavigation = (page: string) => {
-    if (onNavigate) {
-      onNavigate(page);
+    // Use React Router navigation
+    if (page === 'home') {
+      navigate('/');
+    } else {
+      navigate(`/${page}`);
     }
     setIsMenuOpen(false);
     setIsNotificationDropdownOpen(false);
@@ -179,7 +184,7 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
     try {
       await signOut();
       // Navigate to home after successful logout
-      handleNavigation('home');
+      navigate('/');
     } catch (error) {
       console.error('Logout failed:', error);
       alert('Logout failed. Please try again.');
