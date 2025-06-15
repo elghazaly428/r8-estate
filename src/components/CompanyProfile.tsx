@@ -16,7 +16,13 @@ import {
   Edit,
   CheckCircle,
   AlertTriangle,
-  Clock
+  Clock,
+  Reply,
+  Send,
+  X,
+  Shield,
+  EyeOff,
+  Trash2
 } from 'lucide-react';
 import Header from './Header';
 import Footer from './Footer';
@@ -29,7 +35,8 @@ import {
   submitReplyReport,
   isCompanyRepresentative,
   CompanyWithCategory,
-  ReviewWithProfile
+  ReviewWithProfile,
+  supabase
 } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 
@@ -52,7 +59,13 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRepresentative, setIsRepresentative] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  
+  // Reply states
+  const [replyingToReviewId, setReplyingToReviewId] = useState<number | null>(null);
+  const [replyText, setReplyText] = useState('');
+  const [submittingReply, setSubmittingReply] = useState(false);
 
   const text = {
     ar: {
@@ -96,7 +109,21 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
       reportSubmitted: 'تم إرسال البلاغ بنجاح',
       errorOccurred: 'حدث خطأ',
       loginToVote: 'يجب تسجيل الدخول للتصويت',
-      loginToReport: 'يجب تسجيل الدخول للإبلاغ'
+      loginToReport: 'يجب تسجيل الدخول للإبلاغ',
+      writeReply: 'اكتب رداً...',
+      submitReply: 'إرسال الرد',
+      submitting: 'جاري الإرسال...',
+      replySubmitted: 'تم إرسال الرد بنجاح',
+      replyError: 'حدث خطأ أثناء إرسال الرد',
+      adminControls: 'أدوات الإدارة',
+      hide: 'إخفاء',
+      delete: 'حذف',
+      confirmHide: 'هل أنت متأكد من إخفاء هذا المحتوى؟',
+      confirmDelete: 'هل أنت متأكد من حذف هذا المحتوى نهائياً؟ لا يمكن التراجع عن هذا الإجراء.',
+      contentHidden: 'تم إخفاء المحتوى بنجاح',
+      contentDeleted: 'تم حذف المحتوى بنجاح',
+      hideError: 'حدث خطأ أثناء إخفاء المحتوى',
+      deleteError: 'حدث خطأ أثناء حذف المحتوى'
     },
     en: {
       loading: 'Loading...',
@@ -139,7 +166,21 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
       reportSubmitted: 'Report submitted successfully',
       errorOccurred: 'An error occurred',
       loginToVote: 'Please log in to vote',
-      loginToReport: 'Please log in to report'
+      loginToReport: 'Please log in to report',
+      writeReply: 'Write a reply...',
+      submitReply: 'Submit Reply',
+      submitting: 'Submitting...',
+      replySubmitted: 'Reply submitted successfully',
+      replyError: 'Error submitting reply',
+      adminControls: 'Admin Controls',
+      hide: 'Hide',
+      delete: 'Delete',
+      confirmHide: 'Are you sure you want to hide this content?',
+      confirmDelete: 'Are you sure you want to permanently delete this content? This action cannot be undone.',
+      contentHidden: 'Content hidden successfully',
+      contentDeleted: 'Content deleted successfully',
+      hideError: 'Error hiding content',
+      deleteError: 'Error deleting content'
     }
   };
 
@@ -186,6 +227,17 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
         if (user) {
           const isRep = await isCompanyRepresentative(companyId, user.id);
           setIsRepresentative(isRep);
+
+          // Check if current user is an admin
+          const { data: profileData, error: profileError } = await supabase
+            .from('profiles')
+            .select('is_admin')
+            .eq('id', user.id)
+            .single();
+
+          if (!profileError && profileData) {
+            setIsAdmin(profileData.is_admin || false);
+          }
         }
       } catch (error: any) {
         console.error('Error fetching company data:', error);
@@ -378,6 +430,139 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
     } catch (error) {
       console.error('Error submitting report:', error);
       setToast({ message: text[language].errorOccurred, type: 'error' });
+    }
+  };
+
+  const handleReplySubmit = async (reviewId: number) => {
+    if (!replyText.trim() || !user) return;
+
+    setSubmittingReply(true);
+
+    try {
+      const { data, error } = await supabase
+        .from('company_replies')
+        .insert([{
+          review_id: reviewId,
+          reply_body: replyText.trim(),
+          profile_id: user.id,
+          status: 'published'
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Update reviews state to include the new reply
+      setReviews(prev => prev.map(review => 
+        review.id === reviewId 
+          ? { 
+              ...review, 
+              company_reply: {
+                ...data,
+                vote_count: 0,
+                user_has_voted: false
+              }
+            }
+          : review
+      ));
+
+      setReplyingToReviewId(null);
+      setReplyText('');
+      setToast({ message: text[language].replySubmitted, type: 'success' });
+    } catch (error: any) {
+      console.error('Error submitting reply:', error);
+      setToast({ message: text[language].replyError, type: 'error' });
+    } finally {
+      setSubmittingReply(false);
+    }
+  };
+
+  // Admin functions
+  const handleHideReview = async (reviewId: number) => {
+    if (!confirm(text[language].confirmHide)) return;
+
+    try {
+      const { error } = await supabase
+        .from('reviews')
+        .update({ status: 'removed' })
+        .eq('id', reviewId);
+
+      if (error) throw error;
+
+      // Remove from local state
+      setReviews(prev => prev.filter(review => review.id !== reviewId));
+      setToast({ message: text[language].contentHidden, type: 'success' });
+    } catch (error: any) {
+      console.error('Error hiding review:', error);
+      setToast({ message: text[language].hideError, type: 'error' });
+    }
+  };
+
+  const handleDeleteReview = async (reviewId: number) => {
+    if (!confirm(text[language].confirmDelete)) return;
+
+    try {
+      const { error } = await supabase
+        .from('reviews')
+        .delete()
+        .eq('id', reviewId);
+
+      if (error) throw error;
+
+      // Remove from local state
+      setReviews(prev => prev.filter(review => review.id !== reviewId));
+      setToast({ message: text[language].contentDeleted, type: 'success' });
+    } catch (error: any) {
+      console.error('Error deleting review:', error);
+      setToast({ message: text[language].deleteError, type: 'error' });
+    }
+  };
+
+  const handleHideReply = async (replyId: string, reviewId: number) => {
+    if (!confirm(text[language].confirmHide)) return;
+
+    try {
+      const { error } = await supabase
+        .from('company_replies')
+        .update({ status: 'removed' })
+        .eq('id', replyId);
+
+      if (error) throw error;
+
+      // Update local state to remove the reply
+      setReviews(prev => prev.map(review => 
+        review.id === reviewId 
+          ? { ...review, company_reply: null }
+          : review
+      ));
+      setToast({ message: text[language].contentHidden, type: 'success' });
+    } catch (error: any) {
+      console.error('Error hiding reply:', error);
+      setToast({ message: text[language].hideError, type: 'error' });
+    }
+  };
+
+  const handleDeleteReply = async (replyId: string, reviewId: number) => {
+    if (!confirm(text[language].confirmDelete)) return;
+
+    try {
+      const { error } = await supabase
+        .from('company_replies')
+        .delete()
+        .eq('id', replyId);
+
+      if (error) throw error;
+
+      // Update local state to remove the reply
+      setReviews(prev => prev.map(review => 
+        review.id === reviewId 
+          ? { ...review, company_reply: null }
+          : review
+      ));
+      setToast({ message: text[language].contentDeleted, type: 'success' });
+    } catch (error: any) {
+      console.error('Error deleting reply:', error);
+      setToast({ message: text[language].deleteError, type: 'error' });
     }
   };
 
@@ -653,6 +838,36 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
                   key={review.id}
                   className="border border-gray-200 rounded-lg p-6 hover:border-primary-300 transition-colors duration-200"
                 >
+                  {/* Admin Controls for Review */}
+                  {isAdmin && (
+                    <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                          <Shield className="h-4 w-4 text-red-500" />
+                          <span className="text-sm font-semibold text-gray-700">
+                            {text[language].adminControls}
+                          </span>
+                        </div>
+                        <div className="flex space-x-2 rtl:space-x-reverse">
+                          <button
+                            onClick={() => handleHideReview(review.id)}
+                            className="flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white text-xs rounded transition-colors duration-200"
+                          >
+                            <EyeOff className="h-3 w-3" />
+                            <span>{text[language].hide}</span>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteReview(review.id)}
+                            className="flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-xs rounded transition-colors duration-200"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            <span>{text[language].delete}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Review Header with Avatar */}
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center space-x-4 rtl:space-x-reverse">
@@ -733,9 +948,39 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
                     </div>
                   </div>
 
-                  {/* Company Reply */}
-                  {review.company_reply && (
+                  {/* Company Reply Section */}
+                  {review.company_reply ? (
                     <div className="mt-6 bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg rtl:border-r-4 rtl:border-l-0 rtl:rounded-l-lg rtl:rounded-r-none">
+                      {/* Admin Controls for Reply */}
+                      {isAdmin && (
+                        <div className="mb-3 p-2 bg-white border border-gray-200 rounded">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                              <Shield className="h-3 w-3 text-red-500" />
+                              <span className="text-xs font-semibold text-gray-700">
+                                {text[language].adminControls}
+                              </span>
+                            </div>
+                            <div className="flex space-x-2 rtl:space-x-reverse">
+                              <button
+                                onClick={() => handleHideReply(review.company_reply!.id, review.id)}
+                                className="flex items-center space-x-1 rtl:space-x-reverse px-2 py-1 bg-yellow-500 hover:bg-yellow-600 text-white text-xs rounded transition-colors duration-200"
+                              >
+                                <EyeOff className="h-2 w-2" />
+                                <span>{text[language].hide}</span>
+                              </button>
+                              <button
+                                onClick={() => handleDeleteReply(review.company_reply!.id, review.id)}
+                                className="flex items-center space-x-1 rtl:space-x-reverse px-2 py-1 bg-red-500 hover:bg-red-600 text-white text-xs rounded transition-colors duration-200"
+                              >
+                                <Trash2 className="h-2 w-2" />
+                                <span>{text[language].delete}</span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="flex items-center space-x-2 rtl:space-x-reverse mb-2">
                         <Building2 className="h-4 w-4 text-blue-600" />
                         <span className="font-semibold text-blue-800">{text[language].companyReply}</span>
@@ -773,6 +1018,70 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
                         </button>
                       </div>
                     </div>
+                  ) : (
+                    // Reply Section for Company Representatives
+                    isRepresentative && (
+                      <div className="mt-6">
+                        {replyingToReviewId === review.id ? (
+                          // Reply Form
+                          <div className="bg-gray-50 p-4 rounded-lg">
+                            <textarea
+                              value={replyText}
+                              onChange={(e) => setReplyText(e.target.value)}
+                              placeholder={text[language].writeReply}
+                              rows={3}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 mb-3"
+                              dir={language === 'ar' ? 'rtl' : 'ltr'}
+                              disabled={submittingReply}
+                            />
+                            <div className="flex space-x-3 rtl:space-x-reverse">
+                              <button
+                                onClick={() => {
+                                  setReplyingToReviewId(null);
+                                  setReplyText('');
+                                }}
+                                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                                disabled={submittingReply}
+                              >
+                                <X className="h-4 w-4 inline mr-2 rtl:ml-2 rtl:mr-0" />
+                                {text[language].cancel}
+                              </button>
+                              <button
+                                onClick={() => handleReplySubmit(review.id)}
+                                disabled={!replyText.trim() || submittingReply}
+                                className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 rtl:space-x-reverse"
+                              >
+                                {submittingReply ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                    <span>{text[language].submitting}</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Send className="h-4 w-4" />
+                                    <span>{text[language].submitReply}</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          // Reply Button
+                          <div className="pt-4 border-t border-gray-100">
+                            <button
+                              onClick={() => {
+                                setReplyingToReviewId(review.id);
+                                setReplyText('');
+                              }}
+                              className="flex items-center space-x-2 rtl:space-x-reverse bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg transition-colors duration-200"
+                            >
+                              <Reply className="h-4 w-4" />
+                              <span>{text[language].reply}</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )
                   )}
                 </div>
               ))}
