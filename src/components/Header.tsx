@@ -26,6 +26,7 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
   const [unreadCount, setUnreadCount] = useState(0);
   const [recentNotifications, setRecentNotifications] = useState<Notification[]>([]);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { user, isAuthenticated, signOut, loading } = useAuth();
 
   const text = {
