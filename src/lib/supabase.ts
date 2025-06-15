@@ -1,132 +1,479 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables. Please check your .env file.');
+  throw new Error('Missing Supabase environment variables')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Add validation for URL format
+if (!supabaseUrl.startsWith('https://') || !supabaseUrl.includes('.supabase.co')) {
+  console.error('Invalid Supabase URL format:', supabaseUrl)
+  throw new Error('Invalid Supabase URL format')
+}
 
-// Type definitions
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+})
+
+// Test connection function
+export const testConnection = async (): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { data, error } = await supabase
+      .from('companies')
+      .select('id')
+      .limit(1)
+      .single()
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned" which is OK
+      throw error
+    }
+
+    return { success: true }
+  } catch (error: any) {
+    console.error('Supabase connection test failed:', error)
+    return { success: false, error: error.message }
+  }
+}
+
+// Database types based on the schema
 export interface Profile {
-  first_name: string | null;
-  last_name: string | null;
-  avatar_url: string | null;
-}
-
-export interface Category {
-  id: number;
-  name: string | null;
-  description: string | null;
-  icon_name: string | null;
-  created_at: string;
+  id: string
+  updated_at: string
+  first_name: string | null
+  last_name: string | null
+  avatar_url: string | null
 }
 
 export interface Company {
-  id: number;
-  created_at: string;
-  name: string | null;
-  logo_url: string | null;
-  website: string | null;
-  domain_name: string | null;
-  is_claimed: boolean | null;
-  category_id: number | null;
-  established_in: number | null;
-  location: string | null;
-  description: string | null;
+  id: number
+  created_at: string
+  name: string | null
+  logo_url: string | null
+  website: string | null
+  domain_name: string | null
+  is_claimed: boolean | null
+  category_id: number | null
+  description: string | null
+  established_in: number | null
+  location: string | null
 }
 
-export interface CompanyWithCategory extends Company {
-  categories: Category | null;
-}
-
-export interface CompanySearchResult extends CompanyWithCategory {
-  average_rating: number;
-  review_count: number;
+// Extended company interface for search results with ratings
+export interface CompanySearchResult {
+  id: number
+  name: string | null
+  logo_url: string | null
+  website: string | null
+  avg_rating: number
+  review_count: number
 }
 
 export interface Review {
-  id: number;
-  created_at: string;
-  profile_id: string | null;
-  company_id: number | null;
-  title: string | null;
-  body: string | null;
-  rating_communication: number | null;
-  rating_responsiveness: number | null;
-  rating_value: number | null;
-  rating_friendliness: number | null;
-  overall_rating: number | null;
-  date_of_experience: string | null;
-  has_document: boolean | null;
-  is_anonymous: boolean | null;
-  status: string | null;
+  id: number
+  created_at: string
+  profile_id: string | null
+  company_id: number | null
+  title: string | null
+  body: string | null
+  rating_communication: number | null
+  rating_responsiveness: number | null
+  rating_value: number | null
+  rating_friendliness: number | null
+  overall_rating: number | null
+  date_of_experience: string | null
+  has_document: boolean | null
+  is_anonymous: boolean | null
+  status: 'pending_approval' | 'published' | 'removed' | 'flagged_for_review' | null
+}
+
+export interface Category {
+  id: number
+  created_at: string
+  name: string | null
+  description: string | null
+  icon_name: string | null
+}
+
+export interface ReviewVote {
+  review_id: number
+  profile_id: string
+}
+
+export interface Report {
+  id: string
+  review_id: number
+  reporter_profile_id: string
+  reason: string
+  details: string | null
+  status: 'pending' | 'reviewed' | 'resolved'
+  created_at: string
+}
+
+export interface CompanyRepresentative {
+  id: string
+  company_id: number
+  profile_id: string
+  role: string
+  verified_at: string
+  created_at: string
 }
 
 export interface CompanyReply {
-  id: number;
-  created_at: string;
-  reply_body: string | null;
-  review_id: number | null;
-  profile_id: string | null;
-  status: string | null;
+  id: string
+  created_at: string
+  reply_body: string | null
+  review_id: number
+  profile_id: string | null
+  status?: string | null
 }
 
-export interface CompanyReplyWithVotes extends CompanyReply {
-  vote_count: number;
-  user_has_voted: boolean;
+export interface ReplyVote {
+  reply_id: string
+  profile_id: string
+}
+
+export interface ReplyReport {
+  id: string
+  reply_id: string
+  reporter_profile_id: string
+  reason: string
+  details: string | null
+  status: 'pending' | 'reviewed' | 'resolved'
+  created_at: string
+}
+
+// Notification interface
+export interface Notification {
+  id: string
+  recipient_profile_id: string
+  type: string
+  message: string
+  link_url: string | null
+  is_read: boolean
+  created_at: string
+}
+
+// Extended interfaces for joined data
+export interface CompanyWithCategory extends Company {
+  categories: Category | null
 }
 
 export interface ReviewWithProfile extends Review {
-  profiles: Profile | null;
-  vote_count: number;
-  user_has_voted: boolean;
-  company_reply: CompanyReplyWithVotes | null;
+  profiles: Profile | null
+  vote_count?: number
+  user_has_voted?: boolean
+  company_reply?: CompanyReplyWithVotes | null
 }
 
-// Get all categories
+export interface CompanyReplyWithVotes extends CompanyReply {
+  vote_count?: number
+  user_has_voted?: boolean
+}
+
+// Notification functions
+export const getUnreadNotificationCount = async (userId: string): Promise<number> => {
+  try {
+    const { count, error } = await supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('recipient_profile_id', userId)
+      .eq('is_read', false);
+
+    if (error) {
+      console.error('Error fetching unread notification count:', error);
+      throw error;
+    }
+
+    return count || 0;
+  } catch (error: any) {
+    console.error('Error in getUnreadNotificationCount:', error);
+    return 0;
+  }
+};
+
+export const getRecentNotifications = async (userId: string, limit: number = 5): Promise<Notification[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('recipient_profile_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('Error fetching recent notifications:', error);
+      throw error;
+    }
+
+    return data || [];
+  } catch (error: any) {
+    console.error('Error in getRecentNotifications:', error);
+    return [];
+  }
+};
+
+export const getAllNotifications = async (userId: string, page: number = 1, pageSize: number = 20): Promise<{ notifications: Notification[]; totalCount: number }> => {
+  try {
+    const offset = (page - 1) * pageSize;
+
+    // Get total count
+    const { count, error: countError } = await supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('recipient_profile_id', userId);
+
+    if (countError) {
+      console.error('Error fetching notification count:', countError);
+      throw countError;
+    }
+
+    // Get paginated notifications
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('recipient_profile_id', userId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) {
+      console.error('Error fetching notifications:', error);
+      throw error;
+    }
+
+    return {
+      notifications: data || [],
+      totalCount: count || 0
+    };
+  } catch (error: any) {
+    console.error('Error in getAllNotifications:', error);
+    return { notifications: [], totalCount: 0 };
+  }
+};
+
+export const markNotificationAsRead = async (notificationId: string, userId: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('id', notificationId)
+      .eq('recipient_profile_id', userId);
+
+    if (error) {
+      console.error('Error marking notification as read:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error in markNotificationAsRead:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+export const markAllNotificationsAsRead = async (userId: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('recipient_profile_id', userId)
+      .eq('is_read', false);
+
+    if (error) {
+      console.error('Error marking all notifications as read:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error in markAllNotificationsAsRead:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+export const createNotification = async (
+  recipientId: string,
+  type: string,
+  message: string,
+  linkUrl?: string
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .insert({
+        recipient_profile_id: recipientId,
+        type,
+        message,
+        link_url: linkUrl || null,
+        is_read: false
+      });
+
+    if (error) {
+      console.error('Error creating notification:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error in createNotification:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+// Utility functions for database operations
+export const getCompanyCount = async (): Promise<number> => {
+  try {
+    const { count, error } = await supabase
+      .from('companies')
+      .select('*', { count: 'exact', head: true });
+
+    if (error) {
+      console.error('Supabase error in getCompanyCount:', error)
+      throw error;
+    }
+
+    return count || 0;
+  } catch (error: any) {
+    console.error('Error fetching company count:', error);
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
+    return 0;
+  }
+};
+
+export const getAllCompanies = async (): Promise<Company[]> => {
+  try {
+    console.log('Attempting to fetch companies from:', supabaseUrl)
+    
+    const { data, error } = await supabase
+      .from('companies')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Supabase error in getAllCompanies:', error)
+      console.error('Error details:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint
+      })
+      throw error;
+    }
+
+    console.log('Successfully fetched companies:', data?.length || 0)
+    return data || [];
+  } catch (error: any) {
+    console.error('Error fetching companies:', error);
+    
+    // Provide more specific error information
+    if (error.message?.includes('fetch')) {
+      console.error('Network connectivity issue detected')
+      console.error('Check:')
+      console.error('1. Supabase URL:', supabaseUrl)
+      console.error('2. Internet connectivity')
+      console.error('3. Supabase project status')
+      console.error('4. CORS settings in Supabase dashboard')
+    }
+    
+    return [];
+  }
+};
+
 export const getAllCategories = async (): Promise<Category[]> => {
   try {
     const { data, error } = await supabase
       .from('categories')
       .select('*')
-      .order('name');
+      .order('name', { ascending: true });
 
     if (error) {
-      console.error('Error fetching categories:', error);
+      console.error('Supabase error in getAllCategories:', error)
       throw error;
     }
 
     return data || [];
-  } catch (error) {
-    console.error('Error in getAllCategories:', error);
+  } catch (error: any) {
+    console.error('Error fetching categories:', error);
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
     return [];
   }
 };
 
-// Get all companies
-export const getAllCompanies = async (): Promise<Company[]> => {
+export const getCategoryCompanyCount = async (categoryId: number): Promise<number> => {
+  try {
+    const { count, error } = await supabase
+      .from('companies')
+      .select('*', { count: 'exact', head: true })
+      .eq('category_id', categoryId);
+
+    if (error) {
+      console.error('Supabase error in getCategoryCompanyCount:', error)
+      throw error;
+    }
+
+    return count || 0;
+  } catch (error: any) {
+    console.error('Error fetching category company count:', error);
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
+    return 0;
+  }
+};
+
+export const searchCompanies = async (query: string): Promise<Company[]> => {
   try {
     const { data, error } = await supabase
       .from('companies')
       .select('*')
-      .order('name');
+      .or(`name.ilike.%${query}%,domain_name.ilike.%${query}%`)
+      .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Error fetching companies:', error);
+      console.error('Supabase error in searchCompanies:', error)
       throw error;
     }
 
     return data || [];
-  } catch (error) {
-    console.error('Error in getAllCompanies:', error);
+  } catch (error: any) {
+    console.error('Error searching companies:', error);
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
     return [];
   }
 };
 
-// Get company by ID
+// New function to search companies using RPC with ratings
+export const searchCompaniesWithRatings = async (query: string): Promise<CompanySearchResult[]> => {
+  try {
+    const { data, error } = await supabase.rpc('search_companies', {
+      search_term: query.trim()
+    });
+
+    if (error) {
+      console.error('Supabase error in searchCompaniesWithRatings:', error)
+      throw error;
+    }
+
+    return data || [];
+  } catch (error: any) {
+    console.error('Error searching companies with ratings:', error);
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
+    return [];
+  }
+};
+
 export const getCompanyById = async (id: number): Promise<Company | null> => {
   try {
     const { data, error } = await supabase
@@ -136,300 +483,46 @@ export const getCompanyById = async (id: number): Promise<Company | null> => {
       .single();
 
     if (error) {
-      console.error('Error fetching company:', error);
+      if (error.code === 'PGRST116') {
+        return null; // Company not found
+      }
+      console.error('Supabase error in getCompanyById:', error)
       throw error;
     }
 
     return data;
-  } catch (error) {
-    console.error('Error in getCompanyById:', error);
+  } catch (error: any) {
+    console.error('Error fetching company by ID:', error);
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
     return null;
   }
 };
 
-// Get company with category by ID
 export const getCompanyWithCategoryById = async (id: number): Promise<CompanyWithCategory | null> => {
   try {
     const { data, error } = await supabase
       .from('companies')
-      .select('*, categories(*)')
+      .select('*, categories(id, name, description)')
       .eq('id', id)
       .single();
 
     if (error) {
-      console.error('Error fetching company with category:', error);
+      if (error.code === 'PGRST116') {
+        return null; // Company not found
+      }
+      console.error('Supabase error in getCompanyWithCategoryById:', error)
       throw error;
     }
 
     return data;
-  } catch (error) {
-    console.error('Error in getCompanyWithCategoryById:', error);
+  } catch (error: any) {
+    console.error('Error fetching company with category by ID:', error);
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
     return null;
-  }
-};
-
-// Search companies
-export const searchCompanies = async (query: string, categoryId?: number): Promise<CompanySearchResult[]> => {
-  try {
-    let queryBuilder = supabase
-      .from('companies')
-      .select('*, categories(*)');
-
-    if (query) {
-      queryBuilder = queryBuilder.ilike('name', `%${query}%`);
-    }
-
-    if (categoryId) {
-      queryBuilder = queryBuilder.eq('category_id', categoryId);
-    }
-
-    const { data, error } = await queryBuilder.order('name');
-
-    if (error) {
-      console.error('Error searching companies:', error);
-      throw error;
-    }
-
-    if (!data) return [];
-
-    // Get ratings for each company
-    const companiesWithRatings = await Promise.all(
-      data.map(async (company) => {
-        const { data: reviews } = await supabase
-          .from('reviews')
-          .select('overall_rating')
-          .eq('company_id', company.id)
-          .eq('status', 'published');
-
-        const validRatings = reviews?.filter(r => r.overall_rating !== null) || [];
-        const averageRating = validRatings.length > 0 
-          ? validRatings.reduce((sum, r) => sum + (r.overall_rating || 0), 0) / validRatings.length
-          : 0;
-
-        return {
-          ...company,
-          average_rating: Math.round(averageRating * 10) / 10,
-          review_count: reviews?.length || 0
-        };
-      })
-    );
-
-    return companiesWithRatings;
-  } catch (error) {
-    console.error('Error in searchCompanies:', error);
-    return [];
-  }
-};
-
-// Search companies with ratings (alias for searchCompanies)
-export const searchCompaniesWithRatings = searchCompanies;
-
-// Get category company count
-export const getCategoryCompanyCount = async (categoryId: number): Promise<number> => {
-  try {
-    const { count, error } = await supabase
-      .from('companies')
-      .select('*', { count: 'exact', head: true })
-      .eq('category_id', categoryId);
-
-    if (error) {
-      console.error('Error getting category company count:', error);
-      throw error;
-    }
-
-    return count || 0;
-  } catch (error) {
-    console.error('Error in getCategoryCompanyCount:', error);
-    return 0;
-  }
-};
-
-// Toggle review vote
-export const toggleReviewVote = async (reviewId: number, userId: string): Promise<{ success: boolean; voteCount: number; isVoted: boolean }> => {
-  try {
-    // Check if user has already voted
-    const { data: existingVote } = await supabase
-      .from('review_votes')
-      .select('*')
-      .eq('review_id', reviewId)
-      .eq('profile_id', userId)
-      .single();
-
-    if (existingVote) {
-      // Remove vote
-      const { error } = await supabase
-        .from('review_votes')
-        .delete()
-        .eq('review_id', reviewId)
-        .eq('profile_id', userId);
-
-      if (error) throw error;
-    } else {
-      // Add vote
-      const { error } = await supabase
-        .from('review_votes')
-        .insert({ review_id: reviewId, profile_id: userId });
-
-      if (error) throw error;
-    }
-
-    // Get updated vote count
-    const { count } = await supabase
-      .from('review_votes')
-      .select('*', { count: 'exact', head: true })
-      .eq('review_id', reviewId);
-
-    return {
-      success: true,
-      voteCount: count || 0,
-      isVoted: !existingVote
-    };
-  } catch (error) {
-    console.error('Error toggling review vote:', error);
-    return { success: false, voteCount: 0, isVoted: false };
-  }
-};
-
-// Toggle reply vote
-export const toggleReplyVote = async (replyId: string, userId: string): Promise<{ success: boolean; voteCount: number; isVoted: boolean }> => {
-  try {
-    // Check if user has already voted
-    const { data: existingVote } = await supabase
-      .from('reply_votes')
-      .select('*')
-      .eq('reply_id', replyId)
-      .eq('profile_id', userId)
-      .single();
-
-    if (existingVote) {
-      // Remove vote
-      const { error } = await supabase
-        .from('reply_votes')
-        .delete()
-        .eq('reply_id', replyId)
-        .eq('profile_id', userId);
-
-      if (error) throw error;
-    } else {
-      // Add vote
-      const { error } = await supabase
-        .from('reply_votes')
-        .insert({ reply_id: replyId, profile_id: userId });
-
-      if (error) throw error;
-    }
-
-    // Get updated vote count
-    const { count } = await supabase
-      .from('reply_votes')
-      .select('*', { count: 'exact', head: true })
-      .eq('reply_id', replyId);
-
-    return {
-      success: true,
-      voteCount: count || 0,
-      isVoted: !existingVote
-    };
-  } catch (error) {
-    console.error('Error toggling reply vote:', error);
-    return { success: false, voteCount: 0, isVoted: false };
-  }
-};
-
-// Submit report
-export const submitReport = async (reviewId: number, reporterId: string, reason: string, details?: string): Promise<{ success: boolean; error?: string }> => {
-  try {
-    const { error } = await supabase
-      .from('reports')
-      .insert({
-        review_id: reviewId,
-        reporter_profile_id: reporterId,
-        reason,
-        details: details || null,
-        status: 'received'
-      });
-
-    if (error) {
-      console.error('Error submitting report:', error);
-      return { success: false, error: error.message };
-    }
-
-    return { success: true };
-  } catch (error: any) {
-    console.error('Error in submitReport:', error);
-    return { success: false, error: error.message };
-  }
-};
-
-// Submit reply report
-export const submitReplyReport = async (replyId: string, reporterId: string, reason: string, details?: string): Promise<{ success: boolean; error?: string }> => {
-  try {
-    const { error } = await supabase
-      .from('reply_reports')
-      .insert({
-        reply_id: replyId,
-        reporter_profile_id: reporterId,
-        reason,
-        details: details || null,
-        status: 'received'
-      });
-
-    if (error) {
-      console.error('Error submitting reply report:', error);
-      return { success: false, error: error.message };
-    }
-
-    return { success: true };
-  } catch (error: any) {
-    console.error('Error in submitReplyReport:', error);
-    return { success: false, error: error.message };
-  }
-};
-
-// Check if user is company representative
-export const isCompanyRepresentative = async (companyId: number, userId: string): Promise<boolean> => {
-  try {
-    // Validate inputs
-    if (!companyId || !userId) {
-      console.error('Invalid parameters for isCompanyRepresentative:', { companyId, userId });
-      return false;
-    }
-
-    // Check if Supabase client is properly initialized
-    if (!supabase) {
-      console.error('Supabase client not initialized');
-      return false;
-    }
-
-    const { data, error } = await supabase
-      .from('company_representatives')
-      .select('*')
-      .eq('company_id', companyId)
-      .eq('profile_id', userId)
-      .maybeSingle();
-
-    if (error) {
-      console.error('Error checking company representative:', error);
-      // If it's a network error, log additional details
-      if (error.message?.includes('fetch') || error.message?.includes('network')) {
-        console.error('Network error details:', {
-          supabaseUrl: import.meta.env.VITE_SUPABASE_URL ? 'Set' : 'Missing',
-          supabaseKey: import.meta.env.VITE_SUPABASE_ANON_KEY ? 'Set' : 'Missing'
-        });
-      }
-      return false;
-    }
-
-    return !!data;
-  } catch (error: any) {
-    console.error('Error in isCompanyRepresentative:', error);
-    // Log additional context for debugging
-    console.error('Function called with:', { companyId, userId });
-    console.error('Environment check:', {
-      supabaseUrl: import.meta.env.VITE_SUPABASE_URL ? 'Available' : 'Missing',
-      supabaseKey: import.meta.env.VITE_SUPABASE_ANON_KEY ? 'Available' : 'Missing'
-    });
-    return false;
   }
 };
 
@@ -555,5 +648,281 @@ export const getReviewsByCompanyId = async (companyId: number, userId?: string):
       console.error('Network error - check Supabase URL and connectivity')
     }
     return [];
+  }
+};
+
+// Review vote functions
+export const toggleReviewVote = async (reviewId: number, userId: string): Promise<{ success: boolean; isVoted: boolean; voteCount: number }> => {
+  try {
+    // Check if user has already voted
+    const { data: existingVote, error: checkError } = await supabase
+      .from('review_votes')
+      .select('review_id, profile_id')
+      .eq('review_id', reviewId)
+      .eq('profile_id', userId)
+      .limit(1);
+
+    if (checkError) {
+      console.error('Supabase error in toggleReviewVote (check):', checkError)
+      throw checkError;
+    }
+
+    if (existingVote && existingVote.length > 0) {
+      // Remove vote
+      const { error: deleteError } = await supabase
+        .from('review_votes')
+        .delete()
+        .eq('review_id', reviewId)
+        .eq('profile_id', userId);
+
+      if (deleteError) {
+        console.error('Supabase error in toggleReviewVote (delete):', deleteError)
+        throw deleteError;
+      }
+
+      // Get updated vote count
+      const { count: voteCount } = await supabase
+        .from('review_votes')
+        .select('*', { count: 'exact', head: true })
+        .eq('review_id', reviewId);
+
+      return { success: true, isVoted: false, voteCount: voteCount || 0 };
+    } else {
+      // Add vote
+      const { error: insertError } = await supabase
+        .from('review_votes')
+        .insert([{ review_id: reviewId, profile_id: userId }]);
+
+      if (insertError) {
+        console.error('Supabase error in toggleReviewVote (insert):', insertError)
+        throw insertError;
+      }
+
+      // Get updated vote count
+      const { count: voteCount } = await supabase
+        .from('review_votes')
+        .select('*', { count: 'exact', head: true })
+        .eq('review_id', reviewId);
+
+      return { success: true, isVoted: true, voteCount: voteCount || 0 };
+    }
+  } catch (error: any) {
+    console.error('Error toggling review vote:', error);
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
+    return { success: false, isVoted: false, voteCount: 0 };
+  }
+};
+
+// Reply vote functions
+export const toggleReplyVote = async (replyId: string, userId: string): Promise<{ success: boolean; isVoted: boolean; voteCount: number }> => {
+  try {
+    // Check if user has already voted
+    const { data: existingVote, error: checkError } = await supabase
+      .from('reply_votes')
+      .select('reply_id, profile_id')
+      .eq('reply_id', replyId)
+      .eq('profile_id', userId)
+      .limit(1);
+
+    if (checkError) {
+      console.error('Supabase error in toggleReplyVote (check):', checkError)
+      throw checkError;
+    }
+
+    if (existingVote && existingVote.length > 0) {
+      // Remove vote
+      const { error: deleteError } = await supabase
+        .from('reply_votes')
+        .delete()
+        .eq('reply_id', replyId)
+        .eq('profile_id', userId);
+
+      if (deleteError) {
+        console.error('Supabase error in toggleReplyVote (delete):', deleteError)
+        throw deleteError;
+      }
+
+      // Get updated vote count
+      const { count: voteCount } = await supabase
+        .from('reply_votes')
+        .select('*', { count: 'exact', head: true })
+        .eq('reply_id', replyId);
+
+      return { success: true, isVoted: false, voteCount: voteCount || 0 };
+    } else {
+      // Add vote
+      const { error: insertError } = await supabase
+        .from('reply_votes')
+        .insert([{ reply_id: replyId, profile_id: userId }]);
+
+      if (insertError) {
+        console.error('Supabase error in toggleReplyVote (insert):', insertError)
+        throw insertError;
+      }
+
+      // Get updated vote count
+      const { count: voteCount } = await supabase
+        .from('reply_votes')
+        .select('*', { count: 'exact', head: true })
+        .eq('reply_id', replyId);
+
+      return { success: true, isVoted: true, voteCount: voteCount || 0 };
+    }
+  } catch (error: any) {
+    console.error('Error toggling reply vote:', error);
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
+    return { success: false, isVoted: false, voteCount: 0 };
+  }
+};
+
+// Updated report functions using RPC calls
+export const submitReport = async (
+  reviewId: number, 
+  reporterUserId: string, 
+  reason: string, 
+  details?: string
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { data, error } = await supabase.rpc('handle_new_review_report', {
+      p_review_id: reviewId,
+      p_reporter_profile_id: reporterUserId,
+      p_reason: reason,
+      p_details: details || null
+    });
+
+    if (error) {
+      console.error('Supabase error in submitReport:', error)
+      throw error;
+    }
+
+    if (data.success) {
+      return { success: true };
+    } else {
+      return { success: false, error: data.error };
+    }
+  } catch (error: any) {
+    console.error('Error submitting report:', error);
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
+    return { success: false, error: error.message };
+  }
+};
+
+// Reply report functions using RPC calls
+export const submitReplyReport = async (
+  replyId: string, 
+  reporterUserId: string, 
+  reason: string, 
+  details?: string
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { data, error } = await supabase.rpc('handle_new_reply_report', {
+      p_reply_id: replyId,
+      p_reporter_profile_id: reporterUserId,
+      p_reason: reason,
+      p_details: details || null
+    });
+
+    if (error) {
+      console.error('Supabase error in submitReplyReport:', error)
+      throw error;
+    }
+
+    if (data.success) {
+      return { success: true };
+    } else {
+      return { success: false, error: data.error };
+    }
+  } catch (error: any) {
+    console.error('Error submitting reply report:', error);
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
+    return { success: false, error: error.message };
+  }
+};
+
+// Company representative functions
+export const isCompanyRepresentative = async (companyId: number, userId: string): Promise<boolean> => {
+  try {
+    const { data, error } = await supabase
+      .from('company_representatives')
+      .select('company_id')
+      .eq('company_id', companyId)
+      .eq('profile_id', userId)
+      .limit(1);
+
+    if (error) {
+      console.error('Supabase error in isCompanyRepresentative:', error)
+      throw error;
+    }
+
+    return data && data.length > 0;
+  } catch (error: any) {
+    console.error('Error checking company representative:', error);
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
+    return false;
+  }
+};
+
+// Company reply functions
+export const submitCompanyReply = async (
+  reviewId: number,
+  replyBody: string,
+  userId: string
+): Promise<{ success: boolean; error?: string; reply?: CompanyReply }> => {
+  try {
+    const { data, error } = await supabase
+      .from('company_replies')
+      .insert([{
+        review_id: reviewId,
+        reply_body: replyBody,
+        profile_id: userId
+      }])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Supabase error in submitCompanyReply:', error)
+      throw error;
+    }
+
+    return { success: true, reply: data };
+  } catch (error: any) {
+    console.error('Error submitting company reply:', error);
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
+    return { success: false, error: error.message };
+  }
+};
+
+// Company claiming functions
+export const claimCompany = async (companyId: number): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { error } = await supabase
+      .from('companies')
+      .update({ is_claimed: true })
+      .eq('id', companyId);
+
+    if (error) {
+      console.error('Supabase error in claimCompany:', error)
+      throw error;
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error claiming company:', error);
+    if (error.message?.includes('fetch')) {
+      console.error('Network error - check Supabase URL and connectivity')
+    }
+    return { success: false, error: error.message };
   }
 };

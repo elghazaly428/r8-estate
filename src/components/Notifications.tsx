@@ -1,7 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bell, Check, MessageSquare, ThumbsUp, Star, Building2, User, Clock } from 'lucide-react';
 import Header from './Header';
 import Footer from './Footer';
+import { useAuth } from '../hooks/useAuth';
+import { 
+  getAllNotifications, 
+  markNotificationAsRead, 
+  markAllNotificationsAsRead, 
+  Notification 
+} from '../lib/supabase';
 
 interface NotificationsProps {
   language: 'ar' | 'en';
@@ -9,83 +16,14 @@ interface NotificationsProps {
   onNavigate: (page: string) => void;
 }
 
-interface NotificationItem {
-  id: number;
-  type: 'reply' | 'vote' | 'review' | 'company' | 'system';
-  icon: string;
-  message: string;
-  timestamp: string;
-  isRead: boolean;
-  actionUrl?: string;
-}
-
 const Notifications: React.FC<NotificationsProps> = ({ language, onLanguageChange, onNavigate }) => {
-  const [notifications, setNotifications] = useState<NotificationItem[]>([
-    {
-      id: 1,
-      type: 'reply',
-      icon: '💬',
-      message: language === 'ar' ? 'شركة العقارات المتميزة ردت على تقييمك' : 'Premium Real Estate replied to your review',
-      timestamp: language === 'ar' ? 'منذ ٥ دقائق' : '5 minutes ago',
-      isRead: false
-    },
-    {
-      id: 2,
-      type: 'vote',
-      icon: '👍',
-      message: language === 'ar' ? 'أحد المستخدمين وجد تقييمك مفيداً' : 'Someone found your review helpful',
-      timestamp: language === 'ar' ? 'منذ ١٥ دقيقة' : '15 minutes ago',
-      isRead: false
-    },
-    {
-      id: 3,
-      type: 'review',
-      icon: '⭐',
-      message: language === 'ar' ? 'تم نشر تقييمك بنجاح' : 'Your review has been published',
-      timestamp: language === 'ar' ? 'منذ ساعة' : '1 hour ago',
-      isRead: false
-    },
-    {
-      id: 4,
-      type: 'company',
-      icon: '🏢',
-      message: language === 'ar' ? 'شركة جديدة انضمت إلى المنصة' : 'A new company joined the platform',
-      timestamp: language === 'ar' ? 'منذ ٣ ساعات' : '3 hours ago',
-      isRead: true
-    },
-    {
-      id: 5,
-      type: 'system',
-      icon: '🔔',
-      message: language === 'ar' ? 'تم تحديث شروط الاستخدام' : 'Terms of service have been updated',
-      timestamp: language === 'ar' ? 'منذ يوم' : '1 day ago',
-      isRead: true
-    },
-    {
-      id: 6,
-      type: 'reply',
-      icon: '💬',
-      message: language === 'ar' ? 'مجموعة الإسكان الحديث ردت على تقييمك' : 'Modern Housing Group replied to your review',
-      timestamp: language === 'ar' ? 'منذ يومين' : '2 days ago',
-      isRead: true
-    },
-    {
-      id: 7,
-      type: 'vote',
-      icon: '👍',
-      message: language === 'ar' ? 'حصل تقييمك على ١٠ إعجابات' : 'Your review received 10 likes',
-      timestamp: language === 'ar' ? 'منذ ٣ أيام' : '3 days ago',
-      isRead: true
-    },
-    {
-      id: 8,
-      type: 'review',
-      icon: '⭐',
-      message: language === 'ar' ? 'تذكير: اكتب تقييماً لشركة التطوير العقاري الذكي' : 'Reminder: Write a review for Smart Real Estate Development',
-      timestamp: language === 'ar' ? 'منذ أسبوع' : '1 week ago',
-      isRead: true
-    }
-  ]);
+  const { user } = useAuth();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [markingAllAsRead, setMarkingAllAsRead] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 20;
 
   const text = {
     ar: {
@@ -96,7 +34,10 @@ const Notifications: React.FC<NotificationsProps> = ({ language, onLanguageChang
       unreadNotifications: 'الإشعارات غير المقروءة',
       allNotifications: 'جميع الإشعارات',
       markAsRead: 'تحديد كمقروء',
-      markAsUnread: 'تحديد كغير مقروء'
+      markAsUnread: 'تحديد كغير مقروء',
+      loading: 'جاري التحميل...',
+      loadMore: 'تحميل المزيد',
+      markingAsRead: 'جاري التحديد...'
     },
     en: {
       notifications: 'Notifications',
@@ -106,9 +47,36 @@ const Notifications: React.FC<NotificationsProps> = ({ language, onLanguageChang
       unreadNotifications: 'Unread notifications',
       allNotifications: 'All notifications',
       markAsRead: 'Mark as read',
-      markAsUnread: 'Mark as unread'
+      markAsUnread: 'Mark as unread',
+      loading: 'Loading...',
+      loadMore: 'Load more',
+      markingAsRead: 'Marking as read...'
     }
   };
+
+  // Fetch notifications when component mounts or user changes
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      if (!user) {
+        onNavigate('login');
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const result = await getAllNotifications(user.id, currentPage, pageSize);
+        setNotifications(result.notifications);
+        setTotalCount(result.totalCount);
+      } catch (error) {
+        console.error('Error fetching notifications:', error);
+        setNotifications([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchNotifications();
+  }, [user, currentPage, onNavigate]);
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -127,24 +95,97 @@ const Notifications: React.FC<NotificationsProps> = ({ language, onLanguageChang
     }
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(notification => ({
-      ...notification,
-      isRead: true
-    })));
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffMinutes = Math.ceil(diffTime / (1000 * 60));
+    const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (language === 'ar') {
+      if (diffMinutes < 1) return 'الآن';
+      if (diffMinutes < 60) {
+        if (diffMinutes === 1) return 'منذ دقيقة';
+        return `منذ ${diffMinutes} دقائق`;
+      }
+      if (diffHours < 24) {
+        if (diffHours === 1) return 'منذ ساعة';
+        return `منذ ${diffHours} ساعات`;
+      }
+      if (diffDays === 1) return 'منذ يوم';
+      return `منذ ${diffDays} أيام`;
+    } else {
+      if (diffMinutes < 1) return 'just now';
+      if (diffMinutes < 60) {
+        return diffMinutes === 1 ? '1 minute ago' : `${diffMinutes} minutes ago`;
+      }
+      if (diffHours < 24) {
+        return diffHours === 1 ? '1 hour ago' : `${diffHours} hours ago`;
+      }
+      return diffDays === 1 ? '1 day ago' : `${diffDays} days ago`;
+    }
   };
 
-  const toggleNotificationRead = (id: number) => {
-    setNotifications(prev => prev.map(notification => 
-      notification.id === id 
-        ? { ...notification, isRead: !notification.isRead }
-        : notification
-    ));
+  const handleMarkAllAsRead = async () => {
+    if (!user || markingAllAsRead) return;
+
+    setMarkingAllAsRead(true);
+    try {
+      const result = await markAllNotificationsAsRead(user.id);
+      if (result.success) {
+        setNotifications(prev => prev.map(notification => ({
+          ...notification,
+          is_read: true
+        })));
+      }
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+    } finally {
+      setMarkingAllAsRead(false);
+    }
   };
 
-  const unreadCount = notifications.filter(n => !n.isRead).length;
-  const unreadNotifications = notifications.filter(n => !n.isRead);
-  const readNotifications = notifications.filter(n => n.isRead);
+  const handleNotificationClick = async (notification: Notification) => {
+    if (!user) return;
+
+    // Mark as read if not already read
+    if (!notification.is_read) {
+      try {
+        const result = await markNotificationAsRead(notification.id, user.id);
+        if (result.success) {
+          setNotifications(prev => prev.map(n => 
+            n.id === notification.id ? { ...n, is_read: true } : n
+          ));
+        }
+      } catch (error) {
+        console.error('Error marking notification as read:', error);
+      }
+    }
+
+    // Navigate to the link if available
+    if (notification.link_url) {
+      // Parse the link URL and navigate accordingly
+      if (notification.link_url.startsWith('/company/')) {
+        const companyId = parseInt(notification.link_url.split('/')[2]);
+        onNavigate('company', companyId);
+      } else if (notification.link_url.startsWith('/dashboard')) {
+        onNavigate('dashboard');
+      } else {
+        // Default navigation
+        onNavigate('home');
+      }
+    }
+  };
+
+  const unreadCount = notifications.filter(n => !n.is_read).length;
+  const unreadNotifications = notifications.filter(n => !n.is_read);
+  const readNotifications = notifications.filter(n => n.is_read);
+
+  // Redirect to login if not authenticated
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className={`min-h-screen bg-gray-50 ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
@@ -163,16 +204,23 @@ const Notifications: React.FC<NotificationsProps> = ({ language, onLanguageChang
           
           {unreadCount > 0 && (
             <button
-              onClick={markAllAsRead}
-              className="flex items-center space-x-2 rtl:space-x-reverse bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200"
+              onClick={handleMarkAllAsRead}
+              disabled={markingAllAsRead}
+              className="flex items-center space-x-2 rtl:space-x-reverse bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Check className="h-4 w-4" />
-              <span>{text[language].markAllAsRead}</span>
+              <span>{markingAllAsRead ? text[language].markingAsRead : text[language].markAllAsRead}</span>
             </button>
           )}
         </div>
 
-        {notifications.length === 0 ? (
+        {loading ? (
+          /* Loading State */
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">{text[language].loading}</p>
+          </div>
+        ) : notifications.length === 0 ? (
           /* Empty State */
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
             <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 text-3xl mx-auto mb-6">
@@ -202,7 +250,7 @@ const Notifications: React.FC<NotificationsProps> = ({ language, onLanguageChang
                     <div
                       key={notification.id}
                       className="px-6 py-4 hover:bg-gray-50 transition-colors duration-200 cursor-pointer"
-                      onClick={() => toggleNotificationRead(notification.id)}
+                      onClick={() => handleNotificationClick(notification)}
                     >
                       <div className="flex items-start space-x-4 rtl:space-x-reverse">
                         {/* Icon */}
@@ -222,7 +270,7 @@ const Notifications: React.FC<NotificationsProps> = ({ language, onLanguageChang
                               <div className="flex items-center space-x-2 rtl:space-x-reverse mt-2">
                                 <Clock className="h-3 w-3 text-gray-400" />
                                 <span className="text-sm text-gray-500">
-                                  {notification.timestamp}
+                                  {formatTimeAgo(notification.created_at)}
                                 </span>
                               </div>
                             </div>
@@ -252,7 +300,7 @@ const Notifications: React.FC<NotificationsProps> = ({ language, onLanguageChang
                     <div
                       key={notification.id}
                       className="px-6 py-4 hover:bg-gray-50 transition-colors duration-200 cursor-pointer opacity-75"
-                      onClick={() => toggleNotificationRead(notification.id)}
+                      onClick={() => handleNotificationClick(notification)}
                     >
                       <div className="flex items-start space-x-4 rtl:space-x-reverse">
                         {/* Icon */}
@@ -270,7 +318,7 @@ const Notifications: React.FC<NotificationsProps> = ({ language, onLanguageChang
                           <div className="flex items-center space-x-2 rtl:space-x-reverse mt-2">
                             <Clock className="h-3 w-3 text-gray-400" />
                             <span className="text-sm text-gray-400">
-                              {notification.timestamp}
+                              {formatTimeAgo(notification.created_at)}
                             </span>
                           </div>
                         </div>
@@ -278,6 +326,18 @@ const Notifications: React.FC<NotificationsProps> = ({ language, onLanguageChang
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Load More Button */}
+            {notifications.length < totalCount && (
+              <div className="text-center">
+                <button
+                  onClick={() => setCurrentPage(prev => prev + 1)}
+                  className="bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
+                >
+                  {text[language].loadMore}
+                </button>
               </div>
             )}
           </div>

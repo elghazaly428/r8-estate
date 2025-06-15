@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Globe, Menu, X, Home, Grid3X3, Settings, LogOut, Building2, Shield, Info, CreditCard, Bell } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { supabase } from '../lib/supabase';
+import { supabase, getUnreadNotificationCount, getRecentNotifications, Notification } from '../lib/supabase';
 
 interface HeaderProps {
   language: 'ar' | 'en';
@@ -19,11 +19,13 @@ interface UserProfile {
 
 const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isCompanyRepresentative, setIsCompanyRepresentative] = useState(false);
   const [checkingRole, setCheckingRole] = useState(false);
   const [isNotificationDropdownOpen, setIsNotificationDropdownOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [recentNotifications, setRecentNotifications] = useState<Notification[]>([]);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
   const { user, isAuthenticated, signOut, loading } = useAuth();
 
   const text = {
@@ -42,7 +44,9 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
       menu: 'القائمة',
       loggingOut: 'جاري تسجيل الخروج...',
       notifications: 'الإشعارات',
-      seeAllNotifications: 'عرض كل الإشعارات'
+      seeAllNotifications: 'عرض كل الإشعارات',
+      noNotifications: 'لا توجد إشعارات',
+      loadingNotifications: 'جاري التحميل...'
     },
     en: {
       home: 'Home',
@@ -59,41 +63,11 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
       menu: 'Menu',
       loggingOut: 'Logging out...',
       notifications: 'Notifications',
-      seeAllNotifications: 'See all notifications'
+      seeAllNotifications: 'See all notifications',
+      noNotifications: 'No notifications',
+      loadingNotifications: 'Loading...'
     }
   };
-
-  // Placeholder notification data
-  const placeholderNotifications = [
-    {
-      id: 1,
-      icon: '💬',
-      message: language === 'ar' ? 'شركة العقارات المتميزة ردت على تقييمك' : 'Premium Real Estate replied to your review',
-      timestamp: language === 'ar' ? 'منذ ٥ دقائق' : '5 minutes ago',
-      isRead: false
-    },
-    {
-      id: 2,
-      icon: '👍',
-      message: language === 'ar' ? 'أحد المستخدمين وجد تقييمك مفيداً' : 'Someone found your review helpful',
-      timestamp: language === 'ar' ? 'منذ ١٥ دقيقة' : '15 minutes ago',
-      isRead: false
-    },
-    {
-      id: 3,
-      icon: '⭐',
-      message: language === 'ar' ? 'تم نشر تقييمك بنجاح' : 'Your review has been published',
-      timestamp: language === 'ar' ? 'منذ ساعة' : '1 hour ago',
-      isRead: false
-    },
-    {
-      id: 4,
-      icon: '🏢',
-      message: language === 'ar' ? 'شركة جديدة انضمت إلى المنصة' : 'A new company joined the platform',
-      timestamp: language === 'ar' ? 'منذ ٣ ساعات' : '3 hours ago',
-      isRead: true
-    }
-  ];
 
   // Check user role when user changes
   useEffect(() => {
@@ -146,6 +120,36 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
     checkUserRole();
   }, [user]);
 
+  // Fetch notification data when user is authenticated
+  useEffect(() => {
+    const fetchNotificationData = async () => {
+      if (!user) {
+        setUnreadCount(0);
+        setRecentNotifications([]);
+        return;
+      }
+
+      try {
+        // Fetch unread count
+        const count = await getUnreadNotificationCount(user.id);
+        setUnreadCount(count);
+
+        // Fetch recent notifications when dropdown is opened
+        if (isNotificationDropdownOpen) {
+          setLoadingNotifications(true);
+          const notifications = await getRecentNotifications(user.id, 4);
+          setRecentNotifications(notifications);
+          setLoadingNotifications(false);
+        }
+      } catch (error) {
+        console.error('Error fetching notification data:', error);
+        setLoadingNotifications(false);
+      }
+    };
+
+    fetchNotificationData();
+  }, [user, isNotificationDropdownOpen]);
+
   // Close notification dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -180,6 +184,55 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
       alert('Logout failed. Please try again.');
     } finally {
       setIsLoggingOut(false);
+    }
+  };
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffMinutes = Math.ceil(diffTime / (1000 * 60));
+    const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (language === 'ar') {
+      if (diffMinutes < 1) return 'الآن';
+      if (diffMinutes < 60) {
+        if (diffMinutes === 1) return 'منذ دقيقة';
+        return `منذ ${diffMinutes} دقائق`;
+      }
+      if (diffHours < 24) {
+        if (diffHours === 1) return 'منذ ساعة';
+        return `منذ ${diffHours} ساعات`;
+      }
+      if (diffDays === 1) return 'منذ يوم';
+      return `منذ ${diffDays} أيام`;
+    } else {
+      if (diffMinutes < 1) return 'just now';
+      if (diffMinutes < 60) {
+        return diffMinutes === 1 ? '1 minute ago' : `${diffMinutes} minutes ago`;
+      }
+      if (diffHours < 24) {
+        return diffHours === 1 ? '1 hour ago' : `${diffHours} hours ago`;
+      }
+      return diffDays === 1 ? '1 day ago' : `${diffDays} days ago`;
+    }
+  };
+
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'reply':
+        return '💬';
+      case 'vote':
+        return '👍';
+      case 'review':
+        return '⭐';
+      case 'company':
+        return '🏢';
+      case 'system':
+        return '🔔';
+      default:
+        return '📢';
     }
   };
 
@@ -220,7 +273,6 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
   };
 
   const dashboardLinks = getDashboardLinks();
-  const unreadCount = placeholderNotifications.filter(n => !n.isRead).length;
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-100 sticky top-0 z-50">
@@ -332,34 +384,45 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
 
                           {/* Notification List */}
                           <div className="max-h-64 overflow-y-auto">
-                            {placeholderNotifications.slice(0, 4).map((notification) => (
-                              <div
-                                key={notification.id}
-                                className="px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0"
-                              >
-                                <div className="flex items-start space-x-3 rtl:space-x-reverse">
-                                  {/* Icon */}
-                                  <div className="text-lg flex-shrink-0 mt-0.5">
-                                    {notification.icon}
-                                  </div>
-                                  
-                                  {/* Content */}
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm text-gray-800 leading-relaxed">
-                                      {notification.message}
-                                    </p>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                      {notification.timestamp}
-                                    </p>
-                                  </div>
-                                  
-                                  {/* Unread indicator */}
-                                  {!notification.isRead && (
-                                    <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-2"></div>
-                                  )}
-                                </div>
+                            {loadingNotifications ? (
+                              <div className="px-4 py-6 text-center">
+                                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-500 mx-auto mb-2"></div>
+                                <p className="text-gray-500 text-sm">{text[language].loadingNotifications}</p>
                               </div>
-                            ))}
+                            ) : recentNotifications.length === 0 ? (
+                              <div className="px-4 py-6 text-center">
+                                <p className="text-gray-500 text-sm">{text[language].noNotifications}</p>
+                              </div>
+                            ) : (
+                              recentNotifications.map((notification) => (
+                                <div
+                                  key={notification.id}
+                                  className="px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0"
+                                >
+                                  <div className="flex items-start space-x-3 rtl:space-x-reverse">
+                                    {/* Icon */}
+                                    <div className="text-lg flex-shrink-0 mt-0.5">
+                                      {getNotificationIcon(notification.type)}
+                                    </div>
+                                    
+                                    {/* Content */}
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm text-gray-800 leading-relaxed">
+                                        {notification.message}
+                                      </p>
+                                      <p className="text-xs text-gray-500 mt-1">
+                                        {formatTimeAgo(notification.created_at)}
+                                      </p>
+                                    </div>
+                                    
+                                    {/* Unread indicator */}
+                                    {!notification.is_read && (
+                                      <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-2"></div>
+                                    )}
+                                  </div>
+                                </div>
+                              ))
+                            )}
                           </div>
 
                           {/* Footer */}
