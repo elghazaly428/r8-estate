@@ -3,6 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables. Please check your .env file.');
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Type definitions
@@ -385,6 +389,18 @@ export const submitReplyReport = async (replyId: string, reporterId: string, rea
 // Check if user is company representative
 export const isCompanyRepresentative = async (companyId: number, userId: string): Promise<boolean> => {
   try {
+    // Validate inputs
+    if (!companyId || !userId) {
+      console.error('Invalid parameters for isCompanyRepresentative:', { companyId, userId });
+      return false;
+    }
+
+    // Check if Supabase client is properly initialized
+    if (!supabase) {
+      console.error('Supabase client not initialized');
+      return false;
+    }
+
     const { data, error } = await supabase
       .from('company_representatives')
       .select('*')
@@ -394,12 +410,25 @@ export const isCompanyRepresentative = async (companyId: number, userId: string)
 
     if (error) {
       console.error('Error checking company representative:', error);
+      // If it's a network error, log additional details
+      if (error.message?.includes('fetch') || error.message?.includes('network')) {
+        console.error('Network error details:', {
+          supabaseUrl: import.meta.env.VITE_SUPABASE_URL ? 'Set' : 'Missing',
+          supabaseKey: import.meta.env.VITE_SUPABASE_ANON_KEY ? 'Set' : 'Missing'
+        });
+      }
       return false;
     }
 
     return !!data;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in isCompanyRepresentative:', error);
+    // Log additional context for debugging
+    console.error('Function called with:', { companyId, userId });
+    console.error('Environment check:', {
+      supabaseUrl: import.meta.env.VITE_SUPABASE_URL ? 'Available' : 'Missing',
+      supabaseKey: import.meta.env.VITE_SUPABASE_ANON_KEY ? 'Available' : 'Missing'
+    });
     return false;
   }
 };
