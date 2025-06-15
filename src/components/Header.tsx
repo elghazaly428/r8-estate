@@ -26,7 +26,7 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
   const [unreadCount, setUnreadCount] = useState(0);
   const [recentNotifications, setRecentNotifications] = useState<Notification[]>([]);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
-  const [isLoggingOut, setIsLoggingOut] = useState(false); // Add missing state variable
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { user, isAuthenticated, signOut, loading } = useAuth();
 
   const text = {
@@ -222,18 +222,56 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
-      case 'reply':
-        return '💬';
-      case 'vote':
-        return '👍';
-      case 'review':
+      case 'new_review':
         return '⭐';
-      case 'company':
-        return '🏢';
-      case 'system':
-        return '🔔';
+      case 'new_reply':
+        return '💬';
+      case 'review_approved':
+        return '✔️';
       default:
-        return '📢';
+        return '🔔';
+    }
+  };
+
+  const handleNotificationClick = async (notification: Notification) => {
+    if (!user) return;
+
+    // Mark as read if not already read
+    if (!notification.is_read) {
+      try {
+        const { error } = await supabase
+          .from('notifications')
+          .update({ is_read: true })
+          .eq('id', notification.id)
+          .eq('recipient_profile_id', user.id);
+
+        if (!error) {
+          // Update local state
+          setRecentNotifications(prev => prev.map(n => 
+            n.id === notification.id ? { ...n, is_read: true } : n
+          ));
+          setUnreadCount(prev => Math.max(0, prev - 1));
+        }
+      } catch (error) {
+        console.error('Error marking notification as read:', error);
+      }
+    }
+
+    // Close dropdown
+    setIsNotificationDropdownOpen(false);
+
+    // Navigate to the link if available
+    if (notification.link_url) {
+      // Parse the link URL and navigate accordingly
+      if (notification.link_url.startsWith('/company/')) {
+        const companyId = parseInt(notification.link_url.split('/')[2]);
+        onNavigate && onNavigate('company', companyId);
+      } else if (notification.link_url.startsWith('/dashboard')) {
+        onNavigate && onNavigate('dashboard');
+      } else {
+        // Default navigation
+        onNavigate && onNavigate('home');
+      }
     }
   };
 
@@ -396,9 +434,10 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
                               </div>
                             ) : (
                               recentNotifications.map((notification) => (
-                                <div
+                                <button
                                   key={notification.id}
-                                  className="px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0"
+                                  onClick={() => handleNotificationClick(notification)}
+                                  className="w-full px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0 text-left"
                                 >
                                   <div className="flex items-start space-x-3 rtl:space-x-reverse">
                                     {/* Icon */}
@@ -421,7 +460,7 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
                                       <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-2"></div>
                                     )}
                                   </div>
-                                </div>
+                                </button>
                               ))
                             )}
                           </div>

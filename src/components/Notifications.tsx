@@ -87,12 +87,14 @@ const Notifications: React.FC<NotificationsProps> = ({ language, onLanguageChang
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
-      case 'reply':
+      case 'new_review':
+        return <Star className="h-5 w-5 text-yellow-500" />;
+      case 'new_reply':
         return <MessageSquare className="h-5 w-5 text-blue-500" />;
+      case 'review_approved':
+        return <Check className="h-5 w-5 text-green-500" />;
       case 'vote':
         return <ThumbsUp className="h-5 w-5 text-green-500" />;
-      case 'review':
-        return <Star className="h-5 w-5 text-yellow-500" />;
       case 'company':
         return <Building2 className="h-5 w-5 text-purple-500" />;
       case 'system':
@@ -231,6 +233,43 @@ const Notifications: React.FC<NotificationsProps> = ({ language, onLanguageChang
     );
   }
 
+  // Notification Item Component
+  const NotificationItem: React.FC<{ notification: Notification; onClick: () => void }> = ({ notification, onClick }) => (
+    <button
+      onClick={onClick}
+      className="w-full px-6 py-4 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0 text-left"
+    >
+      <div className="flex items-start space-x-4 rtl:space-x-reverse">
+        {/* Icon (Left Side) */}
+        <div className="flex-shrink-0 mt-1">
+          <div className="w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center">
+            {getNotificationIcon(notification.type)}
+          </div>
+        </div>
+        
+        {/* Text Content (Middle) */}
+        <div className="flex-1 min-w-0">
+          {/* Top Line: Message */}
+          <p className={`text-sm leading-relaxed ${notification.is_read ? 'text-gray-600' : 'text-gray-800 font-medium'}`}>
+            {notification.message}
+          </p>
+          {/* Bottom Line: Timestamp */}
+          <div className="flex items-center space-x-2 rtl:space-x-reverse mt-2">
+            <Clock className="h-3 w-3 text-gray-400" />
+            <span className="text-xs text-gray-400">
+              {formatTimeAgo(notification.created_at)}
+            </span>
+          </div>
+        </div>
+        
+        {/* Unread Indicator (Right Side) */}
+        {!notification.is_read && (
+          <div className="w-3 h-3 bg-blue-500 rounded-full flex-shrink-0 mt-1"></div>
+        )}
+      </div>
+    </button>
+  );
+
   return (
     <div className={`min-h-screen bg-gray-50 ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <Header language={language} onLanguageChange={onLanguageChange} onNavigate={onNavigate} />
@@ -291,40 +330,11 @@ const Notifications: React.FC<NotificationsProps> = ({ language, onLanguageChang
                 
                 <div className="divide-y divide-gray-100">
                   {unreadNotifications.map((notification) => (
-                    <div
+                    <NotificationItem
                       key={notification.id}
-                      className="px-6 py-4 hover:bg-gray-50 transition-colors duration-200 cursor-pointer"
+                      notification={notification}
                       onClick={() => handleNotificationClick(notification)}
-                    >
-                      <div className="flex items-start space-x-4 rtl:space-x-reverse">
-                        {/* Icon */}
-                        <div className="flex-shrink-0 mt-1">
-                          <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
-                            {getNotificationIcon(notification.type)}
-                          </div>
-                        </div>
-                        
-                        {/* Content */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <p className="text-gray-800 font-medium leading-relaxed">
-                                {notification.message}
-                              </p>
-                              <div className="flex items-center space-x-2 rtl:space-x-reverse mt-2">
-                                <Clock className="h-3 w-3 text-gray-400" />
-                                <span className="text-sm text-gray-500">
-                                  {formatTimeAgo(notification.created_at)}
-                                </span>
-                              </div>
-                            </div>
-                            
-                            {/* Unread indicator */}
-                            <div className="w-3 h-3 bg-blue-500 rounded-full flex-shrink-0 mt-1"></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    />
                   ))}
                 </div>
               </div>
@@ -341,33 +351,11 @@ const Notifications: React.FC<NotificationsProps> = ({ language, onLanguageChang
                 
                 <div className="divide-y divide-gray-100">
                   {readNotifications.map((notification) => (
-                    <div
+                    <NotificationItem
                       key={notification.id}
-                      className="px-6 py-4 hover:bg-gray-50 transition-colors duration-200 cursor-pointer opacity-75"
+                      notification={notification}
                       onClick={() => handleNotificationClick(notification)}
-                    >
-                      <div className="flex items-start space-x-4 rtl:space-x-reverse">
-                        {/* Icon */}
-                        <div className="flex-shrink-0 mt-1">
-                          <div className="w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center">
-                            {getNotificationIcon(notification.type)}
-                          </div>
-                        </div>
-                        
-                        {/* Content */}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-gray-600 leading-relaxed">
-                            {notification.message}
-                          </p>
-                          <div className="flex items-center space-x-2 rtl:space-x-reverse mt-2">
-                            <Clock className="h-3 w-3 text-gray-400" />
-                            <span className="text-sm text-gray-400">
-                              {formatTimeAgo(notification.created_at)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    />
                   ))}
                 </div>
               </div>
