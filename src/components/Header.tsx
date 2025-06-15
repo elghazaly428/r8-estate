@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Globe, Menu, X, Home, Grid3X3, Settings, LogOut, Building2, Shield, Info, CreditCard } from 'lucide-react';
+import { Globe, Menu, X, Home, Grid3X3, Settings, LogOut, Building2, Shield, Info, CreditCard, Bell } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 
@@ -23,6 +23,7 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isCompanyRepresentative, setIsCompanyRepresentative] = useState(false);
   const [checkingRole, setCheckingRole] = useState(false);
+  const [isNotificationDropdownOpen, setIsNotificationDropdownOpen] = useState(false);
   const { user, isAuthenticated, signOut, loading } = useAuth();
 
   const text = {
@@ -39,7 +40,9 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
       adminPanel: 'لوحة تحكم الأدمن',
       logout: 'تسجيل الخروج',
       menu: 'القائمة',
-      loggingOut: 'جاري تسجيل الخروج...'
+      loggingOut: 'جاري تسجيل الخروج...',
+      notifications: 'الإشعارات',
+      seeAllNotifications: 'عرض كل الإشعارات'
     },
     en: {
       home: 'Home',
@@ -54,9 +57,43 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
       adminPanel: 'Admin Panel',
       logout: 'Log Out',
       menu: 'Menu',
-      loggingOut: 'Logging out...'
+      loggingOut: 'Logging out...',
+      notifications: 'Notifications',
+      seeAllNotifications: 'See all notifications'
     }
   };
+
+  // Placeholder notification data
+  const placeholderNotifications = [
+    {
+      id: 1,
+      icon: '💬',
+      message: language === 'ar' ? 'شركة العقارات المتميزة ردت على تقييمك' : 'Premium Real Estate replied to your review',
+      timestamp: language === 'ar' ? 'منذ ٥ دقائق' : '5 minutes ago',
+      isRead: false
+    },
+    {
+      id: 2,
+      icon: '👍',
+      message: language === 'ar' ? 'أحد المستخدمين وجد تقييمك مفيداً' : 'Someone found your review helpful',
+      timestamp: language === 'ar' ? 'منذ ١٥ دقيقة' : '15 minutes ago',
+      isRead: false
+    },
+    {
+      id: 3,
+      icon: '⭐',
+      message: language === 'ar' ? 'تم نشر تقييمك بنجاح' : 'Your review has been published',
+      timestamp: language === 'ar' ? 'منذ ساعة' : '1 hour ago',
+      isRead: false
+    },
+    {
+      id: 4,
+      icon: '🏢',
+      message: language === 'ar' ? 'شركة جديدة انضمت إلى المنصة' : 'A new company joined the platform',
+      timestamp: language === 'ar' ? 'منذ ٣ ساعات' : '3 hours ago',
+      isRead: true
+    }
+  ];
 
   // Check user role when user changes
   useEffect(() => {
@@ -109,11 +146,25 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
     checkUserRole();
   }, [user]);
 
+  // Close notification dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('.notification-dropdown')) {
+        setIsNotificationDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const handleNavigation = (page: string) => {
     if (onNavigate) {
       onNavigate(page);
     }
     setIsMenuOpen(false);
+    setIsNotificationDropdownOpen(false);
   };
 
   const handleLogout = async () => {
@@ -169,6 +220,7 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
   };
 
   const dashboardLinks = getDashboardLinks();
+  const unreadCount = placeholderNotifications.filter(n => !n.isRead).length;
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-100 sticky top-0 z-50">
@@ -254,8 +306,76 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
                     </button>
                   </>
                 ) : (
-                  // Logged in state - Show role-based dashboard links and logout
+                  // Logged in state - Show notifications, dashboard links and logout
                   <>
+                    {/* Notification Bell */}
+                    <div className="relative notification-dropdown">
+                      <button
+                        onClick={() => setIsNotificationDropdownOpen(!isNotificationDropdownOpen)}
+                        className="relative p-2 text-gray-600 hover:text-primary-500 transition-colors duration-200 rounded-lg hover:bg-gray-50"
+                      >
+                        <Bell className="h-5 w-5" />
+                        {unreadCount > 0 && (
+                          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                            {unreadCount}
+                          </span>
+                        )}
+                      </button>
+
+                      {/* Notification Dropdown */}
+                      {isNotificationDropdownOpen && (
+                        <div className="absolute top-full right-0 rtl:left-0 rtl:right-auto mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-50 max-h-96 overflow-hidden">
+                          {/* Header */}
+                          <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+                            <h3 className="font-bold text-dark-500">{text[language].notifications}</h3>
+                          </div>
+
+                          {/* Notification List */}
+                          <div className="max-h-64 overflow-y-auto">
+                            {placeholderNotifications.slice(0, 4).map((notification) => (
+                              <div
+                                key={notification.id}
+                                className="px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0"
+                              >
+                                <div className="flex items-start space-x-3 rtl:space-x-reverse">
+                                  {/* Icon */}
+                                  <div className="text-lg flex-shrink-0 mt-0.5">
+                                    {notification.icon}
+                                  </div>
+                                  
+                                  {/* Content */}
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm text-gray-800 leading-relaxed">
+                                      {notification.message}
+                                    </p>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      {notification.timestamp}
+                                    </p>
+                                  </div>
+                                  
+                                  {/* Unread indicator */}
+                                  {!notification.isRead && (
+                                    <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 mt-2"></div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Footer */}
+                          <div className="px-4 py-3 border-t border-gray-100 bg-gray-50">
+                            <button
+                              onClick={() => handleNavigation('notifications')}
+                              className="w-full text-center text-primary-500 hover:text-primary-600 font-medium text-sm transition-colors duration-200"
+                            >
+                              {text[language].seeAllNotifications}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Dashboard Links */}
                     {dashboardLinks.map((link, index) => (
                       <button 
                         key={index}
@@ -371,8 +491,23 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
                       </button>
                     </>
                   ) : (
-                    // Logged in state - Show role-based dashboard links and logout
+                    // Logged in state - Show notifications, dashboard links and logout
                     <>
+                      {/* Mobile Notifications */}
+                      <button
+                        onClick={() => handleNavigation('notifications')}
+                        className="flex items-center justify-center space-x-2 rtl:space-x-reverse px-4 py-2 rounded-lg font-medium btn-secondary text-dark-500 hover:text-primary-500 relative"
+                      >
+                        <Bell className="h-4 w-4" />
+                        <span>{text[language].notifications}</span>
+                        {unreadCount > 0 && (
+                          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                            {unreadCount}
+                          </span>
+                        )}
+                      </button>
+
+                      {/* Mobile Dashboard Links */}
                       {dashboardLinks.map((link, index) => (
                         <button 
                           key={index}

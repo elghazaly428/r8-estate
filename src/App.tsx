@@ -19,10 +19,11 @@ import Pricing from './components/Pricing';
 import Terms from './components/Terms';
 import Privacy from './components/Privacy';
 import Contact from './components/Contact';
+import Notifications from './components/Notifications';
 
 function App() {
   const [language, setLanguage] = useState<'ar' | 'en'>('ar');
-  const [currentPage, setCurrentPage] = useState<'home' | 'search' | 'signup' | 'login' | 'company' | 'categories' | 'write-review' | 'dashboard' | 'company-dashboard' | 'admin' | 'about' | 'pricing' | 'terms' | 'privacy' | 'contact'>('home');
+  const [currentPage, setCurrentPage] = useState<'home' | 'search' | 'signup' | 'login' | 'company' | 'categories' | 'write-review' | 'dashboard' | 'company-dashboard' | 'admin' | 'about' | 'pricing' | 'terms' | 'privacy' | 'contact' | 'notifications'>('home');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
@@ -39,7 +40,7 @@ function App() {
   };
 
   const handleNavigation = (page: string, companyId?: number, categoryId?: number) => {
-    setCurrentPage(page as 'home' | 'search' | 'signup' | 'login' | 'company' | 'categories' | 'write-review' | 'dashboard' | 'company-dashboard' | 'admin' | 'about' | 'pricing' | 'terms' | 'privacy' | 'contact');
+    setCurrentPage(page as 'home' | 'search' | 'signup' | 'login' | 'company' | 'categories' | 'write-review' | 'dashboard' | 'company-dashboard' | 'admin' | 'about' | 'pricing' | 'terms' | 'privacy' | 'contact' | 'notifications');
     if (page === 'company' && companyId) {
       setSelectedCompanyId(companyId);
     }
@@ -62,6 +63,15 @@ function App() {
     setSelectedCompanyId(companyId);
     setCurrentPage('company');
   };
+
+  // Show Notifications page
+  if (currentPage === 'notifications') {
+    return <Notifications 
+      language={language} 
+      onLanguageChange={setLanguage} 
+      onNavigate={handleNavigation}
+    />;
+  }
 
   // Show Contact page
   if (currentPage === 'contact') {
