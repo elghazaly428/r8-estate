@@ -1,3 +1,56 @@
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Type definitions
+interface Profile {
+  first_name: string | null;
+  last_name: string | null;
+  avatar_url: string | null;
+}
+
+interface Review {
+  id: number;
+  created_at: string;
+  profile_id: string | null;
+  company_id: number | null;
+  title: string | null;
+  body: string | null;
+  rating_communication: number | null;
+  rating_responsiveness: number | null;
+  rating_value: number | null;
+  rating_friendliness: number | null;
+  overall_rating: number | null;
+  date_of_experience: string | null;
+  has_document: boolean | null;
+  is_anonymous: boolean | null;
+  status: string | null;
+}
+
+interface ReviewWithProfile extends Review {
+  profiles: Profile | null;
+  vote_count: number;
+  user_has_voted: boolean;
+  company_reply: CompanyReplyWithVotes | null;
+}
+
+interface CompanyReply {
+  id: number;
+  created_at: string;
+  reply_body: string | null;
+  review_id: number | null;
+  profile_id: string | null;
+  status: string | null;
+}
+
+interface CompanyReplyWithVotes extends CompanyReply {
+  vote_count: number;
+  user_has_voted: boolean;
+}
+
 export const getReviewsByCompanyId = async (companyId: number, userId?: string): Promise<ReviewWithProfile[]> => {
   try {
     const { data, error } = await supabase
