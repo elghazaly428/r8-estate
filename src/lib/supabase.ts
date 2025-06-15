@@ -122,5 +122,3 @@ export const getReviewsByCompanyId = async (companyId: number, userId?: string):
     return [];
   }
 };
-
-export { getReviewsByCompanyId }
