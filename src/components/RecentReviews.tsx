@@ -17,6 +17,7 @@ interface ReviewData {
   profiles: {
     first_name: string | null;
     last_name: string | null;
+    avatar_url: string | null;
   } | null;
   companies: {
     id: number;
@@ -78,7 +79,7 @@ const RecentReviews: React.FC<RecentReviewsProps> = ({ language, onNavigate }) =
             body,
             overall_rating,
             is_anonymous,
-            profiles!reviews_profile_id_fkey(first_name, last_name),
+            profiles!reviews_profile_id_fkey(first_name, last_name, avatar_url),
             companies!reviews_company_id_fkey(id, name)
           `)
           .eq('status', 'published')
@@ -164,6 +165,13 @@ const RecentReviews: React.FC<RecentReviewsProps> = ({ language, onNavigate }) =
     return text[language].anonymous;
   };
 
+  const getReviewerAvatar = (review: ReviewData) => {
+    if (review.is_anonymous || !review.profiles?.avatar_url) {
+      return null;
+    }
+    return review.profiles.avatar_url;
+  };
+
   const handleCompanyClick = (companyId: number) => {
     if (onNavigate) {
       onNavigate('company', companyId);
@@ -247,13 +255,24 @@ const RecentReviews: React.FC<RecentReviewsProps> = ({ language, onNavigate }) =
               key={review.id}
               className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:border-primary-500 transition-all duration-300 cursor-pointer hover:scale-105"
             >
-              {/* Reviewer Info */}
+              {/* Reviewer Info with Avatar */}
               <div className="flex items-center space-x-3 rtl:space-x-reverse mb-4">
-                <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
-                  <User className="h-5 w-5 text-primary-500" />
+                {/* Avatar */}
+                <div className="w-10 h-10 rounded-full overflow-hidden bg-primary-100 flex items-center justify-center flex-shrink-0">
+                  {getReviewerAvatar(review) ? (
+                    <img 
+                      src={getReviewerAvatar(review)!} 
+                      alt="Reviewer Avatar" 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <User className="h-5 w-5 text-primary-500" />
+                  )}
                 </div>
-                <div>
-                  <h4 className="font-semibold text-dark-500 text-sm">
+                
+                {/* Name and Date */}
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-semibold text-dark-500 text-sm truncate">
                     {getReviewerName(review)}
                   </h4>
                   <p className="text-gray-500 text-xs">
