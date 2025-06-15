@@ -82,7 +82,7 @@ const WriteReview: React.FC<WriteReviewProps> = ({
       loading: 'جاري التحميل...',
       fillAllRatings: 'يرجى تقييم جميع الجوانب (1-5 نجوم)',
       acceptTerms: 'يجب الموافقة على الشروط',
-      reviewSubmitted: 'تم إرسال التقييم بنجاح! سيتم مراجعته قبل النشر.',
+      reviewSubmitted: 'تم إرسال التقييم بنجاح!',
       errorSubmitting: 'حدث خطأ أثناء إرسال التقييم'
     },
     en: {
@@ -111,7 +111,7 @@ const WriteReview: React.FC<WriteReviewProps> = ({
       loading: 'Loading...',
       fillAllRatings: 'Please rate all aspects (1-5 stars)',
       acceptTerms: 'Please accept the terms',
-      reviewSubmitted: 'Review submitted successfully! It will be reviewed before publication.',
+      reviewSubmitted: 'Review submitted successfully!',
       errorSubmitting: 'Error submitting review'
     }
   };
@@ -248,7 +248,7 @@ const WriteReview: React.FC<WriteReviewProps> = ({
         overall_rating: overallRating,
         date_of_experience: formData.dateOfExperience || null,
         is_anonymous: formData.isAnonymous,
-        status: 'pending_approval' as const,
+        status: 'published' as const,
         created_at: new Date().toISOString()
       };
 
