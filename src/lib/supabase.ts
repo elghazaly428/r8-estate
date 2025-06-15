@@ -793,6 +793,26 @@ export const toggleReplyVote = async (replyId: string, userId: string): Promise<
   }
 };
 
+// Function to delete all votes for a reply before deleting the reply
+export const deleteReplyVotes = async (replyId: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const { error } = await supabase
+      .from('reply_votes')
+      .delete()
+      .eq('reply_id', replyId);
+
+    if (error) {
+      console.error('Supabase error in deleteReplyVotes:', error);
+      throw error;
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error deleting reply votes:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 // Updated report functions using RPC calls
 export const submitReport = async (
   reviewId: number, 

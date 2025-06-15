@@ -37,7 +37,8 @@ import {
   CompanyWithCategory,
   ReviewWithProfile,
   supabase,
-  createNotification
+  createNotification,
+  deleteReplyVotes
 } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 
@@ -577,6 +578,13 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
     if (!confirm(text[language].confirmDelete)) return;
 
     try {
+      // First delete all associated votes for this reply
+      const deleteVotesResult = await deleteReplyVotes(replyId);
+      if (!deleteVotesResult.success) {
+        throw new Error(deleteVotesResult.error || 'Failed to delete reply votes');
+      }
+
+      // Then delete the reply itself
       const { error } = await supabase
         .from('company_replies')
         .delete()
