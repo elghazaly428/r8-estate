@@ -398,6 +398,40 @@ const SearchResults: React.FC<SearchResultsProps> = ({
     <div className={`min-h-screen ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <Header language={language} onLanguageChange={onLanguageChange} onNavigate={onNavigate} />
       
+      {/* Dedicated Search Header Section */}
+      <section className="bg-gradient-to-br from-gray-50 to-blue-50 py-12 border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl md:text-4xl font-bold text-dark-500 mb-4">
+              {text[language].searchResults}
+            </h1>
+            {currentSearchQuery && (
+              <p className="text-lg text-gray-600 mb-2">
+                {text[language].searchingFor}: "{currentSearchQuery}"
+              </p>
+            )}
+            {currentCategoryId && currentCategoryName && (
+              <p className="text-lg text-gray-600 mb-2">
+                {text[language].categoryFilter}: {currentCategoryName}
+              </p>
+            )}
+            <p className="text-gray-600">
+              {filteredCompanies.length} {text[language].resultsFound}
+            </p>
+          </div>
+          
+          {/* Centered Search Bar */}
+          <div className="max-w-2xl mx-auto">
+            <SearchBar 
+              language={language} 
+              onSearch={handleSearch} 
+              onCompanySelect={handleCompanySelect}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Main Content Area */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Mobile Filter Toggle */}
         <div className="lg:hidden mb-6">
@@ -425,34 +459,6 @@ const SearchResults: React.FC<SearchResultsProps> = ({
 
           {/* Main Results Column */}
           <div className="lg:col-span-3">
-            <div className="mb-6">
-              <h1 className="text-2xl font-bold text-dark-500 mb-2">
-                {text[language].searchResults}
-              </h1>
-              {currentSearchQuery && (
-                <p className="text-gray-600 mb-2">
-                  {text[language].searchingFor}: "{currentSearchQuery}"
-                </p>
-              )}
-              {currentCategoryId && currentCategoryName && (
-                <p className="text-gray-600 mb-2">
-                  {text[language].categoryFilter}: {currentCategoryName}
-                </p>
-              )}
-              <p className="text-gray-600">
-                {filteredCompanies.length} {text[language].resultsFound}
-              </p>
-            </div>
-
-            {/* Dynamic Search Bar */}
-            <div className="mb-8">
-              <SearchBar 
-                language={language} 
-                onSearch={handleSearch} 
-                onCompanySelect={handleCompanySelect}
-              />
-            </div>
-
             {/* Loading State */}
             {loading && (
               <div className="text-center py-12">
