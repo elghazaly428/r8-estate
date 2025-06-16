@@ -72,8 +72,8 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
   // Claim modal states
   const [isClaimModalOpen, setIsClaimModalOpen] = useState(false);
   const [claimFormData, setClaimFormData] = useState({
-    employeeUsername: '',
-    supervisorUsername: ''
+    employeeEmail: '',
+    supervisorEmail: ''
   });
   const [submittingClaim, setSubmittingClaim] = useState(false);
   const [companyDomain, setCompanyDomain] = useState<string>('');
@@ -137,16 +137,13 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
       deleteError: 'حدث خطأ أثناء حذف المحتوى',
       // Claim modal texts
       claimCompanyTitle: 'طلب ملكية الشركة',
-      claimDescription: 'لطلب ملكية هذه الشركة، يرجى إدخال أسماء المستخدمين للموظف والمشرف باستخدام البريد الإلكتروني الخاص بالشركة.',
+      claimDescription: 'لطلب ملكية هذه الشركة، يرجى تقديم عنوان بريد إلكتروني للموظف والمشرف باستخدام نطاق الشركة الرسمي.',
       employeeEmail: 'البريد الإلكتروني للموظف',
       supervisorEmail: 'البريد الإلكتروني للمشرف',
-      employeeUsernamePlaceholder: 'اسم المستخدم للموظف',
-      supervisorUsernamePlaceholder: 'اسم المستخدم للمشرف',
       sendVerificationLinks: 'إرسال روابط التحقق',
-      loginToClaimBusiness: 'يجب تسجيل الدخول لطلب ملكية الشركة',
-      fillBothUsernames: 'يرجى ملء أسماء المستخدمين لكل من الموظف والمشرف',
-      verificationEmailsSent: 'تم إرسال رسائل التحقق. يرجى التحقق من كلا صندوقي البريد لإكمال العملية.',
-      claimRequestFailed: 'فشل في إرسال طلب الملكية'
+      fillAllFields: 'يرجى ملء جميع الحقول',
+      verificationEmailsSent: 'تم إرسال رسائل التحقق. يرجى التحقق من صندوق الوارد لكلا البريدين الإلكترونيين لإكمال العملية.',
+      domainValidationError: 'خطأ: يجب أن يستخدم البريد الإلكتروني نطاق الشركة'
     },
     en: {
       loading: 'Loading...',
@@ -206,16 +203,13 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
       deleteError: 'Error deleting content',
       // Claim modal texts
       claimCompanyTitle: 'Claim Company',
-      claimDescription: 'To claim this company, please enter the usernames for both employee and supervisor using the company email domain.',
+      claimDescription: 'To claim this company, please provide employee and supervisor email addresses using the company\'s official domain.',
       employeeEmail: 'Employee Email',
       supervisorEmail: 'Supervisor Email',
-      employeeUsernamePlaceholder: 'employee username',
-      supervisorUsernamePlaceholder: 'supervisor username',
       sendVerificationLinks: 'Send Verification Links',
-      loginToClaimBusiness: 'Please log in to claim this business',
-      fillBothUsernames: 'Please fill in usernames for both employee and supervisor',
+      fillAllFields: 'Please fill in all fields',
       verificationEmailsSent: 'Verification emails sent. Please check both inboxes to complete the process.',
-      claimRequestFailed: 'Failed to submit claim request'
+      domainValidationError: 'Error: The email address must use the company domain'
     }
   };
 
@@ -254,20 +248,21 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
         }
         setCompany(companyData);
 
-        // Extract domain from company data
+        // Extract and set company domain for claim validation
+        let domain = '';
         if (companyData.domain_name) {
-          setCompanyDomain(companyData.domain_name);
+          domain = companyData.domain_name;
         } else if (companyData.website) {
-          // Extract domain from website URL if domain_name is not available
           try {
             const url = new URL(companyData.website.startsWith('http') ? companyData.website : `https://${companyData.website}`);
-            setCompanyDomain(url.hostname.replace('www.', ''));
+            domain = url.hostname.replace('www.', '');
           } catch {
-            setCompanyDomain('company.com'); // Fallback domain
+            domain = 'company.com';
           }
         } else {
-          setCompanyDomain('company.com'); // Default fallback
+          domain = 'company.com';
         }
+        setCompanyDomain(domain);
 
         // Fetch reviews
         const reviewsData = await getReviewsByCompanyId(companyId, user?.id);
@@ -657,44 +652,53 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
     }
   };
 
-  const calculateAverageRating = () => {
-    if (reviews.length === 0) return 0;
-    const validRatings = reviews.filter(r => r.overall_rating !== null);
-    if (validRatings.length === 0) return 0;
-    const sum = validRatings.reduce((acc, r) => acc + (r.overall_rating || 0), 0);
-    return Math.round((sum / validRatings.length) * 10) / 10;
-  };
-
-  // Claim business functions
-  const handleClaimBusiness = () => {
+  // Claim modal functions
+  const openClaimModal = () => {
     if (!user) {
-      toast.error(text[language].loginToClaimBusiness);
+      toast.error(text[language].loginToReport);
       return;
     }
     setIsClaimModalOpen(true);
   };
 
-  const handleClaimSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!claimFormData.employeeUsername.trim() || !claimFormData.supervisorUsername.trim()) {
-      toast.error(text[language].fillBothUsernames);
+  const closeClaimModal = () => {
+    setIsClaimModalOpen(false);
+    setClaimFormData({ employeeEmail: '', supervisorEmail: '' });
+  };
+
+  const validateEmailDomain = (email: string): boolean => {
+    if (!email || !email.includes('@')) return false;
+    const emailDomain = email.split('@')[1];
+    return emailDomain === companyDomain;
+  };
+
+  const handleClaimSubmit = async () => {
+    // Validate form data
+    if (!claimFormData.employeeEmail.trim() || !claimFormData.supervisorEmail.trim()) {
+      toast.error(text[language].fillAllFields);
+      return;
+    }
+
+    // Critical security validation: Check domain matching
+    if (!validateEmailDomain(claimFormData.employeeEmail)) {
+      toast.error(`${text[language].domainValidationError} (@${companyDomain})`);
+      return;
+    }
+
+    if (!validateEmailDomain(claimFormData.supervisorEmail)) {
+      toast.error(`${text[language].domainValidationError} (@${companyDomain})`);
       return;
     }
 
     setSubmittingClaim(true);
 
     try {
-      // Construct full email addresses
-      const employeeEmail = `${claimFormData.employeeUsername.trim()}@${companyDomain}`;
-      const supervisorEmail = `${claimFormData.supervisorUsername.trim()}@${companyDomain}`;
-
-      // Call the Edge Function
+      // Call the deployed Edge Function
       const { data, error } = await supabase.functions.invoke('claim-profile-request', {
         body: {
           company_id: companyId,
-          employee_email: employeeEmail,
-          supervisor_email: supervisorEmail
+          employee_email: claimFormData.employeeEmail.trim(),
+          supervisor_email: claimFormData.supervisorEmail.trim()
         }
       });
 
@@ -702,21 +706,23 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
         throw error;
       }
 
-      // Check if the response contains an error
-      if (data && data.error) {
-        throw new Error(data.error);
-      }
-
       // Success
+      closeClaimModal();
       toast.success(text[language].verificationEmailsSent);
-      setIsClaimModalOpen(false);
-      setClaimFormData({ employeeUsername: '', supervisorUsername: '' });
     } catch (error: any) {
-      console.error('Error submitting claim request:', error);
-      toast.error(error.message || text[language].claimRequestFailed);
+      console.error('Error submitting claim:', error);
+      toast.error(error.message || text[language].errorOccurred);
     } finally {
       setSubmittingClaim(false);
     }
+  };
+
+  const calculateAverageRating = () => {
+    if (reviews.length === 0) return 0;
+    const validRatings = reviews.filter(r => r.overall_rating !== null);
+    if (validRatings.length === 0) return 0;
+    const sum = validRatings.reduce((acc, r) => acc + (r.overall_rating || 0), 0);
+    return Math.round((sum / validRatings.length) * 10) / 10;
   };
 
   // Loading state
@@ -764,102 +770,6 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
     <div className={`min-h-screen bg-gray-50 ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <Header language={language} onLanguageChange={onLanguageChange} onNavigate={onNavigate} />
       
-      {/* Claim Company Modal */}
-      {isClaimModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-dark-500">
-                {text[language].claimCompanyTitle}
-              </h3>
-              <button
-                onClick={() => setIsClaimModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
-                disabled={submittingClaim}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            
-            <p className="text-gray-600 mb-6 text-sm leading-relaxed">
-              {text[language].claimDescription}
-            </p>
-            
-            <form onSubmit={handleClaimSubmit} className="space-y-4">
-              {/* Employee Email Input Group */}
-              <div>
-                <label className="block text-sm font-semibold text-dark-500 mb-2">
-                  {text[language].employeeEmail}
-                </label>
-                <div className="flex border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-primary-500 focus-within:border-primary-500">
-                  <input
-                    type="text"
-                    value={claimFormData.employeeUsername}
-                    onChange={(e) => setClaimFormData(prev => ({ ...prev, employeeUsername: e.target.value }))}
-                    placeholder={text[language].employeeUsernamePlaceholder}
-                    className="flex-1 px-3 py-2 focus:outline-none"
-                    dir="ltr"
-                    disabled={submittingClaim}
-                    required
-                  />
-                  <div className="bg-gray-100 px-3 py-2 text-gray-600 border-l border-gray-300 text-sm">
-                    @{companyDomain}
-                  </div>
-                </div>
-              </div>
-
-              {/* Supervisor Email Input Group */}
-              <div>
-                <label className="block text-sm font-semibold text-dark-500 mb-2">
-                  {text[language].supervisorEmail}
-                </label>
-                <div className="flex border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-primary-500 focus-within:border-primary-500">
-                  <input
-                    type="text"
-                    value={claimFormData.supervisorUsername}
-                    onChange={(e) => setClaimFormData(prev => ({ ...prev, supervisorUsername: e.target.value }))}
-                    placeholder={text[language].supervisorUsernamePlaceholder}
-                    className="flex-1 px-3 py-2 focus:outline-none"
-                    dir="ltr"
-                    disabled={submittingClaim}
-                    required
-                  />
-                  <div className="bg-gray-100 px-3 py-2 text-gray-600 border-l border-gray-300 text-sm">
-                    @{companyDomain}
-                  </div>
-                </div>
-              </div>
-
-              {/* Submit Button */}
-              <div className="flex space-x-3 rtl:space-x-reverse mt-6">
-                <button
-                  type="button"
-                  onClick={() => setIsClaimModalOpen(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                  disabled={submittingClaim}
-                >
-                  {text[language].cancel}
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingClaim}
-                  className="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 rtl:space-x-reverse"
-                >
-                  {submittingClaim ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      <span>{text[language].submitting}</span>
-                    </>
-                  ) : (
-                    <span>{text[language].sendVerificationLinks}</span>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* Report Modal */}
       {reportModal.isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -913,6 +823,90 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
                 className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {text[language].submitReport}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Claim Company Modal */}
+      {isClaimModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-dark-500">
+                {text[language].claimCompanyTitle}
+              </h3>
+              <button
+                onClick={closeClaimModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            
+            <p className="text-gray-600 mb-6 leading-relaxed">
+              {text[language].claimDescription}
+            </p>
+            
+            <div className="space-y-4">
+              {/* Employee Email Field */}
+              <div>
+                <label className="block text-sm font-semibold text-dark-500 mb-2">
+                  {text[language].employeeEmail}
+                </label>
+                <input
+                  type="email"
+                  value={claimFormData.employeeEmail}
+                  onChange={(e) => setClaimFormData(prev => ({ ...prev, employeeEmail: e.target.value }))}
+                  placeholder={`your.name@${companyDomain}`}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                  dir="ltr"
+                  disabled={submittingClaim}
+                />
+              </div>
+              
+              {/* Supervisor Email Field */}
+              <div>
+                <label className="block text-sm font-semibold text-dark-500 mb-2">
+                  {text[language].supervisorEmail}
+                </label>
+                <input
+                  type="email"
+                  value={claimFormData.supervisorEmail}
+                  onChange={(e) => setClaimFormData(prev => ({ ...prev, supervisorEmail: e.target.value }))}
+                  placeholder={`supervisor.name@${companyDomain}`}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
+                  dir="ltr"
+                  disabled={submittingClaim}
+                />
+              </div>
+            </div>
+            
+            <div className="flex space-x-3 rtl:space-x-reverse mt-6">
+              <button
+                onClick={closeClaimModal}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                disabled={submittingClaim}
+              >
+                {text[language].cancel}
+              </button>
+              <button
+                onClick={handleClaimSubmit}
+                disabled={submittingClaim}
+                className="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 rtl:space-x-reverse"
+              >
+                {submittingClaim ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>{text[language].submitting}</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    <span>{text[language].sendVerificationLinks}</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -1016,7 +1010,7 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
               
               {!company.is_claimed && (
                 <button 
-                  onClick={handleClaimBusiness}
+                  onClick={openClaimModal}
                   className="btn-secondary px-6 py-3 rounded-lg font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors duration-200 flex items-center justify-center space-x-2 rtl:space-x-reverse"
                 >
                   <Building2 className="h-4 w-4" />
