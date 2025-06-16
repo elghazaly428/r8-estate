@@ -137,16 +137,16 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
       deleteError: 'حدث خطأ أثناء حذف المحتوى',
       // Claim modal texts
       claimCompanyTitle: 'طلب ملكية الشركة',
-      claimDescription: 'لطلب ملكية هذه الشركة، يرجى إدخال أسماء المستخدمين للبريد الإلكتروني للموظف والمشرف.',
+      claimDescription: 'لطلب ملكية هذه الشركة، يرجى إدخال أسماء المستخدمين للموظف والمشرف باستخدام البريد الإلكتروني الخاص بالشركة.',
       employeeEmail: 'البريد الإلكتروني للموظف',
       supervisorEmail: 'البريد الإلكتروني للمشرف',
       employeeUsernamePlaceholder: 'اسم المستخدم للموظف',
       supervisorUsernamePlaceholder: 'اسم المستخدم للمشرف',
       sendVerificationLinks: 'إرسال روابط التحقق',
-      loginToClaim: 'يجب تسجيل الدخول لطلب ملكية الشركة',
-      fillBothFields: 'يرجى ملء كلا الحقلين',
+      loginToClaimBusiness: 'يجب تسجيل الدخول لطلب ملكية الشركة',
+      fillBothUsernames: 'يرجى ملء أسماء المستخدمين لكل من الموظف والمشرف',
       verificationEmailsSent: 'تم إرسال رسائل التحقق. يرجى التحقق من كلا صندوقي البريد لإكمال العملية.',
-      noDomainAvailable: 'لا يوجد نطاق متاح لهذه الشركة'
+      claimRequestFailed: 'فشل في إرسال طلب الملكية'
     },
     en: {
       loading: 'Loading...',
@@ -206,16 +206,16 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
       deleteError: 'Error deleting content',
       // Claim modal texts
       claimCompanyTitle: 'Claim Company',
-      claimDescription: 'To claim this company, please enter the email usernames for both employee and supervisor.',
+      claimDescription: 'To claim this company, please enter the usernames for both employee and supervisor using the company email domain.',
       employeeEmail: 'Employee Email',
       supervisorEmail: 'Supervisor Email',
       employeeUsernamePlaceholder: 'employee username',
       supervisorUsernamePlaceholder: 'supervisor username',
       sendVerificationLinks: 'Send Verification Links',
-      loginToClaim: 'Please log in to claim this company',
-      fillBothFields: 'Please fill in both fields',
+      loginToClaimBusiness: 'Please log in to claim this business',
+      fillBothUsernames: 'Please fill in usernames for both employee and supervisor',
       verificationEmailsSent: 'Verification emails sent. Please check both inboxes to complete the process.',
-      noDomainAvailable: 'No domain available for this company'
+      claimRequestFailed: 'Failed to submit claim request'
     }
   };
 
@@ -263,8 +263,10 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
             const url = new URL(companyData.website.startsWith('http') ? companyData.website : `https://${companyData.website}`);
             setCompanyDomain(url.hostname.replace('www.', ''));
           } catch {
-            setCompanyDomain('');
+            setCompanyDomain('company.com'); // Fallback domain
           }
+        } else {
+          setCompanyDomain('company.com'); // Default fallback
         }
 
         // Fetch reviews
@@ -663,28 +665,20 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
     return Math.round((sum / validRatings.length) * 10) / 10;
   };
 
-  // Claim modal functions
-  const openClaimModal = () => {
+  // Claim business functions
+  const handleClaimBusiness = () => {
     if (!user) {
-      toast.error(text[language].loginToClaim);
+      toast.error(text[language].loginToClaimBusiness);
       return;
     }
     setIsClaimModalOpen(true);
   };
 
-  const closeClaimModal = () => {
-    setIsClaimModalOpen(false);
-    setClaimFormData({ employeeUsername: '', supervisorUsername: '' });
-  };
-
-  const handleClaimSubmit = async () => {
+  const handleClaimSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
     if (!claimFormData.employeeUsername.trim() || !claimFormData.supervisorUsername.trim()) {
-      toast.error(text[language].fillBothFields);
-      return;
-    }
-
-    if (!companyDomain) {
-      toast.error(text[language].noDomainAvailable);
+      toast.error(text[language].fillBothUsernames);
       return;
     }
 
@@ -695,6 +689,7 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
       const employeeEmail = `${claimFormData.employeeUsername.trim()}@${companyDomain}`;
       const supervisorEmail = `${claimFormData.supervisorUsername.trim()}@${companyDomain}`;
 
+      // Call the Edge Function
       const { data, error } = await supabase.functions.invoke('claim-profile-request', {
         body: {
           company_id: companyId,
@@ -714,10 +709,11 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
 
       // Success
       toast.success(text[language].verificationEmailsSent);
-      closeClaimModal();
+      setIsClaimModalOpen(false);
+      setClaimFormData({ employeeUsername: '', supervisorUsername: '' });
     } catch (error: any) {
-      console.error('Error submitting claim:', error);
-      toast.error(error.message || text[language].errorOccurred);
+      console.error('Error submitting claim request:', error);
+      toast.error(error.message || text[language].claimRequestFailed);
     } finally {
       setSubmittingClaim(false);
     }
@@ -768,6 +764,102 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
     <div className={`min-h-screen bg-gray-50 ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <Header language={language} onLanguageChange={onLanguageChange} onNavigate={onNavigate} />
       
+      {/* Claim Company Modal */}
+      {isClaimModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-dark-500">
+                {text[language].claimCompanyTitle}
+              </h3>
+              <button
+                onClick={() => setIsClaimModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
+                disabled={submittingClaim}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <p className="text-gray-600 mb-6 text-sm leading-relaxed">
+              {text[language].claimDescription}
+            </p>
+            
+            <form onSubmit={handleClaimSubmit} className="space-y-4">
+              {/* Employee Email Input Group */}
+              <div>
+                <label className="block text-sm font-semibold text-dark-500 mb-2">
+                  {text[language].employeeEmail}
+                </label>
+                <div className="flex border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-primary-500 focus-within:border-primary-500">
+                  <input
+                    type="text"
+                    value={claimFormData.employeeUsername}
+                    onChange={(e) => setClaimFormData(prev => ({ ...prev, employeeUsername: e.target.value }))}
+                    placeholder={text[language].employeeUsernamePlaceholder}
+                    className="flex-1 px-3 py-2 focus:outline-none"
+                    dir="ltr"
+                    disabled={submittingClaim}
+                    required
+                  />
+                  <div className="bg-gray-100 px-3 py-2 text-gray-600 border-l border-gray-300 text-sm">
+                    @{companyDomain}
+                  </div>
+                </div>
+              </div>
+
+              {/* Supervisor Email Input Group */}
+              <div>
+                <label className="block text-sm font-semibold text-dark-500 mb-2">
+                  {text[language].supervisorEmail}
+                </label>
+                <div className="flex border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-primary-500 focus-within:border-primary-500">
+                  <input
+                    type="text"
+                    value={claimFormData.supervisorUsername}
+                    onChange={(e) => setClaimFormData(prev => ({ ...prev, supervisorUsername: e.target.value }))}
+                    placeholder={text[language].supervisorUsernamePlaceholder}
+                    className="flex-1 px-3 py-2 focus:outline-none"
+                    dir="ltr"
+                    disabled={submittingClaim}
+                    required
+                  />
+                  <div className="bg-gray-100 px-3 py-2 text-gray-600 border-l border-gray-300 text-sm">
+                    @{companyDomain}
+                  </div>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <div className="flex space-x-3 rtl:space-x-reverse mt-6">
+                <button
+                  type="button"
+                  onClick={() => setIsClaimModalOpen(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                  disabled={submittingClaim}
+                >
+                  {text[language].cancel}
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingClaim}
+                  className="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 rtl:space-x-reverse"
+                >
+                  {submittingClaim ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>{text[language].submitting}</span>
+                    </>
+                  ) : (
+                    <span>{text[language].sendVerificationLinks}</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Report Modal */}
       {reportModal.isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -821,108 +913,6 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
                 className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {text[language].submitReport}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Claim Company Modal */}
-      {isClaimModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-dark-500">
-                {text[language].claimCompanyTitle}
-              </h3>
-              <button
-                onClick={closeClaimModal}
-                className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
-                disabled={submittingClaim}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            
-            <p className="text-gray-600 mb-6 text-sm leading-relaxed">
-              {text[language].claimDescription}
-            </p>
-
-            {companyDomain ? (
-              <div className="space-y-4">
-                {/* Employee Email Input Group */}
-                <div>
-                  <label className="block text-sm font-semibold text-dark-500 mb-2">
-                    {text[language].employeeEmail}
-                  </label>
-                  <div className="flex rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-primary-500 focus-within:border-primary-500 overflow-hidden">
-                    <input
-                      type="text"
-                      value={claimFormData.employeeUsername}
-                      onChange={(e) => setClaimFormData(prev => ({ ...prev, employeeUsername: e.target.value }))}
-                      placeholder={text[language].employeeUsernamePlaceholder}
-                      className="flex-1 px-3 py-2 border-0 focus:ring-0 focus:outline-none"
-                      dir="ltr"
-                      disabled={submittingClaim}
-                    />
-                    <div className="bg-gray-100 px-3 py-2 text-gray-600 border-l border-gray-300 font-mono text-sm">
-                      @{companyDomain}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Supervisor Email Input Group */}
-                <div>
-                  <label className="block text-sm font-semibold text-dark-500 mb-2">
-                    {text[language].supervisorEmail}
-                  </label>
-                  <div className="flex rounded-lg border border-gray-300 focus-within:ring-2 focus-within:ring-primary-500 focus-within:border-primary-500 overflow-hidden">
-                    <input
-                      type="text"
-                      value={claimFormData.supervisorUsername}
-                      onChange={(e) => setClaimFormData(prev => ({ ...prev, supervisorUsername: e.target.value }))}
-                      placeholder={text[language].supervisorUsernamePlaceholder}
-                      className="flex-1 px-3 py-2 border-0 focus:ring-0 focus:outline-none"
-                      dir="ltr"
-                      disabled={submittingClaim}
-                    />
-                    <div className="bg-gray-100 px-3 py-2 text-gray-600 border-l border-gray-300 font-mono text-sm">
-                      @{companyDomain}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-6">
-                <AlertTriangle className="h-12 w-12 text-yellow-500 mx-auto mb-3" />
-                <p className="text-gray-600">{text[language].noDomainAvailable}</p>
-              </div>
-            )}
-            
-            <div className="flex space-x-3 rtl:space-x-reverse mt-6">
-              <button
-                onClick={closeClaimModal}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                disabled={submittingClaim}
-              >
-                {text[language].cancel}
-              </button>
-              <button
-                onClick={handleClaimSubmit}
-                disabled={!companyDomain || submittingClaim || !claimFormData.employeeUsername.trim() || !claimFormData.supervisorUsername.trim()}
-                className="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 rtl:space-x-reverse"
-              >
-                {submittingClaim ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span>{text[language].submitting}</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4" />
-                    <span>{text[language].sendVerificationLinks}</span>
-                  </>
-                )}
               </button>
             </div>
           </div>
@@ -1026,7 +1016,7 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
               
               {!company.is_claimed && (
                 <button 
-                  onClick={openClaimModal}
+                  onClick={handleClaimBusiness}
                   className="btn-secondary px-6 py-3 rounded-lg font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors duration-200 flex items-center justify-center space-x-2 rtl:space-x-reverse"
                 >
                   <Building2 className="h-4 w-4" />
