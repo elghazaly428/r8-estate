@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Users, 
   Building2, 
@@ -8,21 +8,21 @@ import {
   Shield, 
   Search,
   Filter,
-  Download,
-  Upload,
-  X,
-  Check,
-  AlertTriangle,
+  ChevronDown,
   Eye,
-  Trash2,
   Edit,
+  Trash2,
+  Ban,
+  CheckCircle,
+  X,
+  Upload,
+  Download,
+  FileText,
+  AlertTriangle,
+  User,
   Star,
   Calendar,
-  TrendingUp,
-  User,
-  FileText,
-  CheckCircle,
-  XCircle
+  ExternalLink
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import Header from './Header';
@@ -36,7 +36,7 @@ interface AdminDashboardProps {
   onNavigate: (page: string, companyId?: number) => void;
 }
 
-interface DashboardStats {
+interface AdminStats {
   totalUsers: number;
   totalCompanies: number;
   totalReviews: number;
@@ -60,7 +60,6 @@ interface Company {
   website: string | null;
   is_claimed: boolean | null;
   created_at: string;
-  category_id: number | null;
 }
 
 interface Review {
@@ -68,8 +67,9 @@ interface Review {
   title: string | null;
   body: string | null;
   overall_rating: number | null;
-  status: 'pending_approval' | 'published' | 'removed' | 'flagged_for_review' | null;
+  status: string | null;
   created_at: string;
+  is_anonymous: boolean | null;
   profiles: {
     first_name: string | null;
     last_name: string | null;
@@ -81,30 +81,20 @@ interface Review {
 
 interface Report {
   id: string;
-  review_id: number;
   reason: string;
   details: string | null;
   status: string;
   created_at: string;
-  profiles: {
-    first_name: string | null;
-    last_name: string | null;
-  } | null;
-  reviews: {
-    title: string | null;
-    body: string | null;
-    companies: {
-      name: string | null;
-    } | null;
-  } | null;
+  review_id: number;
+  reporter_profile_id: string;
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageChange, onNavigate }) => {
   const { user, loading: authLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'companies' | 'reviews' | 'reports' | 'bulk-upload'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'companies' | 'reviews' | 'reports'>('overview');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [stats, setStats] = useState<DashboardStats>({
+  const [stats, setStats] = useState<AdminStats>({
     totalUsers: 0,
     totalCompanies: 0,
     totalReviews: 0,
@@ -117,13 +107,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   
-  // UI states
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('pending'); // Default to pending
+  // Modal states
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  
+  // Processing states for report actions
   const [processingReports, setProcessingReports] = useState<Set<string>>(new Set());
+  
+  // File input ref
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const text = {
     ar: {
@@ -133,7 +126,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       companies: 'الشركات',
       reviews: 'التقييمات',
       reports: 'البلاغات',
-      bulkUpload: 'رفع مجمع',
       
       // Overview
       totalUsers: 'إجمالي المستخدمين',
@@ -141,65 +133,79 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       totalReviews: 'إجمالي التقييمات',
       pendingReports: 'البلاغات المعلقة',
       
-      // Common
-      search: 'بحث',
-      filter: 'تصفية',
-      actions: 'الإجراءات',
-      status: 'الحالة',
-      createdAt: 'تاريخ الإنشاء',
-      loading: 'جاري التحميل...',
-      noData: 'لا توجد بيانات',
-      
       // Users
       name: 'الاسم',
       email: 'البريد الإلكتروني',
+      role: 'الدور',
+      status: 'الحالة',
+      lastUpdated: 'آخر تحديث',
+      actions: 'الإجراءات',
       admin: 'مدير',
-      suspended: 'موقوف',
+      user: 'مستخدم',
       active: 'نشط',
+      suspended: 'موقوف',
       
       // Companies
-      companyName: 'اسم الشركة',
-      website: 'الموقع الإلكتروني',
+      bulkUpload: 'رفع مجمع',
+      bulkUploadCompanies: 'رفع الشركات بشكل مجمع',
+      selectCsvFile: 'اختر ملف CSV',
+      uploadAndProcess: 'رفع ومعالجة الملف',
+      csvFormat: 'تنسيق CSV المطلوب',
+      csvFormatDesc: 'يجب أن يحتوي ملف CSV على الأعمدة التالية:',
+      nameColumn: 'name - اسم الشركة (مطلوب)',
+      logoColumn: 'logo_url - رابط الشعار (اختياري)',
+      websiteColumn: 'website - الموقع الإلكتروني (اختياري)',
+      domainColumn: 'domain_name - اسم النطاق (مطلوب)',
+      categoryColumn: 'category_name - اسم الفئة (اختياري)',
+      downloadTemplate: 'تحميل نموذج',
+      website: 'الموقع',
       claimed: 'مطالب بها',
       unclaimed: 'غير مطالب بها',
+      created: 'تاريخ الإنشاء',
       
       // Reviews
+      title: 'العنوان',
+      rating: 'التقييم',
       reviewer: 'المراجع',
       company: 'الشركة',
-      rating: 'التقييم',
+      anonymous: 'مجهول',
       published: 'منشور',
       pending: 'في الانتظار',
       removed: 'محذوف',
       flagged: 'مبلغ عنه',
       
       // Reports
-      reporter: 'المبلغ',
       reason: 'السبب',
-      reviewContent: 'محتوى التقييم',
-      dismiss: 'رفض البلاغ',
-      uphold: 'قبول البلاغ وإخفاء المحتوى',
-      allReports: 'جميع البلاغات',
-      pendingReports: 'البلاغات المعلقة',
-      resolvedReports: 'البلاغات المحلولة',
+      details: 'التفاصيل',
+      reporter: 'المبلغ',
+      reportedOn: 'تاريخ البلاغ',
+      reviewed: 'تمت المراجعة',
+      resolved: 'تم الحل',
+      dismissReport: 'رفض البلاغ',
+      upholdReport: 'قبول البلاغ وإخفاء المحتوى',
       
-      // Bulk Upload
-      bulkUploadTitle: 'رفع الشركات بالجملة',
-      selectFile: 'اختر ملف CSV',
-      uploadInstructions: 'يجب أن يحتوي ملف CSV على الأعمدة التالية: name, logo_url, website, domain_name, category_name (اختياري)',
-      downloadTemplate: 'تحميل نموذج CSV',
-      uploadAndProcess: 'رفع ومعالجة الملف',
-      uploading: 'جاري الرفع...',
-      selectFileFirst: 'يرجى اختيار ملف CSV أولاً',
-      uploadSuccess: 'تم رفع الملف بنجاح',
-      uploadError: 'خطأ في رفع الملف',
+      // Common
+      close: 'إغلاق',
+      cancel: 'إلغاء',
+      view: 'عرض',
+      edit: 'تعديل',
+      delete: 'حذف',
+      suspend: 'إيقاف',
+      activate: 'تفعيل',
       
       // Messages
+      loading: 'جاري التحميل...',
       accessDenied: 'غير مسموح بالوصول',
       notAuthorized: 'أنت غير مخول للوصول إلى هذه الصفحة',
       backToDashboard: 'العودة إلى لوحة التحكم',
+      errorOccurred: 'حدث خطأ',
+      selectFileFirst: 'يرجى اختيار ملف CSV أولاً',
+      uploading: 'جاري الرفع...',
+      uploadSuccess: 'تم رفع الملف بنجاح',
+      uploadError: 'خطأ في رفع الملف',
       reportDismissed: 'تم رفض البلاغ بنجاح',
       reportUpheld: 'تم قبول البلاغ وإخفاء المحتوى',
-      errorProcessingReport: 'حدث خطأ أثناء معالجة البلاغ'
+      processing: 'جاري المعالجة...'
     },
     en: {
       // Navigation
@@ -208,7 +214,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       companies: 'Companies',
       reviews: 'Reviews',
       reports: 'Reports',
-      bulkUpload: 'Bulk Upload',
       
       // Overview
       totalUsers: 'Total Users',
@@ -216,65 +221,79 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       totalReviews: 'Total Reviews',
       pendingReports: 'Pending Reports',
       
-      // Common
-      search: 'Search',
-      filter: 'Filter',
-      actions: 'Actions',
-      status: 'Status',
-      createdAt: 'Created At',
-      loading: 'Loading...',
-      noData: 'No data available',
-      
       // Users
       name: 'Name',
       email: 'Email',
+      role: 'Role',
+      status: 'Status',
+      lastUpdated: 'Last Updated',
+      actions: 'Actions',
       admin: 'Admin',
-      suspended: 'Suspended',
+      user: 'User',
       active: 'Active',
+      suspended: 'Suspended',
       
       // Companies
-      companyName: 'Company Name',
+      bulkUpload: 'Bulk Upload',
+      bulkUploadCompanies: 'Bulk Upload Companies',
+      selectCsvFile: 'Select CSV File',
+      uploadAndProcess: 'Upload and Process File',
+      csvFormat: 'Required CSV Format',
+      csvFormatDesc: 'The CSV file must contain the following columns:',
+      nameColumn: 'name - Company name (required)',
+      logoColumn: 'logo_url - Logo URL (optional)',
+      websiteColumn: 'website - Website URL (optional)',
+      domainColumn: 'domain_name - Domain name (required)',
+      categoryColumn: 'category_name - Category name (optional)',
+      downloadTemplate: 'Download Template',
       website: 'Website',
       claimed: 'Claimed',
       unclaimed: 'Unclaimed',
+      created: 'Created',
       
       // Reviews
+      title: 'Title',
+      rating: 'Rating',
       reviewer: 'Reviewer',
       company: 'Company',
-      rating: 'Rating',
+      anonymous: 'Anonymous',
       published: 'Published',
       pending: 'Pending',
       removed: 'Removed',
       flagged: 'Flagged',
       
       // Reports
-      reporter: 'Reporter',
       reason: 'Reason',
-      reviewContent: 'Review Content',
-      dismiss: 'Dismiss Report',
-      uphold: 'Uphold Report & Hide Content',
-      allReports: 'All Reports',
-      pendingReports: 'Pending Reports',
-      resolvedReports: 'Resolved Reports',
+      details: 'Details',
+      reporter: 'Reporter',
+      reportedOn: 'Reported On',
+      reviewed: 'Reviewed',
+      resolved: 'Resolved',
+      dismissReport: 'Dismiss Report',
+      upholdReport: 'Uphold Report & Hide Content',
       
-      // Bulk Upload
-      bulkUploadTitle: 'Bulk Upload Companies',
-      selectFile: 'Select CSV File',
-      uploadInstructions: 'CSV file should contain the following columns: name, logo_url, website, domain_name, category_name (optional)',
-      downloadTemplate: 'Download CSV Template',
-      uploadAndProcess: 'Upload and Process File',
-      uploading: 'Uploading...',
-      selectFileFirst: 'Please select a CSV file first',
-      uploadSuccess: 'File uploaded successfully',
-      uploadError: 'Error uploading file',
+      // Common
+      close: 'Close',
+      cancel: 'Cancel',
+      view: 'View',
+      edit: 'Edit',
+      delete: 'Delete',
+      suspend: 'Suspend',
+      activate: 'Activate',
       
       // Messages
+      loading: 'Loading...',
       accessDenied: 'Access Denied',
       notAuthorized: 'You are not authorized to access this page',
       backToDashboard: 'Back to Dashboard',
+      errorOccurred: 'An error occurred',
+      selectFileFirst: 'Please select a CSV file first',
+      uploading: 'Uploading...',
+      uploadSuccess: 'File uploaded successfully',
+      uploadError: 'Error uploading file',
       reportDismissed: 'Report dismissed successfully',
       reportUpheld: 'Report upheld and content hidden',
-      errorProcessingReport: 'Error processing report'
+      processing: 'Processing...'
     }
   };
 
@@ -300,13 +319,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
           .single();
 
         if (profileError || !profileData?.is_admin) {
-          setError('Access denied');
+          onNavigate('dashboard');
           return;
         }
 
-        // Fetch dashboard stats
-        await fetchDashboardStats();
-        await fetchAllData();
+        // Fetch admin stats
+        const [usersResult, companiesResult, reviewsResult, reportsResult] = await Promise.all([
+          supabase.from('profiles').select('*', { count: 'exact', head: true }),
+          supabase.from('companies').select('*', { count: 'exact', head: true }),
+          supabase.from('reviews').select('*', { count: 'exact', head: true }),
+          supabase.from('reports').select('*', { count: 'exact', head: true }).eq('status', 'pending')
+        ]);
+
+        setStats({
+          totalUsers: usersResult.count || 0,
+          totalCompanies: companiesResult.count || 0,
+          totalReviews: reviewsResult.count || 0,
+          pendingReports: reportsResult.count || 0
+        });
+
+        // Fetch detailed data based on active tab
+        await fetchTabData();
 
       } catch (error: any) {
         console.error('Error checking admin access:', error);
@@ -319,127 +352,75 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     checkAdminAccess();
   }, [user, authLoading, onNavigate]);
 
-  const fetchDashboardStats = async () => {
+  const fetchTabData = async () => {
     try {
-      // Fetch total users
-      const { count: usersCount } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true });
+      switch (activeTab) {
+        case 'users':
+          const { data: usersData } = await supabase
+            .from('profiles')
+            .select('*')
+            .order('updated_at', { ascending: false })
+            .limit(50);
+          setUsers(usersData || []);
+          break;
 
-      // Fetch total companies
-      const { count: companiesCount } = await supabase
-        .from('companies')
-        .select('*', { count: 'exact', head: true });
+        case 'companies':
+          const { data: companiesData } = await supabase
+            .from('companies')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(50);
+          setCompanies(companiesData || []);
+          break;
 
-      // Fetch total reviews
-      const { count: reviewsCount } = await supabase
-        .from('reviews')
-        .select('*', { count: 'exact', head: true });
+        case 'reviews':
+          const { data: reviewsData } = await supabase
+            .from('reviews')
+            .select(`
+              *,
+              profiles!reviews_profile_id_fkey(first_name, last_name),
+              companies!reviews_company_id_fkey(name)
+            `)
+            .order('created_at', { ascending: false })
+            .limit(50);
+          setReviews(reviewsData || []);
+          break;
 
-      // Fetch pending reports
-      const { count: reportsCount } = await supabase
-        .from('reports')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending');
-
-      setStats({
-        totalUsers: usersCount || 0,
-        totalCompanies: companiesCount || 0,
-        totalReviews: reviewsCount || 0,
-        pendingReports: reportsCount || 0
-      });
-    } catch (error) {
-      console.error('Error fetching dashboard stats:', error);
-    }
-  };
-
-  const fetchAllData = async () => {
-    try {
-      // Fetch users
-      const { data: usersData } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('updated_at', { ascending: false });
-
-      // Fetch companies
-      const { data: companiesData } = await supabase
-        .from('companies')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      // Fetch reviews
-      const { data: reviewsData } = await supabase
-        .from('reviews')
-        .select(`
-          *,
-          profiles!reviews_profile_id_fkey(first_name, last_name),
-          companies!reviews_company_id_fkey(name)
-        `)
-        .order('created_at', { ascending: false });
-
-      setUsers(usersData || []);
-      setCompanies(companiesData || []);
-      setReviews(reviewsData || []);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    }
-  };
-
-  // Separate function to fetch reports based on filter
-  const fetchReports = async () => {
-    try {
-      let query = supabase
-        .from('reports')
-        .select(`
-          *,
-          profiles!reports_reporter_profile_id_fkey(first_name, last_name),
-          reviews!reports_review_id_fkey(
-            title,
-            body,
-            companies!reviews_company_id_fkey(name)
-          )
-        `);
-
-      // Apply status filter
-      if (filterStatus === 'pending') {
-        query = query.eq('status', 'pending');
-      } else if (filterStatus === 'resolved') {
-        query = query.or('status.eq.Resolved: Denied,status.eq.Resolved: Accepted');
+        case 'reports':
+          const { data: reportsData } = await supabase
+            .from('reports')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(50);
+          setReports(reportsData || []);
+          break;
       }
-      // If filterStatus is 'all', don't add any status filter
-
-      const { data: reportsData, error } = await query.order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching reports:', error);
-        return;
-      }
-
-      console.log('Fetched reports:', reportsData?.length || 0, 'with filter:', filterStatus);
-      setReports(reportsData || []);
     } catch (error) {
-      console.error('Error fetching reports:', error);
+      console.error('Error fetching tab data:', error);
     }
   };
 
-  // Fetch reports when filter changes
+  // Fetch data when tab changes
   useEffect(() => {
     if (!loading && !error) {
-      fetchReports();
+      fetchTabData();
     }
-  }, [filterStatus, loading, error]);
+  }, [activeTab]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file && file.type === 'text/csv') {
+    if (file) {
+      // Validate file type
+      if (!file.name.toLowerCase().endsWith('.csv')) {
+        toast.error('Please select a CSV file');
+        return;
+      }
       setSelectedFile(file);
-    } else {
-      toast.error('Please select a valid CSV file');
-      setSelectedFile(null);
     }
   };
 
   const handleBulkUpload = async () => {
+    // Step 1: Get the User's File
     if (!selectedFile) {
       toast.error(text[language].selectFileFirst);
       return;
@@ -448,55 +429,70 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     setIsUploading(true);
 
     try {
-      // Create FormData object
+      // Step 2: Prepare the Request
       const formData = new FormData();
       formData.append('file', selectedFile);
 
-      // Call the Edge Function
+      // Step 3: Call the Edge Function
       const { data, error } = await supabase.functions.invoke('bulk-upload-companies', {
         body: formData
       });
 
+      // Step 4: Handle the Response
       if (error) {
         throw error;
       }
 
       if (data.success) {
-        toast.success(data.message);
+        // On Success: Close modal and show success message
         setIsBulkUploadOpen(false);
         setSelectedFile(null);
-        // Refresh data
-        await fetchDashboardStats();
-        await fetchAllData();
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        toast.success(data.message || text[language].uploadSuccess);
+        
+        // Refresh companies data if we're on the companies tab
+        if (activeTab === 'companies') {
+          fetchTabData();
+        }
+        
+        // Update stats
+        setStats(prev => ({
+          ...prev,
+          totalCompanies: prev.totalCompanies + (data.data?.length || 0)
+        }));
       } else {
-        throw new Error(data.error);
+        // On Failure: Show error message
+        throw new Error(data.error || text[language].uploadError);
       }
+
     } catch (error: any) {
       console.error('Bulk upload error:', error);
-      toast.error(`${text[language].uploadError}: ${error.message}`);
+      toast.error(error.message || text[language].uploadError);
     } finally {
       setIsUploading(false);
     }
   };
 
+  // Report action handlers
   const handleDismissReport = async (reportId: string) => {
+    // Add to processing set
     setProcessingReports(prev => new Set(prev).add(reportId));
 
     try {
+      // Update the report status to 'dismissed'
       const { error } = await supabase
         .from('reports')
-        .update({ status: 'Resolved: Denied' })
+        .update({ status: 'dismissed' })
         .eq('id', reportId);
 
-      if (error) throw error;
-
-      // Remove from UI if we're showing pending reports
-      if (filterStatus === 'pending') {
-        setReports(prev => prev.filter(report => report.id !== reportId));
-      } else {
-        // Refresh reports to show updated status
-        await fetchReports();
+      if (error) {
+        throw error;
       }
+
+      // Remove the report from the UI
+      setReports(prev => prev.filter(report => report.id !== reportId));
       
       // Update stats
       setStats(prev => ({
@@ -507,8 +503,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       toast.success(text[language].reportDismissed);
     } catch (error: any) {
       console.error('Error dismissing report:', error);
-      toast.error(text[language].errorProcessingReport);
+      toast.error(text[language].errorOccurred);
     } finally {
+      // Remove from processing set
       setProcessingReports(prev => {
         const newSet = new Set(prev);
         newSet.delete(reportId);
@@ -518,32 +515,34 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
   };
 
   const handleUpholdReport = async (report: Report) => {
+    // Add to processing set
     setProcessingReports(prev => new Set(prev).add(report.id));
 
     try {
-      // Step A: Hide the original review
+      // Step A: Hide the Original Content
+      // Update the review status to 'removed'
       const { error: reviewError } = await supabase
         .from('reviews')
         .update({ status: 'removed' })
         .eq('id', report.review_id);
 
-      if (reviewError) throw reviewError;
+      if (reviewError) {
+        throw reviewError;
+      }
 
-      // Step B: Update the report status
+      // Step B: Update the Report Status
+      // Update the report status to 'resolved'
       const { error: reportError } = await supabase
         .from('reports')
-        .update({ status: 'Resolved: Accepted' })
+        .update({ status: 'resolved' })
         .eq('id', report.id);
 
-      if (reportError) throw reportError;
-
-      // Remove from UI if we're showing pending reports
-      if (filterStatus === 'pending') {
-        setReports(prev => prev.filter(r => r.id !== report.id));
-      } else {
-        // Refresh reports to show updated status
-        await fetchReports();
+      if (reportError) {
+        throw reportError;
       }
+
+      // Remove the report from the UI
+      setReports(prev => prev.filter(r => r.id !== report.id));
       
       // Update stats
       setStats(prev => ({
@@ -554,8 +553,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       toast.success(text[language].reportUpheld);
     } catch (error: any) {
       console.error('Error upholding report:', error);
-      toast.error(text[language].errorProcessingReport);
+      toast.error(text[language].errorOccurred);
     } finally {
+      // Remove from processing set
       setProcessingReports(prev => {
         const newSet = new Set(prev);
         newSet.delete(report.id);
@@ -564,13 +564,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+  const downloadCsvTemplate = () => {
+    const csvContent = 'name,logo_url,website,domain_name,category_name\n"Example Company","https://example.com/logo.png","https://example.com","example.com","خدمات الاستشارات العقارية"';
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'companies_template.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
   };
 
   const renderStars = (rating: number | null) => {
@@ -587,6 +591,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       );
     }
     return stars;
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US');
+  };
+
+  const getStatusColor = (status: string | null) => {
+    switch (status) {
+      case 'published':
+        return 'bg-green-100 text-green-800';
+      case 'pending_approval':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'removed':
+        return 'bg-red-100 text-red-800';
+      case 'flagged_for_review':
+        return 'bg-orange-100 text-orange-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusText = (status: string | null) => {
+    switch (status) {
+      case 'published':
+        return text[language].published;
+      case 'pending_approval':
+        return text[language].pending;
+      case 'removed':
+        return text[language].removed;
+      case 'flagged_for_review':
+        return text[language].flagged;
+      default:
+        return text[language].pending;
+    }
   };
 
   // Loading state
@@ -649,7 +687,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
             <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
               <Users className="h-6 w-6 text-blue-600" />
             </div>
-            <TrendingUp className="h-5 w-5 text-green-500" />
           </div>
           <h3 className="text-2xl font-bold text-dark-500 mb-1">{stats.totalUsers}</h3>
           <p className="text-gray-600 text-sm">{text[language].totalUsers}</p>
@@ -660,7 +697,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
             <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center">
               <Building2 className="h-6 w-6 text-green-600" />
             </div>
-            <TrendingUp className="h-5 w-5 text-green-500" />
           </div>
           <h3 className="text-2xl font-bold text-dark-500 mb-1">{stats.totalCompanies}</h3>
           <p className="text-gray-600 text-sm">{text[language].totalCompanies}</p>
@@ -671,7 +707,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
             <div className="w-12 h-12 bg-yellow-50 rounded-lg flex items-center justify-center">
               <MessageSquare className="h-6 w-6 text-yellow-600" />
             </div>
-            <TrendingUp className="h-5 w-5 text-green-500" />
           </div>
           <h3 className="text-2xl font-bold text-dark-500 mb-1">{stats.totalReviews}</h3>
           <p className="text-gray-600 text-sm">{text[language].totalReviews}</p>
@@ -682,7 +717,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
             <div className="w-12 h-12 bg-red-50 rounded-lg flex items-center justify-center">
               <Flag className="h-6 w-6 text-red-600" />
             </div>
-            <AlertTriangle className="h-5 w-5 text-red-500" />
           </div>
           <h3 className="text-2xl font-bold text-dark-500 mb-1">{stats.pendingReports}</h3>
           <p className="text-gray-600 text-sm">{text[language].pendingReports}</p>
@@ -706,14 +740,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {text[language].name}
                 </th>
-                <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].role}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {text[language].status}
                 </th>
-                <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].createdAt}
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].lastUpdated}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].actions}
                 </th>
               </tr>
             </thead>
@@ -722,36 +762,51 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                 <tr key={user.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                      <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-                        <User className="h-4 w-4 text-primary-500" />
+                      <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                        {user.avatar_url ? (
+                          <img src={user.avatar_url} alt="" className="w-full h-full object-cover rounded-full" />
+                        ) : (
+                          <User className="h-4 w-4 text-gray-400" />
+                        )}
                       </div>
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {`${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Unnamed User'}
-                        </div>
-                      </div>
+                      <span className="text-sm font-medium text-gray-900">
+                        {`${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Unnamed User'}
+                      </span>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex space-x-2 rtl:space-x-reverse">
-                      {user.is_admin && (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          {text[language].admin}
-                        </span>
-                      )}
-                      {user.is_suspended ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          {text[language].suspended}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          {text[language].active}
-                        </span>
-                      )}
-                    </div>
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      user.is_admin 
+                        ? 'bg-red-100 text-red-800' 
+                        : 'bg-blue-100 text-blue-800'
+                    }`}>
+                      {user.is_admin ? text[language].admin : text[language].user}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      user.is_suspended 
+                        ? 'bg-red-100 text-red-800' 
+                        : 'bg-green-100 text-green-800'
+                    }`}>
+                      {user.is_suspended ? text[language].suspended : text[language].active}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatDate(user.updated_at)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                      <button className="text-blue-600 hover:text-blue-900">
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button className="text-gray-600 hover:text-gray-900">
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button className={`${user.is_suspended ? 'text-green-600 hover:text-green-900' : 'text-red-600 hover:text-red-900'}`}>
+                        {user.is_suspended ? <CheckCircle className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -774,7 +829,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
         </div>
         <button
           onClick={() => setIsBulkUploadOpen(true)}
-          className="flex items-center space-x-2 rtl:space-x-reverse bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200"
+          className="flex items-center space-x-2 rtl:space-x-reverse bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200"
         >
           <Upload className="h-4 w-4" />
           <span>{text[language].bulkUpload}</span>
@@ -786,17 +841,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].companyName}
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].name}
                 </th>
-                <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {text[language].website}
                 </th>
-                <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {text[language].status}
                 </th>
-                <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].createdAt}
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].created}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].actions}
                 </th>
               </tr>
             </thead>
@@ -805,24 +863,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                 <tr key={company.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                      <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-                        <Building2 className="h-4 w-4 text-primary-500" />
+                      <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                        {company.logo_url ? (
+                          <img src={company.logo_url} alt="" className="w-full h-full object-cover rounded-full" />
+                        ) : (
+                          <Building2 className="h-4 w-4 text-gray-400" />
+                        )}
                       </div>
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {company.name || 'Unnamed Company'}
-                        </div>
-                      </div>
+                      <span className="text-sm font-medium text-gray-900">
+                        {company.name || 'Unnamed Company'}
+                      </span>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {company.website ? (
-                      <a 
-                        href={company.website} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-primary-500 hover:text-primary-600"
-                      >
+                      <a href={company.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">
                         {company.website}
                       </a>
                     ) : (
@@ -830,18 +885,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {company.is_claimed ? (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        {text[language].claimed}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                        {text[language].unclaimed}
-                      </span>
-                    )}
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      company.is_claimed 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {company.is_claimed ? text[language].claimed : text[language].unclaimed}
+                    </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatDate(company.created_at)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                      <button
+                        onClick={() => onNavigate('company', company.id)}
+                        className="text-blue-600 hover:text-blue-900"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button className="text-gray-600 hover:text-gray-900">
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button className="text-red-600 hover:text-red-900">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -867,20 +936,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].reviewer}
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].title}
                 </th>
-                <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].company}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {text[language].rating}
                 </th>
-                <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].reviewer}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].company}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {text[language].status}
                 </th>
-                <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].createdAt}
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].created}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].actions}
                 </th>
               </tr>
             </thead>
@@ -888,46 +963,54 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
               {reviews.map((review) => (
                 <tr key={review.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                      <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-                        <User className="h-4 w-4 text-primary-500" />
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {review.profiles 
-                            ? `${review.profiles.first_name || ''} ${review.profiles.last_name || ''}`.trim() || 'Anonymous'
-                            : 'Anonymous'
-                          }
-                        </div>
-                      </div>
+                    <div className="max-w-xs">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {review.title || 'No title'}
+                      </p>
+                      <p className="text-sm text-gray-500 truncate">
+                        {review.body || 'No content'}
+                      </p>
                     </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-1 rtl:space-x-reverse">
+                      {renderStars(review.overall_rating)}
+                      <span className="text-sm text-gray-600 ml-2 rtl:mr-2">
+                        ({review.overall_rating || 0})
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {review.is_anonymous 
+                      ? text[language].anonymous
+                      : review.profiles 
+                        ? `${review.profiles.first_name || ''} ${review.profiles.last_name || ''}`.trim() || text[language].anonymous
+                        : text[language].anonymous
+                    }
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {review.companies?.name || 'Unknown Company'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-1 rtl:space-x-reverse">
-                      {renderStars(review.overall_rating)}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      review.status === 'published' ? 'bg-green-100 text-green-800' :
-                      review.status === 'pending_approval' ? 'bg-yellow-100 text-yellow-800' :
-                      review.status === 'removed' ? 'bg-red-100 text-red-800' :
-                      review.status === 'flagged_for_review' ? 'bg-orange-100 text-orange-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {review.status === 'published' ? text[language].published :
-                       review.status === 'pending_approval' ? text[language].pending :
-                       review.status === 'removed' ? text[language].removed :
-                       review.status === 'flagged_for_review' ? text[language].flagged :
-                       review.status || text[language].pending
-                      }
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(review.status)}`}>
+                      {getStatusText(review.status)}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {formatDate(review.created_at)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                      <button className="text-blue-600 hover:text-blue-900">
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button className="text-gray-600 hover:text-gray-900">
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button className="text-red-600 hover:text-red-900">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -941,165 +1024,226 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
   // Reports View
   const ReportsView = () => (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-dark-500 mb-2">
-            {text[language].reports}
-          </h1>
-          <div className="w-16 h-1 bg-red-500 rounded-full"></div>
-        </div>
-        
-        {/* Filter Dropdown */}
-        <div className="flex items-center space-x-4 rtl:space-x-reverse">
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-          >
-            <option value="pending">{text[language].pendingReports}</option>
-            <option value="resolved">{text[language].resolvedReports}</option>
-            <option value="all">{text[language].allReports}</option>
-          </select>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold text-dark-500 mb-2">
+          {text[language].reports}
+        </h1>
+        <div className="w-16 h-1 bg-red-500 rounded-full"></div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        {reports.length === 0 ? (
-          <div className="text-center py-12">
-            <Flag className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500 text-lg">
-              {filterStatus === 'pending' ? 
-                (language === 'ar' ? 'لا توجد بلاغات معلقة' : 'No pending reports') :
-                filterStatus === 'resolved' ?
-                (language === 'ar' ? 'لا توجد بلاغات محلولة' : 'No resolved reports') :
-                (language === 'ar' ? 'لا توجد بلاغات' : 'No reports')
-              }
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {text[language].reporter}
-                  </th>
-                  <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {text[language].reason}
-                  </th>
-                  <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {text[language].reviewContent}
-                  </th>
-                  <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {text[language].status}
-                  </th>
-                  <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {text[language].createdAt}
-                  </th>
-                  {filterStatus === 'pending' && (
-                    <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {text[language].actions}
-                    </th>
-                  )}
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].reason}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].details}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].status}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].reportedOn}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].actions}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {reports.map((report) => (
+                <tr key={report.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <p className="text-sm font-medium text-gray-900">
+                      {report.reason}
+                    </p>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="max-w-xs">
+                      <p className="text-sm text-gray-500 truncate">
+                        {report.details || '-'}
+                      </p>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      report.status === 'pending' 
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : report.status === 'reviewed'
+                        ? 'bg-blue-100 text-blue-800'
+                        : 'bg-green-100 text-green-800'
+                    }`}>
+                      {report.status === 'pending' 
+                        ? text[language].pending
+                        : report.status === 'reviewed'
+                        ? text[language].reviewed
+                        : text[language].resolved
+                      }
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {formatDate(report.created_at)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                      <button 
+                        className="text-blue-600 hover:text-blue-900"
+                        title={text[language].view}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      
+                      {/* Green Checkmark Button - Dismiss Report */}
+                      <button 
+                        onClick={() => handleDismissReport(report.id)}
+                        disabled={processingReports.has(report.id)}
+                        className="text-green-600 hover:text-green-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={text[language].dismissReport}
+                      >
+                        {processingReports.has(report.id) ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+                        ) : (
+                          <CheckCircle className="h-4 w-4" />
+                        )}
+                      </button>
+                      
+                      {/* Red Cross Button - Uphold Report & Hide Content */}
+                      <button 
+                        onClick={() => handleUpholdReport(report)}
+                        disabled={processingReports.has(report.id)}
+                        className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={text[language].upholdReport}
+                      >
+                        {processingReports.has(report.id) ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                        ) : (
+                          <X className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {reports.map((report) => (
-                  <tr key={report.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                        <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-                          <User className="h-4 w-4 text-primary-500" />
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {report.profiles 
-                              ? `${report.profiles.first_name || ''} ${report.profiles.last_name || ''}`.trim() || 'Anonymous'
-                              : 'Anonymous'
-                            }
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">{report.reason}</div>
-                      {report.details && (
-                        <div className="text-sm text-gray-500 mt-1">{report.details}</div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">
-                        <div className="font-medium mb-1">
-                          {report.reviews?.companies?.name || 'Unknown Company'}
-                        </div>
-                        <div className="text-gray-600">
-                          {report.reviews?.title && (
-                            <div className="font-medium">{report.reviews.title}</div>
-                          )}
-                          {report.reviews?.body && (
-                            <div className="truncate max-w-xs">
-                              {report.reviews.body.length > 100 
-                                ? `${report.reviews.body.substring(0, 100)}...`
-                                : report.reviews.body
-                              }
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        report.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                        report.status === 'Resolved: Denied' ? 'bg-green-100 text-green-800' :
-                        report.status === 'Resolved: Accepted' ? 'bg-red-100 text-red-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {report.status === 'pending' ? (language === 'ar' ? 'معلق' : 'Pending') :
-                         report.status === 'Resolved: Denied' ? (language === 'ar' ? 'مرفوض' : 'Denied') :
-                         report.status === 'Resolved: Accepted' ? (language === 'ar' ? 'مقبول' : 'Accepted') :
-                         report.status
-                        }
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(report.created_at)}
-                    </td>
-                    {filterStatus === 'pending' && (
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex space-x-2 rtl:space-x-reverse">
-                          <button
-                            onClick={() => handleDismissReport(report.id)}
-                            disabled={processingReports.has(report.id)}
-                            className="inline-flex items-center p-2 border border-transparent rounded-full shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title={text[language].dismiss}
-                          >
-                            {processingReports.has(report.id) ? (
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                            ) : (
-                              <CheckCircle className="h-4 w-4" />
-                            )}
-                          </button>
-                          <button
-                            onClick={() => handleUpholdReport(report)}
-                            disabled={processingReports.has(report.id)}
-                            className="inline-flex items-center p-2 border border-transparent rounded-full shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title={text[language].uphold}
-                          >
-                            {processingReports.has(report.id) ? (
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                            ) : (
-                              <XCircle className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Bulk Upload Modal
+  const BulkUploadModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-dark-500">
+              {text[language].bulkUploadCompanies}
+            </h2>
+            <button
+              onClick={() => setIsBulkUploadOpen(false)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="h-6 w-6" />
+            </button>
           </div>
-        )}
+
+          <div className="space-y-6">
+            {/* File Upload Section */}
+            <div>
+              <label className="block text-sm font-semibold text-dark-500 mb-3">
+                {text[language].selectCsvFile}
+              </label>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <div className="space-y-4">
+                  <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center mx-auto">
+                    <FileText className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      {language === 'ar' ? 'انقر لاختيار ملف' : 'Click to select file'}
+                    </button>
+                    <p className="text-gray-500 text-sm mt-1">
+                      {language === 'ar' ? 'أو اسحب وأفلت ملف CSV هنا' : 'or drag and drop a CSV file here'}
+                    </p>
+                  </div>
+                  {selectedFile && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                      <p className="text-green-800 text-sm font-medium">
+                        {language === 'ar' ? 'الملف المحدد:' : 'Selected file:'} {selectedFile.name}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* CSV Format Information */}
+            <div className="bg-gray-50 rounded-lg p-4">
+              <h3 className="font-semibold text-dark-500 mb-3 flex items-center space-x-2 rtl:space-x-reverse">
+                <AlertTriangle className="h-4 w-4 text-orange-500" />
+                <span>{text[language].csvFormat}</span>
+              </h3>
+              <p className="text-gray-600 text-sm mb-3">
+                {text[language].csvFormatDesc}
+              </p>
+              <ul className="space-y-1 text-sm text-gray-600">
+                <li>• {text[language].nameColumn}</li>
+                <li>• {text[language].logoColumn}</li>
+                <li>• {text[language].websiteColumn}</li>
+                <li>• {text[language].domainColumn}</li>
+                <li>• {text[language].categoryColumn}</li>
+              </ul>
+              <button
+                onClick={downloadCsvTemplate}
+                className="mt-3 flex items-center space-x-2 rtl:space-x-reverse text-blue-600 hover:text-blue-700 text-sm font-medium"
+              >
+                <Download className="h-4 w-4" />
+                <span>{text[language].downloadTemplate}</span>
+              </button>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex space-x-3 rtl:space-x-reverse pt-6 border-t border-gray-200">
+              <button
+                onClick={() => setIsBulkUploadOpen(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+              >
+                {text[language].cancel}
+              </button>
+              <button
+                onClick={handleBulkUpload}
+                disabled={!selectedFile || isUploading}
+                className="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 rtl:space-x-reverse"
+              >
+                {isUploading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>{text[language].uploading}</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4" />
+                    <span>{text[language].uploadAndProcess}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -1172,11 +1316,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                 >
                   <Flag className="h-5 w-5" />
                   <span className="font-medium">{text[language].reports}</span>
-                  {stats.pendingReports > 0 && (
-                    <span className="bg-red-500 text-white text-xs rounded-full px-2 py-1 ml-auto rtl:mr-auto rtl:ml-0">
-                      {stats.pendingReports}
-                    </span>
-                  )}
                 </button>
               </nav>
             </div>
@@ -1194,75 +1333,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       </div>
 
       {/* Bulk Upload Modal */}
-      {isBulkUploadOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-dark-500">
-                {text[language].bulkUploadTitle}
-              </h2>
-              <button
-                onClick={() => setIsBulkUploadOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {text[language].selectFile}
-                </label>
-                <input
-                  type="file"
-                  accept=".csv"
-                  onChange={handleFileSelect}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                />
-              </div>
-
-              <div className="text-sm text-gray-600">
-                <p className="mb-2">{text[language].uploadInstructions}</p>
-                <a
-                  href="/template.csv"
-                  download
-                  className="text-primary-500 hover:text-primary-600 underline"
-                >
-                  {text[language].downloadTemplate}
-                </a>
-              </div>
-
-              <div className="flex space-x-3 rtl:space-x-reverse pt-4">
-                <button
-                  onClick={() => setIsBulkUploadOpen(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                  disabled={isUploading}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleBulkUpload}
-                  disabled={!selectedFile || isUploading}
-                  className="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 rtl:space-x-reverse"
-                >
-                  {isUploading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      <span>{text[language].uploading}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="h-4 w-4" />
-                      <span>{text[language].uploadAndProcess}</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {isBulkUploadOpen && <BulkUploadModal />}
 
       <Footer language={language} />
     </div>
