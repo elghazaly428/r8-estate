@@ -673,17 +673,17 @@ function App() {
           </div>
         </section>
 
-        {/* Call-to-Action Section */}
-        <section className="py-12 bg-white border-b border-gray-100">
+        {/* Enhanced Call-to-Action Section */}
+        <section className="py-16 bg-gradient-to-r from-primary-50 to-blue-50 border-b border-gray-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center">
-              <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-6 rtl:sm:space-x-reverse">
-                <p className="text-lg text-gray-700 font-medium">
+              <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-8 rtl:sm:space-x-reverse">
+                <p className="text-xl md:text-2xl text-gray-800 font-semibold">
                   {text[language].ctaQuestion}
                 </p>
                 <button
                   onClick={() => handleNavigation('search')}
-                  className="text-lg font-semibold text-primary-500 hover:text-primary-600 transition-colors duration-200 hover:underline decoration-2 underline-offset-4"
+                  className="text-xl md:text-2xl font-bold text-primary-600 hover:text-primary-700 transition-all duration-300 hover:underline decoration-3 underline-offset-4 hover:scale-105 transform bg-white px-6 py-3 rounded-lg shadow-md hover:shadow-lg border-2 border-primary-200 hover:border-primary-400"
                 >
                   {text[language].ctaAction}
                 </button>
