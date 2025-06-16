@@ -3,7 +3,7 @@ import { Star, Building2, Calendar, ExternalLink, Filter, ChevronDown, Search, X
 import Header from './Header';
 import Footer from './Footer';
 import SearchBar from './SearchBar';
-import { searchCompanies, getAllCompanies, Company, getAllCategories, Category, supabase } from '../lib/supabase';
+import { getAllCategories, Category, supabase } from '../lib/supabase';
 
 interface SearchResultsProps {
   language: 'ar' | 'en';
@@ -13,6 +13,20 @@ interface SearchResultsProps {
   categoryId?: number | null;
 }
 
+interface FilteredCompany {
+  id: number;
+  name: string | null;
+  logo_url: string | null;
+  website: string | null;
+  location: string | null;
+  category_id: number | null;
+  description: string | null;
+  established_in: number | null;
+  created_at: string;
+  avg_rating: number;
+  review_count: number;
+}
+
 const SearchResults: React.FC<SearchResultsProps> = ({ 
   language, 
   onLanguageChange, 
@@ -20,16 +34,17 @@ const SearchResults: React.FC<SearchResultsProps> = ({
   searchQuery = '', 
   categoryId = null 
 }) => {
-  const [selectedRating, setSelectedRating] = useState<number | null>(null);
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  // Centralized state management for all filters
+  const [currentSearchTerm, setCurrentSearchTerm] = useState<string>(searchQuery);
+  const [selectedMinRating, setSelectedMinRating] = useState<number | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(categoryId);
+  
+  // UI state
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [filteredCompanies, setFilteredCompanies] = useState<Company[]>([]);
+  const [companies, setCompanies] = useState<FilteredCompany[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentCategoryName, setCurrentCategoryName] = useState<string>('');
-  const [currentSearchQuery, setCurrentSearchQuery] = useState<string>(searchQuery);
-  const [currentCategoryId, setCurrentCategoryId] = useState<number | null>(categoryId);
   
   // Dropdown states
   const [isRatingDropdownOpen, setIsRatingDropdownOpen] = useState(false);
@@ -60,7 +75,8 @@ const SearchResults: React.FC<SearchResultsProps> = ({
       fourStarsUp: '4 نجوم فأكثر',
       threeStarsUp: '3 نجوم فأكثر',
       twoStarsUp: '2 نجوم فأكثر',
-      oneStarUp: '1 نجمة فأكثر'
+      oneStarUp: '1 نجمة فأكثر',
+      allCategories: 'جميع الفئات'
     },
     en: {
       searchResults: 'Search Results',
@@ -85,7 +101,8 @@ const SearchResults: React.FC<SearchResultsProps> = ({
       fourStarsUp: '4 stars & up',
       threeStarsUp: '3 stars & up',
       twoStarsUp: '2 stars & up',
-      oneStarUp: '1 star & up'
+      oneStarUp: '1 star & up',
+      allCategories: 'All Categories'
     }
   };
 
@@ -98,6 +115,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
     { value: 1, label: text[language].oneStarUp }
   ];
 
+  // Fetch categories on component mount
   useEffect(() => {
     const fetchCategories = async () => {
       try {
@@ -111,71 +129,45 @@ const SearchResults: React.FC<SearchResultsProps> = ({
     fetchCategories();
   }, []);
 
+  // Update category name when selectedCategoryId changes
   useEffect(() => {
-    const performSearch = async () => {
-      setLoading(true);
-      try {
-        let results: Company[] = [];
+    if (selectedCategoryId && categories.length > 0) {
+      const category = categories.find(cat => cat.id === selectedCategoryId);
+      setCurrentCategoryName(category?.name || '');
+    } else {
+      setCurrentCategoryName('');
+    }
+  }, [selectedCategoryId, categories]);
 
-        if (currentCategoryId) {
-          // Filter by category
-          const { data, error } = await supabase
-            .from('companies')
-            .select('*')
-            .eq('category_id', currentCategoryId)
-            .order('created_at', { ascending: false });
+  // Centralized data fetching using filter_companies RPC function
+  const fetchFilteredCompanies = async () => {
+    setLoading(true);
+    try {
+      // Call the filter_companies RPC function with current filter states
+      const { data, error } = await supabase.rpc('filter_companies', {
+        search_term: currentSearchTerm.trim() || null,
+        min_rating: selectedMinRating,
+        filter_category_id: selectedCategoryId
+      });
 
-          if (error) throw error;
-          results = data || [];
-
-          // Find category name for display
-          const category = categories.find(cat => cat.id === currentCategoryId);
-          setCurrentCategoryName(category?.name || '');
-          setSelectedCategory(category || null);
-        } else if (currentSearchQuery.trim()) {
-          // Search by query
-          results = await searchCompanies(currentSearchQuery);
-        } else {
-          // Show all companies if no search query or category
-          const { data, error } = await supabase
-            .from('companies')
-            .select('*')
-            .order('created_at', { ascending: false });
-
-          if (error) throw error;
-          results = data || [];
-        }
-
-        setCompanies(results);
-      } catch (error) {
-        console.error('Search error:', error);
-        setCompanies([]);
-      } finally {
-        setLoading(false);
+      if (error) {
+        console.error('Error calling filter_companies:', error);
+        throw error;
       }
-    };
 
-    performSearch();
-  }, [currentSearchQuery, currentCategoryId, categories]);
+      setCompanies(data || []);
+    } catch (error) {
+      console.error('Error fetching filtered companies:', error);
+      setCompanies([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  // Apply filters to companies
+  // Trigger data fetch whenever any filter state changes
   useEffect(() => {
-    let filtered = [...companies];
-
-    // Apply rating filter
-    if (selectedRating !== null) {
-      // For now, we'll simulate rating filtering since we don't have actual ratings
-      // In a real implementation, you'd filter based on calculated ratings
-      filtered = filtered.filter(() => Math.random() > 0.3); // Simulate filtering
-    }
-
-    // Apply category filter
-    if (selectedCategory) {
-      filtered = filtered.filter(company => company.category_id === selectedCategory.id);
-    }
-
-    setFilteredCompanies(filtered);
-  }, [companies, selectedRating, selectedCategory]);
+    fetchFilteredCompanies();
+  }, [currentSearchTerm, selectedMinRating, selectedCategoryId]);
 
   const renderStars = (rating: number) => {
     const stars = [];
@@ -194,19 +186,21 @@ const SearchResults: React.FC<SearchResultsProps> = ({
     return stars;
   };
 
+  // Clear all filters function
   const clearFilters = () => {
-    setSelectedRating(null);
-    setSelectedCategory(null);
+    setCurrentSearchTerm('');
+    setSelectedMinRating(null);
+    setSelectedCategoryId(null);
     setCategorySearchQuery('');
   };
 
   const handleRatingSelect = (rating: number | null) => {
-    setSelectedRating(rating);
+    setSelectedMinRating(rating);
     setIsRatingDropdownOpen(false);
   };
 
-  const handleCategorySelect = (category: Category | null) => {
-    setSelectedCategory(category);
+  const handleCategorySelect = (categoryId: number | null) => {
+    setSelectedCategoryId(categoryId);
     setIsCategoryDropdownOpen(false);
     setCategorySearchQuery('');
   };
@@ -216,16 +210,15 @@ const SearchResults: React.FC<SearchResultsProps> = ({
     if (query.startsWith('category:')) {
       // Handle category search
       const categoryIdFromQuery = parseInt(query.replace('category:', ''));
-      setCurrentCategoryId(categoryIdFromQuery);
-      setCurrentSearchQuery('');
+      setSelectedCategoryId(categoryIdFromQuery);
+      setCurrentSearchTerm('');
     } else {
       // Handle text search
-      setCurrentSearchQuery(query);
-      setCurrentCategoryId(null);
+      setCurrentSearchTerm(query);
+      setSelectedCategoryId(null);
     }
-    // Clear existing filters when new search is performed
-    setSelectedRating(null);
-    setSelectedCategory(null);
+    // Clear rating filter when new search is performed
+    setSelectedMinRating(null);
   };
 
   // Handle company selection from search bar
@@ -279,8 +272,8 @@ const SearchResults: React.FC<SearchResultsProps> = ({
             className="w-full flex items-center justify-between p-3 border border-gray-300 rounded-lg hover:border-primary-500 transition-colors duration-200 bg-white"
           >
             <span className="text-gray-700">
-              {selectedRating !== null 
-                ? ratingOptions.find(opt => opt.value === selectedRating)?.label
+              {selectedMinRating !== null 
+                ? ratingOptions.find(opt => opt.value === selectedMinRating)?.label
                 : text[language].allRatings
               }
             </span>
@@ -296,7 +289,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                   key={option.value || 'all'}
                   onClick={() => handleRatingSelect(option.value)}
                   className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0 ${
-                    selectedRating === option.value ? 'bg-primary-50 text-primary-600' : 'text-gray-700'
+                    selectedMinRating === option.value ? 'bg-primary-50 text-primary-600' : 'text-gray-700'
                   }`}
                 >
                   <div className="flex items-center space-x-2 rtl:space-x-reverse">
@@ -325,7 +318,10 @@ const SearchResults: React.FC<SearchResultsProps> = ({
             className="w-full flex items-center justify-between p-3 border border-gray-300 rounded-lg hover:border-primary-500 transition-colors duration-200 bg-white"
           >
             <span className="text-gray-700 truncate">
-              {selectedCategory?.name || text[language].chooseCategory}
+              {selectedCategoryId 
+                ? categories.find(cat => cat.id === selectedCategoryId)?.name || text[language].chooseCategory
+                : text[language].chooseCategory
+              }
             </span>
             <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform duration-200 flex-shrink-0 ${
               isCategoryDropdownOpen ? 'rotate-180' : ''
@@ -357,21 +353,21 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                 <button
                   onClick={() => handleCategorySelect(null)}
                   className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 ${
-                    !selectedCategory ? 'bg-primary-50 text-primary-600' : 'text-gray-700'
+                    !selectedCategoryId ? 'bg-primary-50 text-primary-600' : 'text-gray-700'
                   }`}
                 >
                   <div className="flex items-center space-x-2 rtl:space-x-reverse">
                     <X className="h-4 w-4" />
-                    <span>{text[language].allRatings}</span>
+                    <span>{text[language].allCategories}</span>
                   </div>
                 </button>
                 
                 {filteredCategoriesForDropdown.map((category) => (
                   <button
                     key={category.id}
-                    onClick={() => handleCategorySelect(category)}
+                    onClick={() => handleCategorySelect(category.id)}
                     className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0 ${
-                      selectedCategory?.id === category.id ? 'bg-primary-50 text-primary-600' : 'text-gray-700'
+                      selectedCategoryId === category.id ? 'bg-primary-50 text-primary-600' : 'text-gray-700'
                     }`}
                   >
                     <div className="flex items-center space-x-2 rtl:space-x-reverse">
@@ -405,18 +401,18 @@ const SearchResults: React.FC<SearchResultsProps> = ({
             <h1 className="text-3xl md:text-4xl font-bold text-dark-500 mb-4">
               {text[language].searchResults}
             </h1>
-            {currentSearchQuery && (
+            {currentSearchTerm && (
               <p className="text-lg text-gray-600 mb-2">
-                {text[language].searchingFor}: "{currentSearchQuery}"
+                {text[language].searchingFor}: "{currentSearchTerm}"
               </p>
             )}
-            {currentCategoryId && currentCategoryName && (
+            {selectedCategoryId && currentCategoryName && (
               <p className="text-lg text-gray-600 mb-2">
                 {text[language].categoryFilter}: {currentCategoryName}
               </p>
             )}
             <p className="text-gray-600">
-              {filteredCompanies.length} {text[language].resultsFound}
+              {companies.length} {text[language].resultsFound}
             </p>
           </div>
           
@@ -468,7 +464,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
             )}
 
             {/* No Results */}
-            {!loading && filteredCompanies.length === 0 && (currentSearchQuery || currentCategoryId || selectedRating || selectedCategory) && (
+            {!loading && companies.length === 0 && (currentSearchTerm || selectedCategoryId || selectedMinRating) && (
               <div className="text-center py-12">
                 <div className="text-6xl mb-4">🔍</div>
                 <p className="text-gray-500 text-lg">{text[language].noResults}</p>
@@ -476,9 +472,9 @@ const SearchResults: React.FC<SearchResultsProps> = ({
             )}
 
             {/* Company Results */}
-            {!loading && filteredCompanies.length > 0 && (
+            {!loading && companies.length > 0 && (
               <div className="space-y-6">
-                {filteredCompanies.map((company) => (
+                {companies.map((company) => (
                   <div
                     key={company.id}
                     className="hover-lift bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:border-primary-500 transition-all duration-300"
@@ -510,23 +506,25 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                           {/* Rating */}
                           <div className="flex items-center space-x-2 rtl:space-x-reverse mb-2">
                             <div className="flex items-center space-x-1 rtl:space-x-reverse">
-                              {renderStars(4.5)}
+                              {renderStars(Math.round(company.avg_rating))}
                             </div>
                             <span className="font-bold text-dark-500">
-                              4.5
+                              {company.avg_rating > 0 ? company.avg_rating.toFixed(1) : '0.0'}
                             </span>
                             <span className="text-gray-500 text-sm">
-                              (0 {text[language].reviews})
+                              ({company.review_count} {text[language].reviews})
                             </span>
                           </div>
 
                           {/* Establishment Date */}
-                          <div className="flex items-center space-x-2 rtl:space-x-reverse text-sm text-gray-500">
-                            <Calendar className="h-4 w-4" />
-                            <span>
-                              {text[language].established} {new Date(company.created_at).getFullYear()}
-                            </span>
-                          </div>
+                          {company.established_in && (
+                            <div className="flex items-center space-x-2 rtl:space-x-reverse text-sm text-gray-500">
+                              <Calendar className="h-4 w-4" />
+                              <span>
+                                {text[language].established} {company.established_in}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
 
