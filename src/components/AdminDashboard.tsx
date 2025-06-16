@@ -119,7 +119,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
   
   // UI states
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('pending'); // Default to pending
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -178,6 +178,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       reviewContent: 'محتوى التقييم',
       dismiss: 'رفض البلاغ',
       uphold: 'قبول البلاغ وإخفاء المحتوى',
+      allReports: 'جميع البلاغات',
+      pendingReports: 'البلاغات المعلقة',
+      resolvedReports: 'البلاغات المحلولة',
       
       // Bulk Upload
       bulkUploadTitle: 'رفع الشركات بالجملة',
@@ -250,6 +253,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       reviewContent: 'Review Content',
       dismiss: 'Dismiss Report',
       uphold: 'Uphold Report & Hide Content',
+      allReports: 'All Reports',
+      pendingReports: 'Pending Reports',
+      resolvedReports: 'Resolved Reports',
       
       // Bulk Upload
       bulkUploadTitle: 'Bulk Upload Companies',
@@ -371,8 +377,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
         `)
         .order('created_at', { ascending: false });
 
-      // Fetch reports
-      const { data: reportsData } = await supabase
+      setUsers(usersData || []);
+      setCompanies(companiesData || []);
+      setReviews(reviewsData || []);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
+  };
+
+  // Separate function to fetch reports based on filter
+  const fetchReports = async () => {
+    try {
+      let query = supabase
         .from('reports')
         .select(`
           *,
@@ -382,18 +398,36 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
             body,
             companies!reviews_company_id_fkey(name)
           )
-        `)
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false });
+        `);
 
-      setUsers(usersData || []);
-      setCompanies(companiesData || []);
-      setReviews(reviewsData || []);
+      // Apply status filter
+      if (filterStatus === 'pending') {
+        query = query.eq('status', 'pending');
+      } else if (filterStatus === 'resolved') {
+        query = query.or('status.eq.Resolved: Denied,status.eq.Resolved: Accepted');
+      }
+      // If filterStatus is 'all', don't add any status filter
+
+      const { data: reportsData, error } = await query.order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching reports:', error);
+        return;
+      }
+
+      console.log('Fetched reports:', reportsData?.length || 0, 'with filter:', filterStatus);
       setReports(reportsData || []);
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('Error fetching reports:', error);
     }
   };
+
+  // Fetch reports when filter changes
+  useEffect(() => {
+    if (!loading && !error) {
+      fetchReports();
+    }
+  }, [filterStatus, loading, error]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -456,8 +490,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
       if (error) throw error;
 
-      // Remove from UI
-      setReports(prev => prev.filter(report => report.id !== reportId));
+      // Remove from UI if we're showing pending reports
+      if (filterStatus === 'pending') {
+        setReports(prev => prev.filter(report => report.id !== reportId));
+      } else {
+        // Refresh reports to show updated status
+        await fetchReports();
+      }
       
       // Update stats
       setStats(prev => ({
@@ -498,8 +537,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
       if (reportError) throw reportError;
 
-      // Remove from UI
-      setReports(prev => prev.filter(r => r.id !== report.id));
+      // Remove from UI if we're showing pending reports
+      if (filterStatus === 'pending') {
+        setReports(prev => prev.filter(r => r.id !== report.id));
+      } else {
+        // Refresh reports to show updated status
+        await fetchReports();
+      }
       
       // Update stats
       setStats(prev => ({
@@ -897,115 +941,165 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
   // Reports View
   const ReportsView = () => (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-dark-500 mb-2">
-          {text[language].reports}
-        </h1>
-        <div className="w-16 h-1 bg-red-500 rounded-full"></div>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-dark-500 mb-2">
+            {text[language].reports}
+          </h1>
+          <div className="w-16 h-1 bg-red-500 rounded-full"></div>
+        </div>
+        
+        {/* Filter Dropdown */}
+        <div className="flex items-center space-x-4 rtl:space-x-reverse">
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          >
+            <option value="pending">{text[language].pendingReports}</option>
+            <option value="resolved">{text[language].resolvedReports}</option>
+            <option value="all">{text[language].allReports}</option>
+          </select>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].reporter}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].reason}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].reviewContent}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].createdAt}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].actions}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {reports.map((report) => (
-                <tr key={report.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                      <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-                        <User className="h-4 w-4 text-primary-500" />
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {report.profiles 
-                            ? `${report.profiles.first_name || ''} ${report.profiles.last_name || ''}`.trim() || 'Anonymous'
-                            : 'Anonymous'
-                          }
+        {reports.length === 0 ? (
+          <div className="text-center py-12">
+            <Flag className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500 text-lg">
+              {filterStatus === 'pending' ? 
+                (language === 'ar' ? 'لا توجد بلاغات معلقة' : 'No pending reports') :
+                filterStatus === 'resolved' ?
+                (language === 'ar' ? 'لا توجد بلاغات محلولة' : 'No resolved reports') :
+                (language === 'ar' ? 'لا توجد بلاغات' : 'No reports')
+              }
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].reporter}
+                  </th>
+                  <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].reason}
+                  </th>
+                  <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].reviewContent}
+                  </th>
+                  <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].status}
+                  </th>
+                  <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].createdAt}
+                  </th>
+                  {filterStatus === 'pending' && (
+                    <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      {text[language].actions}
+                    </th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {reports.map((report) => (
+                  <tr key={report.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-3 rtl:space-x-reverse">
+                        <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
+                          <User className="h-4 w-4 text-primary-500" />
                         </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-900">{report.reason}</div>
-                    {report.details && (
-                      <div className="text-sm text-gray-500 mt-1">{report.details}</div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-900">
-                      <div className="font-medium mb-1">
-                        {report.reviews?.companies?.name || 'Unknown Company'}
-                      </div>
-                      <div className="text-gray-600">
-                        {report.reviews?.title && (
-                          <div className="font-medium">{report.reviews.title}</div>
-                        )}
-                        {report.reviews?.body && (
-                          <div className="truncate max-w-xs">
-                            {report.reviews.body.length > 100 
-                              ? `${report.reviews.body.substring(0, 100)}...`
-                              : report.reviews.body
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {report.profiles 
+                              ? `${report.profiles.first_name || ''} ${report.profiles.last_name || ''}`.trim() || 'Anonymous'
+                              : 'Anonymous'
                             }
                           </div>
-                        )}
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(report.created_at)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex space-x-2 rtl:space-x-reverse">
-                      <button
-                        onClick={() => handleDismissReport(report.id)}
-                        disabled={processingReports.has(report.id)}
-                        className="inline-flex items-center p-2 border border-transparent rounded-full shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={text[language].dismiss}
-                      >
-                        {processingReports.has(report.id) ? (
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        ) : (
-                          <CheckCircle className="h-4 w-4" />
-                        )}
-                      </button>
-                      <button
-                        onClick={() => handleUpholdReport(report)}
-                        disabled={processingReports.has(report.id)}
-                        className="inline-flex items-center p-2 border border-transparent rounded-full shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={text[language].uphold}
-                      >
-                        {processingReports.has(report.id) ? (
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        ) : (
-                          <XCircle className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-900">{report.reason}</div>
+                      {report.details && (
+                        <div className="text-sm text-gray-500 mt-1">{report.details}</div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-900">
+                        <div className="font-medium mb-1">
+                          {report.reviews?.companies?.name || 'Unknown Company'}
+                        </div>
+                        <div className="text-gray-600">
+                          {report.reviews?.title && (
+                            <div className="font-medium">{report.reviews.title}</div>
+                          )}
+                          {report.reviews?.body && (
+                            <div className="truncate max-w-xs">
+                              {report.reviews.body.length > 100 
+                                ? `${report.reviews.body.substring(0, 100)}...`
+                                : report.reviews.body
+                              }
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        report.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        report.status === 'Resolved: Denied' ? 'bg-green-100 text-green-800' :
+                        report.status === 'Resolved: Accepted' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {report.status === 'pending' ? (language === 'ar' ? 'معلق' : 'Pending') :
+                         report.status === 'Resolved: Denied' ? (language === 'ar' ? 'مرفوض' : 'Denied') :
+                         report.status === 'Resolved: Accepted' ? (language === 'ar' ? 'مقبول' : 'Accepted') :
+                         report.status
+                        }
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatDate(report.created_at)}
+                    </td>
+                    {filterStatus === 'pending' && (
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex space-x-2 rtl:space-x-reverse">
+                          <button
+                            onClick={() => handleDismissReport(report.id)}
+                            disabled={processingReports.has(report.id)}
+                            className="inline-flex items-center p-2 border border-transparent rounded-full shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={text[language].dismiss}
+                          >
+                            {processingReports.has(report.id) ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            ) : (
+                              <CheckCircle className="h-4 w-4" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => handleUpholdReport(report)}
+                            disabled={processingReports.has(report.id)}
+                            className="inline-flex items-center p-2 border border-transparent rounded-full shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={text[language].uphold}
+                          >
+                            {processingReports.has(report.id) ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            ) : (
+                              <XCircle className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
