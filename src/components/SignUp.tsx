@@ -39,7 +39,8 @@ const SignUp: React.FC<SignUpProps> = ({ language, onLanguageChange, onNavigate 
       creating: 'جاري إنشاء الحساب...',
       successMessage: 'تم إنشاء الحساب بنجاح! يرجى التحقق من بريدك الإلكتروني للحصول على رابط التأكيد.',
       passwordMismatch: 'كلمات المرور غير متطابقة',
-      fillAllFields: 'يرجى ملء جميع الحقول'
+      fillAllFields: 'يرجى ملء جميع الحقول',
+      userAlreadyExists: 'هذا البريد الإلكتروني مسجل بالفعل. يرجى تسجيل الدخول بدلاً من ذلك.'
     },
     en: {
       createAccount: 'Create a New Account',
@@ -58,7 +59,8 @@ const SignUp: React.FC<SignUpProps> = ({ language, onLanguageChange, onNavigate 
       creating: 'Creating account...',
       successMessage: 'Success! Please check your email for a confirmation link.',
       passwordMismatch: 'Passwords do not match',
-      fillAllFields: 'Please fill in all fields'
+      fillAllFields: 'Please fill in all fields',
+      userAlreadyExists: 'This email is already registered. Please log in instead.'
     }
   };
 
@@ -132,9 +134,16 @@ const SignUp: React.FC<SignUpProps> = ({ language, onLanguageChange, onNavigate 
         throw new Error('User creation failed - no user object returned');
       }
     } catch (error: any) {
-      // Display error message to user
+      // Handle specific error cases
       console.error('Sign up error:', error);
-      toast.error(`Error: ${error.message || 'An unexpected error occurred'}`);
+      
+      // Check for user already exists error
+      if (error.message === 'User already registered' || error.code === 'user_already_exists') {
+        toast.error(text[language].userAlreadyExists);
+      } else {
+        // Display generic error message for other errors
+        toast.error(`Error: ${error.message || 'An unexpected error occurred'}`);
+      }
     } finally {
       setIsLoading(false);
     }
