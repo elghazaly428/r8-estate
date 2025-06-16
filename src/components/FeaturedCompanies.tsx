@@ -13,7 +13,6 @@ interface FeaturedCompany {
   logo_url: string | null;
   website: string | null;
   location: string | null;
-  category_name: string | null;
   avg_rating: number;
   review_count: number;
 }
@@ -48,15 +47,17 @@ const FeaturedCompanies: React.FC<FeaturedCompaniesProps> = ({ language, onNavig
         setLoading(true);
         setError(null);
 
-        // Call the get_featured_companies RPC function
-        const { data, error } = await supabase.rpc('get_featured_companies');
+        // Call the filter_companies RPC function without parameters to get top companies
+        const { data, error } = await supabase.rpc('filter_companies');
 
         if (error) {
           console.error('Error fetching featured companies:', error);
           throw error;
         }
 
-        setCompanies(data || []);
+        // Take only the first 6 companies for the featured section
+        const featuredCompanies = (data || []).slice(0, 6);
+        setCompanies(featuredCompanies);
       } catch (error: any) {
         console.error('Error in fetchFeaturedCompanies:', error);
         setError(error.message || 'Failed to load companies');
@@ -197,7 +198,7 @@ const FeaturedCompanies: React.FC<FeaturedCompaniesProps> = ({ language, onNavig
                   {company.name || 'Company Name'}
                 </h3>
                 <p className="text-gray-600 text-sm mb-2">
-                  {company.category_name || (language === 'ar' ? 'خدمات عقارية' : 'Real Estate Services')}
+                  {language === 'ar' ? 'خدمات عقارية' : 'Real Estate Services'}
                 </p>
                 {company.location && (
                   <p className="text-gray-500 text-xs">
