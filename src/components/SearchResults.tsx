@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Star, Building2, Calendar, ExternalLink, Filter, ChevronDown, Search, X } from 'lucide-react';
 import Header from './Header';
 import Footer from './Footer';
+import SearchBar from './SearchBar';
 import { searchCompanies, getAllCompanies, Company, getAllCategories, Category, supabase } from '../lib/supabase';
 
 interface SearchResultsProps {
@@ -27,6 +28,8 @@ const SearchResults: React.FC<SearchResultsProps> = ({
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentCategoryName, setCurrentCategoryName] = useState<string>('');
+  const [currentSearchQuery, setCurrentSearchQuery] = useState<string>(searchQuery);
+  const [currentCategoryId, setCurrentCategoryId] = useState<number | null>(categoryId);
   
   // Dropdown states
   const [isRatingDropdownOpen, setIsRatingDropdownOpen] = useState(false);
@@ -114,24 +117,24 @@ const SearchResults: React.FC<SearchResultsProps> = ({
       try {
         let results: Company[] = [];
 
-        if (categoryId) {
+        if (currentCategoryId) {
           // Filter by category
           const { data, error } = await supabase
             .from('companies')
             .select('*')
-            .eq('category_id', categoryId)
+            .eq('category_id', currentCategoryId)
             .order('created_at', { ascending: false });
 
           if (error) throw error;
           results = data || [];
 
           // Find category name for display
-          const category = categories.find(cat => cat.id === categoryId);
+          const category = categories.find(cat => cat.id === currentCategoryId);
           setCurrentCategoryName(category?.name || '');
           setSelectedCategory(category || null);
-        } else if (searchQuery.trim()) {
+        } else if (currentSearchQuery.trim()) {
           // Search by query
-          results = await searchCompanies(searchQuery);
+          results = await searchCompanies(currentSearchQuery);
         } else {
           // Show all companies if no search query or category
           const { data, error } = await supabase
@@ -153,7 +156,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
     };
 
     performSearch();
-  }, [searchQuery, categoryId, categories]);
+  }, [currentSearchQuery, currentCategoryId, categories]);
 
   // Apply filters to companies
   useEffect(() => {
@@ -206,6 +209,28 @@ const SearchResults: React.FC<SearchResultsProps> = ({
     setSelectedCategory(category);
     setIsCategoryDropdownOpen(false);
     setCategorySearchQuery('');
+  };
+
+  // Handle search from the search bar
+  const handleSearch = (query: string) => {
+    if (query.startsWith('category:')) {
+      // Handle category search
+      const categoryIdFromQuery = parseInt(query.replace('category:', ''));
+      setCurrentCategoryId(categoryIdFromQuery);
+      setCurrentSearchQuery('');
+    } else {
+      // Handle text search
+      setCurrentSearchQuery(query);
+      setCurrentCategoryId(null);
+    }
+    // Clear existing filters when new search is performed
+    setSelectedRating(null);
+    setSelectedCategory(null);
+  };
+
+  // Handle company selection from search bar
+  const handleCompanySelect = (companyId: number) => {
+    onNavigate('company', companyId);
   };
 
   // Filter categories based on search query
@@ -404,12 +429,12 @@ const SearchResults: React.FC<SearchResultsProps> = ({
               <h1 className="text-2xl font-bold text-dark-500 mb-2">
                 {text[language].searchResults}
               </h1>
-              {searchQuery && (
+              {currentSearchQuery && (
                 <p className="text-gray-600 mb-2">
-                  {text[language].searchingFor}: "{searchQuery}"
+                  {text[language].searchingFor}: "{currentSearchQuery}"
                 </p>
               )}
-              {categoryId && currentCategoryName && (
+              {currentCategoryId && currentCategoryName && (
                 <p className="text-gray-600 mb-2">
                   {text[language].categoryFilter}: {currentCategoryName}
                 </p>
@@ -417,6 +442,15 @@ const SearchResults: React.FC<SearchResultsProps> = ({
               <p className="text-gray-600">
                 {filteredCompanies.length} {text[language].resultsFound}
               </p>
+            </div>
+
+            {/* Dynamic Search Bar */}
+            <div className="mb-8">
+              <SearchBar 
+                language={language} 
+                onSearch={handleSearch} 
+                onCompanySelect={handleCompanySelect}
+              />
             </div>
 
             {/* Loading State */}
@@ -428,7 +462,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
             )}
 
             {/* No Results */}
-            {!loading && filteredCompanies.length === 0 && (searchQuery || categoryId || selectedRating || selectedCategory) && (
+            {!loading && filteredCompanies.length === 0 && (currentSearchQuery || currentCategoryId || selectedRating || selectedCategory) && (
               <div className="text-center py-12">
                 <div className="text-6xl mb-4">🔍</div>
                 <p className="text-gray-500 text-lg">{text[language].noResults}</p>
