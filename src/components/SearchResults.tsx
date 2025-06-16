@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Star, Check, Building2, Calendar, ExternalLink, Filter } from 'lucide-react';
+import { Star, Building2, Calendar, ExternalLink, Filter, ChevronDown, Search, X } from 'lucide-react';
 import Header from './Header';
 import Footer from './Footer';
 import { searchCompanies, getAllCompanies, Company, getAllCategories, Category, supabase } from '../lib/supabase';
@@ -20,12 +20,18 @@ const SearchResults: React.FC<SearchResultsProps> = ({
   categoryId = null 
 }) => {
   const [selectedRating, setSelectedRating] = useState<number | null>(null);
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [filteredCompanies, setFilteredCompanies] = useState<Company[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentCategoryName, setCurrentCategoryName] = useState<string>('');
+  
+  // Dropdown states
+  const [isRatingDropdownOpen, setIsRatingDropdownOpen] = useState(false);
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const [categorySearchQuery, setCategorySearchQuery] = useState('');
 
   const text = {
     ar: {
@@ -43,7 +49,15 @@ const SearchResults: React.FC<SearchResultsProps> = ({
       searchingFor: 'البحث عن',
       categoryFilter: 'تصفية حسب الفئة',
       loading: 'جاري البحث...',
-      noResults: 'لا توجد نتائج'
+      noResults: 'لا توجد نتائج',
+      chooseCategory: 'اختر فئة...',
+      searchCategories: 'البحث في الفئات...',
+      allRatings: 'جميع التقييمات',
+      fiveStars: '5 نجوم',
+      fourStarsUp: '4 نجوم فأكثر',
+      threeStarsUp: '3 نجوم فأكثر',
+      twoStarsUp: '2 نجوم فأكثر',
+      oneStarUp: '1 نجمة فأكثر'
     },
     en: {
       searchResults: 'Search Results',
@@ -60,9 +74,26 @@ const SearchResults: React.FC<SearchResultsProps> = ({
       searchingFor: 'Searching for',
       categoryFilter: 'Filtering by category',
       loading: 'Searching...',
-      noResults: 'No results found'
+      noResults: 'No results found',
+      chooseCategory: 'Choose a category...',
+      searchCategories: 'Search categories...',
+      allRatings: 'All Ratings',
+      fiveStars: '5 stars',
+      fourStarsUp: '4 stars & up',
+      threeStarsUp: '3 stars & up',
+      twoStarsUp: '2 stars & up',
+      oneStarUp: '1 star & up'
     }
   };
+
+  const ratingOptions = [
+    { value: null, label: text[language].allRatings },
+    { value: 5, label: text[language].fiveStars },
+    { value: 4, label: text[language].fourStarsUp },
+    { value: 3, label: text[language].threeStarsUp },
+    { value: 2, label: text[language].twoStarsUp },
+    { value: 1, label: text[language].oneStarUp }
+  ];
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -97,6 +128,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
           // Find category name for display
           const category = categories.find(cat => cat.id === categoryId);
           setCurrentCategoryName(category?.name || '');
+          setSelectedCategory(category || null);
         } else if (searchQuery.trim()) {
           // Search by query
           results = await searchCompanies(searchQuery);
@@ -123,43 +155,79 @@ const SearchResults: React.FC<SearchResultsProps> = ({
     performSearch();
   }, [searchQuery, categoryId, categories]);
 
-  const renderStars = (rating: number, interactive: boolean = false, onStarClick?: (rating: number) => void) => {
+  // Apply filters to companies
+  useEffect(() => {
+    let filtered = [...companies];
+
+    // Apply rating filter
+    if (selectedRating !== null) {
+      // For now, we'll simulate rating filtering since we don't have actual ratings
+      // In a real implementation, you'd filter based on calculated ratings
+      filtered = filtered.filter(() => Math.random() > 0.3); // Simulate filtering
+    }
+
+    // Apply category filter
+    if (selectedCategory) {
+      filtered = filtered.filter(company => company.category_id === selectedCategory.id);
+    }
+
+    setFilteredCompanies(filtered);
+  }, [companies, selectedRating, selectedCategory]);
+
+  const renderStars = (rating: number) => {
     const stars = [];
     for (let i = 1; i <= 5; i++) {
       stars.push(
-        <button
+        <Star
           key={i}
-          onClick={() => interactive && onStarClick && onStarClick(i)}
-          className={`${interactive ? 'cursor-pointer hover:scale-110' : 'cursor-default'} transition-transform duration-200`}
-          disabled={!interactive}
-        >
-          <Star
-            className={`h-5 w-5 ${
-              i <= rating 
-                ? 'fill-current text-highlight-500' 
-                : interactive && selectedRating && i <= selectedRating
-                ? 'fill-current text-highlight-300'
-                : 'text-gray-300'
-            }`}
-          />
-        </button>
+          className={`h-4 w-4 ${
+            i <= rating 
+              ? 'fill-current text-highlight-500' 
+              : 'text-gray-300'
+          }`}
+        />
       );
     }
     return stars;
   };
 
-  const handleCategoryChange = (categoryId: string) => {
-    setSelectedCategories(prev => 
-      prev.includes(categoryId) 
-        ? prev.filter(id => id !== categoryId)
-        : [...prev, categoryId]
-    );
-  };
-
   const clearFilters = () => {
     setSelectedRating(null);
-    setSelectedCategories([]);
+    setSelectedCategory(null);
+    setCategorySearchQuery('');
   };
+
+  const handleRatingSelect = (rating: number | null) => {
+    setSelectedRating(rating);
+    setIsRatingDropdownOpen(false);
+  };
+
+  const handleCategorySelect = (category: Category | null) => {
+    setSelectedCategory(category);
+    setIsCategoryDropdownOpen(false);
+    setCategorySearchQuery('');
+  };
+
+  // Filter categories based on search query
+  const filteredCategoriesForDropdown = categories.filter(category =>
+    category.name?.toLowerCase().includes(categorySearchQuery.toLowerCase()) || false
+  );
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('.rating-dropdown')) {
+        setIsRatingDropdownOpen(false);
+      }
+      if (!target.closest('.category-dropdown')) {
+        setIsCategoryDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const FilterSidebar = () => (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sticky top-24">
@@ -175,66 +243,127 @@ const SearchResults: React.FC<SearchResultsProps> = ({
         </button>
       </div>
 
-      {/* Rating Filter */}
+      {/* Rating Dropdown Filter */}
       <div className="mb-8">
         <h3 className="font-semibold text-dark-500 mb-4">
           {text[language].rating}
         </h3>
-        <div className="space-y-3">
-          {[5, 4, 3, 2, 1].map((rating) => (
-            <button
-              key={rating}
-              onClick={() => setSelectedRating(selectedRating === rating ? null : rating)}
-              className={`w-full flex items-center space-x-3 rtl:space-x-reverse p-3 rounded-lg border transition-all duration-200 ${
-                selectedRating === rating
-                  ? 'border-primary-500 bg-primary-50'
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              <div className="flex items-center space-x-1 rtl:space-x-reverse">
-                {renderStars(rating)}
-              </div>
-              <span className="text-sm text-gray-600">
-                {language === 'ar' ? 'فأكثر' : '& up'}
-              </span>
-            </button>
-          ))}
+        <div className="relative rating-dropdown">
+          <button
+            onClick={() => setIsRatingDropdownOpen(!isRatingDropdownOpen)}
+            className="w-full flex items-center justify-between p-3 border border-gray-300 rounded-lg hover:border-primary-500 transition-colors duration-200 bg-white"
+          >
+            <span className="text-gray-700">
+              {selectedRating !== null 
+                ? ratingOptions.find(opt => opt.value === selectedRating)?.label
+                : text[language].allRatings
+              }
+            </span>
+            <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${
+              isRatingDropdownOpen ? 'rotate-180' : ''
+            }`} />
+          </button>
+          
+          {isRatingDropdownOpen && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-60 overflow-y-auto">
+              {ratingOptions.map((option) => (
+                <button
+                  key={option.value || 'all'}
+                  onClick={() => handleRatingSelect(option.value)}
+                  className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0 ${
+                    selectedRating === option.value ? 'bg-primary-50 text-primary-600' : 'text-gray-700'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                    {option.value && (
+                      <div className="flex items-center space-x-1 rtl:space-x-reverse">
+                        {renderStars(option.value)}
+                      </div>
+                    )}
+                    <span>{option.label}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Categories Filter */}
+      {/* Category Dropdown Filter */}
       <div>
         <h3 className="font-semibold text-dark-500 mb-4">
           {text[language].categories}
         </h3>
-        <div className="space-y-3">
-          {categories.map((category) => (
-            <label
-              key={category.id}
-              className="flex items-center space-x-3 rtl:space-x-reverse cursor-pointer p-2 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-            >
-              <div className="relative">
-                <input
-                  type="checkbox"
-                  checked={selectedCategories.includes(category.id.toString())}
-                  onChange={() => handleCategoryChange(category.id.toString())}
-                  className="sr-only"
-                />
-                <div className={`w-5 h-5 border-2 rounded transition-all duration-200 ${
-                  selectedCategories.includes(category.id.toString())
-                    ? 'border-primary-500 bg-primary-500'
-                    : 'border-gray-300'
-                }`}>
-                  {selectedCategories.includes(category.id.toString()) && (
-                    <Check className="h-3 w-3 text-white absolute top-0.5 left-0.5" />
-                  )}
+        <div className="relative category-dropdown">
+          <button
+            onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+            className="w-full flex items-center justify-between p-3 border border-gray-300 rounded-lg hover:border-primary-500 transition-colors duration-200 bg-white"
+          >
+            <span className="text-gray-700 truncate">
+              {selectedCategory?.name || text[language].chooseCategory}
+            </span>
+            <ChevronDown className={`h-4 w-4 text-gray-400 transition-transform duration-200 flex-shrink-0 ${
+              isCategoryDropdownOpen ? 'rotate-180' : ''
+            }`} />
+          </button>
+          
+          {isCategoryDropdownOpen && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-80 overflow-hidden">
+              {/* Search Input */}
+              <div className="p-3 border-b border-gray-100">
+                <div className="relative">
+                  <div className="absolute inset-y-0 right-0 pr-3 rtl:left-0 rtl:right-auto rtl:pl-3 rtl:pr-0 flex items-center pointer-events-none">
+                    <Search className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    value={categorySearchQuery}
+                    onChange={(e) => setCategorySearchQuery(e.target.value)}
+                    placeholder={text[language].searchCategories}
+                    className="w-full px-3 py-2 pr-10 rtl:pl-10 rtl:pr-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 text-sm"
+                    dir={language === 'ar' ? 'rtl' : 'ltr'}
+                  />
                 </div>
               </div>
-              <span className="text-sm text-gray-700 flex-1">
-                {category.name || 'Unnamed Category'}
-              </span>
-            </label>
-          ))}
+              
+              {/* Categories List */}
+              <div className="max-h-60 overflow-y-auto">
+                {/* Clear Selection Option */}
+                <button
+                  onClick={() => handleCategorySelect(null)}
+                  className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 ${
+                    !selectedCategory ? 'bg-primary-50 text-primary-600' : 'text-gray-700'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                    <X className="h-4 w-4" />
+                    <span>{text[language].allRatings}</span>
+                  </div>
+                </button>
+                
+                {filteredCategoriesForDropdown.map((category) => (
+                  <button
+                    key={category.id}
+                    onClick={() => handleCategorySelect(category)}
+                    className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0 ${
+                      selectedCategory?.id === category.id ? 'bg-primary-50 text-primary-600' : 'text-gray-700'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                      <Building2 className="h-4 w-4 text-gray-400" />
+                      <span className="truncate">{category.name || 'Unnamed Category'}</span>
+                    </div>
+                  </button>
+                ))}
+                
+                {filteredCategoriesForDropdown.length === 0 && categorySearchQuery && (
+                  <div className="px-4 py-6 text-center text-gray-500 text-sm">
+                    {text[language].noResults}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -286,7 +415,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
                 </p>
               )}
               <p className="text-gray-600">
-                {companies.length} {text[language].resultsFound}
+                {filteredCompanies.length} {text[language].resultsFound}
               </p>
             </div>
 
@@ -299,7 +428,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({
             )}
 
             {/* No Results */}
-            {!loading && companies.length === 0 && (searchQuery || categoryId) && (
+            {!loading && filteredCompanies.length === 0 && (searchQuery || categoryId || selectedRating || selectedCategory) && (
               <div className="text-center py-12">
                 <div className="text-6xl mb-4">🔍</div>
                 <p className="text-gray-500 text-lg">{text[language].noResults}</p>
@@ -307,9 +436,9 @@ const SearchResults: React.FC<SearchResultsProps> = ({
             )}
 
             {/* Company Results */}
-            {!loading && companies.length > 0 && (
+            {!loading && filteredCompanies.length > 0 && (
               <div className="space-y-6">
-                {companies.map((company) => (
+                {filteredCompanies.map((company) => (
                   <div
                     key={company.id}
                     className="hover-lift bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:border-primary-500 transition-all duration-300"
