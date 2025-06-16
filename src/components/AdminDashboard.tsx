@@ -112,6 +112,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   
+  // Processing states for report actions
+  const [processingReports, setProcessingReports] = useState<Set<string>>(new Set());
+  
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -178,6 +181,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       reportedOn: 'تاريخ البلاغ',
       reviewed: 'تمت المراجعة',
       resolved: 'تم الحل',
+      dismissReport: 'رفض البلاغ',
+      upholdReport: 'قبول البلاغ وإخفاء المحتوى',
       
       // Common
       close: 'إغلاق',
@@ -197,7 +202,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       selectFileFirst: 'يرجى اختيار ملف CSV أولاً',
       uploading: 'جاري الرفع...',
       uploadSuccess: 'تم رفع الملف بنجاح',
-      uploadError: 'خطأ في رفع الملف'
+      uploadError: 'خطأ في رفع الملف',
+      reportDismissed: 'تم رفض البلاغ بنجاح',
+      reportUpheld: 'تم قبول البلاغ وإخفاء المحتوى',
+      processing: 'جاري المعالجة...'
     },
     en: {
       // Navigation
@@ -261,6 +269,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       reportedOn: 'Reported On',
       reviewed: 'Reviewed',
       resolved: 'Resolved',
+      dismissReport: 'Dismiss Report',
+      upholdReport: 'Uphold Report & Hide Content',
       
       // Common
       close: 'Close',
@@ -280,7 +290,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       selectFileFirst: 'Please select a CSV file first',
       uploading: 'Uploading...',
       uploadSuccess: 'File uploaded successfully',
-      uploadError: 'Error uploading file'
+      uploadError: 'Error uploading file',
+      reportDismissed: 'Report dismissed successfully',
+      reportUpheld: 'Report upheld and content hidden',
+      processing: 'Processing...'
     }
   };
 
@@ -459,6 +472,95 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       toast.error(error.message || text[language].uploadError);
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  // Report action handlers
+  const handleDismissReport = async (reportId: string) => {
+    // Add to processing set
+    setProcessingReports(prev => new Set(prev).add(reportId));
+
+    try {
+      // Update the report status to 'dismissed'
+      const { error } = await supabase
+        .from('reports')
+        .update({ status: 'dismissed' })
+        .eq('id', reportId);
+
+      if (error) {
+        throw error;
+      }
+
+      // Remove the report from the UI
+      setReports(prev => prev.filter(report => report.id !== reportId));
+      
+      // Update stats
+      setStats(prev => ({
+        ...prev,
+        pendingReports: Math.max(0, prev.pendingReports - 1)
+      }));
+
+      toast.success(text[language].reportDismissed);
+    } catch (error: any) {
+      console.error('Error dismissing report:', error);
+      toast.error(text[language].errorOccurred);
+    } finally {
+      // Remove from processing set
+      setProcessingReports(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(reportId);
+        return newSet;
+      });
+    }
+  };
+
+  const handleUpholdReport = async (report: Report) => {
+    // Add to processing set
+    setProcessingReports(prev => new Set(prev).add(report.id));
+
+    try {
+      // Step A: Hide the Original Content
+      // Update the review status to 'removed'
+      const { error: reviewError } = await supabase
+        .from('reviews')
+        .update({ status: 'removed' })
+        .eq('id', report.review_id);
+
+      if (reviewError) {
+        throw reviewError;
+      }
+
+      // Step B: Update the Report Status
+      // Update the report status to 'resolved'
+      const { error: reportError } = await supabase
+        .from('reports')
+        .update({ status: 'resolved' })
+        .eq('id', report.id);
+
+      if (reportError) {
+        throw reportError;
+      }
+
+      // Remove the report from the UI
+      setReports(prev => prev.filter(r => r.id !== report.id));
+      
+      // Update stats
+      setStats(prev => ({
+        ...prev,
+        pendingReports: Math.max(0, prev.pendingReports - 1)
+      }));
+
+      toast.success(text[language].reportUpheld);
+    } catch (error: any) {
+      console.error('Error upholding report:', error);
+      toast.error(text[language].errorOccurred);
+    } finally {
+      // Remove from processing set
+      setProcessingReports(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(report.id);
+        return newSet;
+      });
     }
   };
 
@@ -987,14 +1089,39 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                      <button className="text-blue-600 hover:text-blue-900">
+                      <button 
+                        className="text-blue-600 hover:text-blue-900"
+                        title={text[language].view}
+                      >
                         <Eye className="h-4 w-4" />
                       </button>
-                      <button className="text-green-600 hover:text-green-900">
-                        <CheckCircle className="h-4 w-4" />
+                      
+                      {/* Green Checkmark Button - Dismiss Report */}
+                      <button 
+                        onClick={() => handleDismissReport(report.id)}
+                        disabled={processingReports.has(report.id)}
+                        className="text-green-600 hover:text-green-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={text[language].dismissReport}
+                      >
+                        {processingReports.has(report.id) ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+                        ) : (
+                          <CheckCircle className="h-4 w-4" />
+                        )}
                       </button>
-                      <button className="text-red-600 hover:text-red-900">
-                        <X className="h-4 w-4" />
+                      
+                      {/* Red Cross Button - Uphold Report & Hide Content */}
+                      <button 
+                        onClick={() => handleUpholdReport(report)}
+                        disabled={processingReports.has(report.id)}
+                        className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={text[language].upholdReport}
+                      >
+                        {processingReports.has(report.id) ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                        ) : (
+                          <X className="h-4 w-4" />
+                        )}
                       </button>
                     </div>
                   </td>
