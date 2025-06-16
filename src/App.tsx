@@ -32,11 +32,15 @@ function App() {
   const text = {
     ar: {
       heroTitle: 'اقرأ التقييمات. اكتب التقييمات. ابحث عن شركة يمكنك الوثوق بها.',
-      heroSubtitle: 'منصة التقييم الرائدة للعقارات في مصر'
+      heroSubtitle: 'منصة التقييم الرائدة للعقارات في مصر',
+      ctaQuestion: 'لسا طالع من تجربة مع شركة ؟',
+      ctaAction: 'شاركها معانا'
     },
     en: {
       heroTitle: 'Read reviews. Write reviews. Find a company you can trust.',
-      heroSubtitle: 'The leading real estate review platform in Egypt'
+      heroSubtitle: 'The leading real estate review platform in Egypt',
+      ctaQuestion: 'Just had an experience with a company?',
+      ctaAction: 'Share it with us'
     }
   };
 
@@ -665,6 +669,25 @@ function App() {
                 onSearch={handleSearch} 
                 onCompanySelect={handleCompanySelect}
               />
+            </div>
+          </div>
+        </section>
+
+        {/* Call-to-Action Section */}
+        <section className="py-12 bg-white border-b border-gray-100">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center">
+              <div className="flex flex-col sm:flex-row items-center justify-center space-y-4 sm:space-y-0 sm:space-x-6 rtl:sm:space-x-reverse">
+                <p className="text-lg text-gray-700 font-medium">
+                  {text[language].ctaQuestion}
+                </p>
+                <button
+                  onClick={() => handleNavigation('search')}
+                  className="text-lg font-semibold text-primary-500 hover:text-primary-600 transition-colors duration-200 hover:underline decoration-2 underline-offset-4"
+                >
+                  {text[language].ctaAction}
+                </button>
+              </div>
             </div>
           </div>
         </section>
