@@ -141,7 +141,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       logoColumn: 'logo_url - رابط الشعار (اختياري)',
       websiteColumn: 'website - الموقع الإلكتروني (اختياري)',
       domainColumn: 'domain_name - اسم النطاق (مطلوب)',
-      categoryColumn: 'category_id - معرف الفئة (اختياري)',
+      categoryColumn: 'category_name - اسم الفئة (اختياري)',
       downloadTemplate: 'تحميل نموذج',
       close: 'إغلاق',
       cancel: 'إلغاء',
@@ -182,7 +182,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       logoColumn: 'logo_url - Logo URL (optional)',
       websiteColumn: 'website - Website URL (optional)',
       domainColumn: 'domain_name - Domain name (required)',
-      categoryColumn: 'category_id - Category ID (optional)',
+      categoryColumn: 'category_name - Category name (optional)',
       downloadTemplate: 'Download Template',
       close: 'Close',
       cancel: 'Cancel',
@@ -379,7 +379,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
   };
 
   const downloadCsvTemplate = () => {
-    const csvContent = 'name,logo_url,website,domain_name,category_id\n"Example Company","https://example.com/logo.png","https://example.com","example.com","1"';
+    const csvContent = 'name,logo_url,website,domain_name,category_name\n"Example Company","https://example.com/logo.png","https://example.com","example.com","خدمات الاستشارات العقارية"';
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
