@@ -1,28 +1,32 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   Building2, 
   MessageSquare, 
   Flag, 
   BarChart3, 
-  Shield, 
+  Settings, 
   Search,
   Filter,
-  ChevronDown,
-  Eye,
-  Edit,
-  Trash2,
-  Ban,
-  CheckCircle,
-  X,
-  Upload,
   Download,
-  FileText,
+  Upload,
+  X,
+  Check,
   AlertTriangle,
-  User,
-  Star,
+  Eye,
+  Trash2,
+  Edit,
+  Plus,
+  FileText,
   Calendar,
-  ExternalLink
+  TrendingUp,
+  Star,
+  Shield,
+  UserCheck,
+  UserX,
+  Clock,
+  CheckCircle,
+  XCircle
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import Header from './Header';
@@ -33,7 +37,7 @@ import { supabase } from '../lib/supabase';
 interface AdminDashboardProps {
   language: 'ar' | 'en';
   onLanguageChange: (lang: 'ar' | 'en') => void;
-  onNavigate: (page: string, companyId?: number) => void;
+  onNavigate: (page: string) => void;
 }
 
 interface AdminStats {
@@ -43,23 +47,23 @@ interface AdminStats {
   pendingReports: number;
 }
 
-interface UserProfile {
+interface User {
   id: string;
+  email: string;
   first_name: string | null;
   last_name: string | null;
-  avatar_url: string | null;
   is_admin: boolean | null;
   is_suspended: boolean | null;
-  updated_at: string;
+  created_at: string;
 }
 
 interface Company {
   id: number;
   name: string | null;
-  logo_url: string | null;
   website: string | null;
   is_claimed: boolean | null;
   created_at: string;
+  category_name: string | null;
 }
 
 interface Review {
@@ -69,29 +73,27 @@ interface Review {
   overall_rating: number | null;
   status: string | null;
   created_at: string;
+  company_name: string | null;
+  reviewer_name: string | null;
   is_anonymous: boolean | null;
-  profiles: {
-    first_name: string | null;
-    last_name: string | null;
-  } | null;
-  companies: {
-    name: string | null;
-  } | null;
 }
 
 interface Report {
   id: string;
+  review_id: number;
   reason: string;
   details: string | null;
   status: string;
   created_at: string;
-  review_id: number;
-  reporter_profile_id: string;
+  reporter_name: string | null;
+  review_title: string | null;
+  review_body: string | null;
+  company_name: string | null;
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageChange, onNavigate }) => {
   const { user, loading: authLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'companies' | 'reviews' | 'reports'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'companies' | 'reviews' | 'reports' | 'settings'>('overview');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<AdminStats>({
@@ -100,23 +102,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     totalReviews: 0,
     pendingReports: 0
   });
-  
+
   // Data states
-  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
-  
+
+  // Filter states
+  const [userFilter, setUserFilter] = useState('all');
+  const [companyFilter, setCompanyFilter] = useState('all');
+  const [reviewFilter, setReviewFilter] = useState('all');
+  const [reportFilter, setReportFilter] = useState('all'); // New filter state for reports
+
+  // Search states
+  const [userSearch, setUserSearch] = useState('');
+  const [companySearch, setCompanySearch] = useState('');
+  const [reviewSearch, setReviewSearch] = useState('');
+
   // Modal states
   const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  
-  // Processing states for report actions
+
+  // Processing states
   const [processingReports, setProcessingReports] = useState<Set<string>>(new Set());
-  
-  // File input ref
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const text = {
     ar: {
@@ -126,6 +136,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       companies: 'الشركات',
       reviews: 'التقييمات',
       reports: 'البلاغات',
+      settings: 'الإعدادات',
       
       // Overview
       totalUsers: 'إجمالي المستخدمين',
@@ -134,77 +145,97 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       pendingReports: 'البلاغات المعلقة',
       
       // Users
-      name: 'الاسم',
+      allUsers: 'جميع المستخدمين',
+      adminUsers: 'المديرون',
+      suspendedUsers: 'المستخدمون المعلقون',
+      searchUsers: 'البحث في المستخدمين...',
       email: 'البريد الإلكتروني',
+      name: 'الاسم',
       role: 'الدور',
       status: 'الحالة',
-      lastUpdated: 'آخر تحديث',
+      joinDate: 'تاريخ الانضمام',
       actions: 'الإجراءات',
       admin: 'مدير',
       user: 'مستخدم',
       active: 'نشط',
-      suspended: 'موقوف',
+      suspended: 'معلق',
+      makeAdmin: 'جعل مديراً',
+      removeAdmin: 'إزالة الإدارة',
+      suspendUser: 'تعليق المستخدم',
+      unsuspendUser: 'إلغاء التعليق',
       
       // Companies
-      bulkUpload: 'رفع مجمع',
-      bulkUploadCompanies: 'رفع الشركات بشكل مجمع',
-      selectCsvFile: 'اختر ملف CSV',
-      uploadAndProcess: 'رفع ومعالجة الملف',
-      csvFormat: 'تنسيق CSV المطلوب',
-      csvFormatDesc: 'يجب أن يحتوي ملف CSV على الأعمدة التالية:',
-      nameColumn: 'name - اسم الشركة (مطلوب)',
-      logoColumn: 'logo_url - رابط الشعار (اختياري)',
-      websiteColumn: 'website - الموقع الإلكتروني (اختياري)',
-      domainColumn: 'domain_name - اسم النطاق (مطلوب)',
-      categoryColumn: 'category_name - اسم الفئة (اختياري)',
-      downloadTemplate: 'تحميل نموذج',
-      website: 'الموقع',
+      allCompanies: 'جميع الشركات',
+      claimedCompanies: 'الشركات المطالب بها',
+      unclaimedCompanies: 'الشركات غير المطالب بها',
+      searchCompanies: 'البحث في الشركات...',
+      companyName: 'اسم الشركة',
+      website: 'الموقع الإلكتروني',
+      category: 'الفئة',
+      claimStatus: 'حالة المطالبة',
+      createdDate: 'تاريخ الإنشاء',
       claimed: 'مطالب بها',
       unclaimed: 'غير مطالب بها',
-      created: 'تاريخ الإنشاء',
+      viewCompany: 'عرض الشركة',
+      editCompany: 'تعديل الشركة',
+      deleteCompany: 'حذف الشركة',
+      bulkUpload: 'رفع مجمع',
+      bulkUploadTitle: 'رفع الشركات بشكل مجمع',
+      selectCsvFile: 'اختر ملف CSV',
+      uploadAndProcess: 'رفع ومعالجة الملف',
+      downloadTemplate: 'تحميل نموذج CSV',
+      csvInstructions: 'يجب أن يحتوي ملف CSV على الأعمدة التالية: name, logo_url, website, domain_name, category_name (اختياري)',
       
       // Reviews
-      title: 'العنوان',
-      rating: 'التقييم',
+      allReviews: 'جميع التقييمات',
+      publishedReviews: 'التقييمات المنشورة',
+      pendingReviews: 'التقييمات المعلقة',
+      flaggedReviews: 'التقييمات المبلغ عنها',
+      searchReviews: 'البحث في التقييمات...',
+      reviewTitle: 'عنوان التقييم',
       reviewer: 'المراجع',
       company: 'الشركة',
-      anonymous: 'مجهول',
+      rating: 'التقييم',
+      reviewStatus: 'حالة التقييم',
+      reviewDate: 'تاريخ التقييم',
       published: 'منشور',
-      pending: 'في الانتظار',
-      removed: 'محذوف',
+      pending: 'معلق',
       flagged: 'مبلغ عنه',
+      removed: 'محذوف',
+      anonymous: 'مجهول',
+      viewReview: 'عرض التقييم',
+      approveReview: 'الموافقة على التقييم',
+      rejectReview: 'رفض التقييم',
       
-      // Reports
-      reason: 'السبب',
-      details: 'التفاصيل',
+      // Reports - Updated with new filter labels
+      allReports: 'جميع البلاغات',
+      acceptedReports: 'بلاغات مقبولة',
+      declinedReports: 'بلاغات مرفوضة',
+      reportReason: 'سبب البلاغ',
+      reportDetails: 'تفاصيل البلاغ',
       reporter: 'المبلغ',
-      reportedOn: 'تاريخ البلاغ',
-      reviewed: 'تمت المراجعة',
-      resolved: 'تم الحل',
+      reportedContent: 'المحتوى المبلغ عنه',
+      reportDate: 'تاريخ البلاغ',
+      reportStatus: 'حالة البلاغ',
       dismissReport: 'رفض البلاغ',
       upholdReport: 'قبول البلاغ وإخفاء المحتوى',
       
-      // Common
-      close: 'إغلاق',
-      cancel: 'إلغاء',
-      view: 'عرض',
-      edit: 'تعديل',
-      delete: 'حذف',
-      suspend: 'إيقاف',
-      activate: 'تفعيل',
+      // Settings
+      systemSettings: 'إعدادات النظام',
       
       // Messages
       loading: 'جاري التحميل...',
       accessDenied: 'غير مسموح بالوصول',
       notAuthorized: 'أنت غير مخول للوصول إلى هذه الصفحة',
       backToDashboard: 'العودة إلى لوحة التحكم',
-      errorOccurred: 'حدث خطأ',
-      selectFileFirst: 'يرجى اختيار ملف CSV أولاً',
+      noDataAvailable: 'لا توجد بيانات متاحة',
+      selectFile: 'يرجى اختيار ملف CSV أولاً',
       uploading: 'جاري الرفع...',
       uploadSuccess: 'تم رفع الملف بنجاح',
       uploadError: 'خطأ في رفع الملف',
-      reportDismissed: 'تم رفض البلاغ بنجاح',
-      reportUpheld: 'تم قبول البلاغ وإخفاء المحتوى',
+      actionSuccess: 'تم تنفيذ الإجراء بنجاح',
+      actionError: 'حدث خطأ أثناء تنفيذ الإجراء',
+      confirmAction: 'هل أنت متأكد من تنفيذ هذا الإجراء؟',
       processing: 'جاري المعالجة...'
     },
     en: {
@@ -214,6 +245,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       companies: 'Companies',
       reviews: 'Reviews',
       reports: 'Reports',
+      settings: 'Settings',
       
       // Overview
       totalUsers: 'Total Users',
@@ -222,82 +254,102 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       pendingReports: 'Pending Reports',
       
       // Users
-      name: 'Name',
+      allUsers: 'All Users',
+      adminUsers: 'Admin Users',
+      suspendedUsers: 'Suspended Users',
+      searchUsers: 'Search users...',
       email: 'Email',
+      name: 'Name',
       role: 'Role',
       status: 'Status',
-      lastUpdated: 'Last Updated',
+      joinDate: 'Join Date',
       actions: 'Actions',
       admin: 'Admin',
       user: 'User',
       active: 'Active',
       suspended: 'Suspended',
+      makeAdmin: 'Make Admin',
+      removeAdmin: 'Remove Admin',
+      suspendUser: 'Suspend User',
+      unsuspendUser: 'Unsuspend User',
       
       // Companies
-      bulkUpload: 'Bulk Upload',
-      bulkUploadCompanies: 'Bulk Upload Companies',
-      selectCsvFile: 'Select CSV File',
-      uploadAndProcess: 'Upload and Process File',
-      csvFormat: 'Required CSV Format',
-      csvFormatDesc: 'The CSV file must contain the following columns:',
-      nameColumn: 'name - Company name (required)',
-      logoColumn: 'logo_url - Logo URL (optional)',
-      websiteColumn: 'website - Website URL (optional)',
-      domainColumn: 'domain_name - Domain name (required)',
-      categoryColumn: 'category_name - Category name (optional)',
-      downloadTemplate: 'Download Template',
+      allCompanies: 'All Companies',
+      claimedCompanies: 'Claimed Companies',
+      unclaimedCompanies: 'Unclaimed Companies',
+      searchCompanies: 'Search companies...',
+      companyName: 'Company Name',
       website: 'Website',
+      category: 'Category',
+      claimStatus: 'Claim Status',
+      createdDate: 'Created Date',
       claimed: 'Claimed',
       unclaimed: 'Unclaimed',
-      created: 'Created',
+      viewCompany: 'View Company',
+      editCompany: 'Edit Company',
+      deleteCompany: 'Delete Company',
+      bulkUpload: 'Bulk Upload',
+      bulkUploadTitle: 'Bulk Upload Companies',
+      selectCsvFile: 'Select CSV File',
+      uploadAndProcess: 'Upload and Process File',
+      downloadTemplate: 'Download CSV Template',
+      csvInstructions: 'CSV file must contain the following columns: name, logo_url, website, domain_name, category_name (optional)',
       
       // Reviews
-      title: 'Title',
-      rating: 'Rating',
+      allReviews: 'All Reviews',
+      publishedReviews: 'Published Reviews',
+      pendingReviews: 'Pending Reviews',
+      flaggedReviews: 'Flagged Reviews',
+      searchReviews: 'Search reviews...',
+      reviewTitle: 'Review Title',
       reviewer: 'Reviewer',
       company: 'Company',
-      anonymous: 'Anonymous',
+      rating: 'Rating',
+      reviewStatus: 'Review Status',
+      reviewDate: 'Review Date',
       published: 'Published',
       pending: 'Pending',
-      removed: 'Removed',
       flagged: 'Flagged',
+      removed: 'Removed',
+      anonymous: 'Anonymous',
+      viewReview: 'View Review',
+      approveReview: 'Approve Review',
+      rejectReview: 'Reject Review',
       
-      // Reports
-      reason: 'Reason',
-      details: 'Details',
+      // Reports - Updated with new filter labels
+      allReports: 'All Reports',
+      acceptedReports: 'Accepted Reports',
+      declinedReports: 'Declined Reports',
+      reportReason: 'Report Reason',
+      reportDetails: 'Report Details',
       reporter: 'Reporter',
-      reportedOn: 'Reported On',
-      reviewed: 'Reviewed',
-      resolved: 'Resolved',
+      reportedContent: 'Reported Content',
+      reportDate: 'Report Date',
+      reportStatus: 'Report Status',
       dismissReport: 'Dismiss Report',
       upholdReport: 'Uphold Report & Hide Content',
       
-      // Common
-      close: 'Close',
-      cancel: 'Cancel',
-      view: 'View',
-      edit: 'Edit',
-      delete: 'Delete',
-      suspend: 'Suspend',
-      activate: 'Activate',
+      // Settings
+      systemSettings: 'System Settings',
       
       // Messages
       loading: 'Loading...',
       accessDenied: 'Access Denied',
       notAuthorized: 'You are not authorized to access this page',
       backToDashboard: 'Back to Dashboard',
-      errorOccurred: 'An error occurred',
-      selectFileFirst: 'Please select a CSV file first',
+      noDataAvailable: 'No data available',
+      selectFile: 'Please select a CSV file first',
       uploading: 'Uploading...',
       uploadSuccess: 'File uploaded successfully',
       uploadError: 'Error uploading file',
-      reportDismissed: 'Report dismissed successfully',
-      reportUpheld: 'Report upheld and content hidden',
+      actionSuccess: 'Action completed successfully',
+      actionError: 'Error performing action',
+      confirmAction: 'Are you sure you want to perform this action?',
       processing: 'Processing...'
     }
   };
 
-  // Check admin access and fetch data
+  // Check admin access and fetch initial data
   useEffect(() => {
     const checkAdminAccess = async () => {
       if (authLoading) return;
@@ -319,28 +371,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
           .single();
 
         if (profileError || !profileData?.is_admin) {
-          onNavigate('dashboard');
+          setError('Access denied');
           return;
         }
 
         // Fetch admin stats
-        const [usersResult, companiesResult, reviewsResult, reportsResult] = await Promise.all([
-          supabase.from('profiles').select('*', { count: 'exact', head: true }),
-          supabase.from('companies').select('*', { count: 'exact', head: true }),
-          supabase.from('reviews').select('*', { count: 'exact', head: true }),
-          supabase.from('reports').select('*', { count: 'exact', head: true }).eq('status', 'pending')
-        ]);
-
-        setStats({
-          totalUsers: usersResult.count || 0,
-          totalCompanies: companiesResult.count || 0,
-          totalReviews: reviewsResult.count || 0,
-          pendingReports: reportsResult.count || 0
-        });
-
-        // Fetch detailed data based on active tab
-        await fetchTabData();
-
+        await fetchAdminStats();
+        
       } catch (error: any) {
         console.error('Error checking admin access:', error);
         setError(error.message);
@@ -352,121 +389,266 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     checkAdminAccess();
   }, [user, authLoading, onNavigate]);
 
-  const fetchTabData = async () => {
-    try {
-      switch (activeTab) {
-        case 'users':
-          const { data: usersData } = await supabase
-            .from('profiles')
-            .select('*')
-            .order('updated_at', { ascending: false })
-            .limit(50);
-          setUsers(usersData || []);
-          break;
-
-        case 'companies':
-          const { data: companiesData } = await supabase
-            .from('companies')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(50);
-          setCompanies(companiesData || []);
-          break;
-
-        case 'reviews':
-          const { data: reviewsData } = await supabase
-            .from('reviews')
-            .select(`
-              *,
-              profiles!reviews_profile_id_fkey(first_name, last_name),
-              companies!reviews_company_id_fkey(name)
-            `)
-            .order('created_at', { ascending: false })
-            .limit(50);
-          setReviews(reviewsData || []);
-          break;
-
-        case 'reports':
-          const { data: reportsData } = await supabase
-            .from('reports')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(50);
-          setReports(reportsData || []);
-          break;
-      }
-    } catch (error) {
-      console.error('Error fetching tab data:', error);
-    }
-  };
-
   // Fetch data when tab changes
   useEffect(() => {
     if (!loading && !error) {
-      fetchTabData();
+      switch (activeTab) {
+        case 'users':
+          fetchUsers();
+          break;
+        case 'companies':
+          fetchCompanies();
+          break;
+        case 'reviews':
+          fetchReviews();
+          break;
+        case 'reports':
+          fetchReports();
+          break;
+      }
     }
-  }, [activeTab]);
+  }, [activeTab, loading, error, userFilter, companyFilter, reviewFilter, reportFilter]);
+
+  const fetchAdminStats = async () => {
+    try {
+      // Fetch total users
+      const { count: usersCount } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true });
+
+      // Fetch total companies
+      const { count: companiesCount } = await supabase
+        .from('companies')
+        .select('*', { count: 'exact', head: true });
+
+      // Fetch total reviews
+      const { count: reviewsCount } = await supabase
+        .from('reviews')
+        .select('*', { count: 'exact', head: true });
+
+      // Fetch pending reports
+      const { count: reportsCount } = await supabase
+        .from('reports')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+
+      setStats({
+        totalUsers: usersCount || 0,
+        totalCompanies: companiesCount || 0,
+        totalReviews: reviewsCount || 0,
+        pendingReports: reportsCount || 0
+      });
+    } catch (error) {
+      console.error('Error fetching admin stats:', error);
+    }
+  };
+
+  const fetchUsers = async () => {
+    try {
+      let query = supabase
+        .from('profiles')
+        .select(`
+          id,
+          first_name,
+          last_name,
+          is_admin,
+          is_suspended,
+          updated_at
+        `)
+        .order('updated_at', { ascending: false });
+
+      // Apply filters
+      if (userFilter === 'admin') {
+        query = query.eq('is_admin', true);
+      } else if (userFilter === 'suspended') {
+        query = query.eq('is_suspended', true);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      // Get user emails from auth.users (this would need admin access)
+      const usersWithEmails = data?.map(profile => ({
+        ...profile,
+        email: 'user@example.com', // Placeholder - would need auth admin access
+        created_at: profile.updated_at
+      })) || [];
+
+      setUsers(usersWithEmails);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
+  const fetchCompanies = async () => {
+    try {
+      let query = supabase
+        .from('companies')
+        .select(`
+          id,
+          name,
+          website,
+          is_claimed,
+          created_at,
+          categories(name)
+        `)
+        .order('created_at', { ascending: false });
+
+      // Apply filters
+      if (companyFilter === 'claimed') {
+        query = query.eq('is_claimed', true);
+      } else if (companyFilter === 'unclaimed') {
+        query = query.eq('is_claimed', false);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      const companiesWithCategory = data?.map(company => ({
+        ...company,
+        category_name: company.categories?.name || null
+      })) || [];
+
+      setCompanies(companiesWithCategory);
+    } catch (error) {
+      console.error('Error fetching companies:', error);
+    }
+  };
+
+  const fetchReviews = async () => {
+    try {
+      let query = supabase
+        .from('reviews')
+        .select(`
+          id,
+          title,
+          body,
+          overall_rating,
+          status,
+          is_anonymous,
+          created_at,
+          companies(name),
+          profiles(first_name, last_name)
+        `)
+        .order('created_at', { ascending: false });
+
+      // Apply filters
+      if (reviewFilter === 'published') {
+        query = query.eq('status', 'published');
+      } else if (reviewFilter === 'pending') {
+        query = query.eq('status', 'pending_approval');
+      } else if (reviewFilter === 'flagged') {
+        query = query.eq('status', 'flagged_for_review');
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      const reviewsWithDetails = data?.map(review => ({
+        ...review,
+        company_name: review.companies?.name || 'Unknown Company',
+        reviewer_name: review.is_anonymous 
+          ? text[language].anonymous 
+          : review.profiles 
+            ? `${review.profiles.first_name || ''} ${review.profiles.last_name || ''}`.trim() || text[language].anonymous
+            : text[language].anonymous
+      })) || [];
+
+      setReviews(reviewsWithDetails);
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+    }
+  };
+
+  const fetchReports = async () => {
+    try {
+      let query = supabase
+        .from('reports')
+        .select(`
+          id,
+          review_id,
+          reason,
+          details,
+          status,
+          created_at,
+          profiles!reports_reporter_profile_id_fkey(first_name, last_name),
+          reviews(title, body, companies(name))
+        `)
+        .order('created_at', { ascending: false });
+
+      // Apply filters based on the new Arabic status values
+      if (reportFilter === 'accepted') {
+        query = query.eq('status', 'مقبول');
+      } else if (reportFilter === 'declined') {
+        query = query.eq('status', 'مرفوض');
+      }
+      // For 'all', we don't add any status filter
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      const reportsWithDetails = data?.map(report => ({
+        ...report,
+        reporter_name: report.profiles 
+          ? `${report.profiles.first_name || ''} ${report.profiles.last_name || ''}`.trim() || text[language].anonymous
+          : text[language].anonymous,
+        review_title: report.reviews?.title || 'No title',
+        review_body: report.reviews?.body || 'No content',
+        company_name: report.reviews?.companies?.name || 'Unknown Company'
+      })) || [];
+
+      setReports(reportsWithDetails);
+    } catch (error) {
+      console.error('Error fetching reports:', error);
+    }
+  };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // Validate file type
-      if (!file.name.toLowerCase().endsWith('.csv')) {
-        toast.error('Please select a CSV file');
-        return;
-      }
       setSelectedFile(file);
     }
   };
 
   const handleBulkUpload = async () => {
-    // Step 1: Get the User's File
     if (!selectedFile) {
-      toast.error(text[language].selectFileFirst);
+      toast.error(text[language].selectFile);
       return;
     }
 
     setIsUploading(true);
 
     try {
-      // Step 2: Prepare the Request
+      // Create FormData and append the file
       const formData = new FormData();
       formData.append('file', selectedFile);
 
-      // Step 3: Call the Edge Function
+      // Call the Supabase Edge Function
       const { data, error } = await supabase.functions.invoke('bulk-upload-companies', {
         body: formData
       });
 
-      // Step 4: Handle the Response
       if (error) {
         throw error;
       }
 
       if (data.success) {
-        // On Success: Close modal and show success message
+        toast.success(data.message || text[language].uploadSuccess);
         setIsBulkUploadOpen(false);
         setSelectedFile(null);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-        toast.success(data.message || text[language].uploadSuccess);
-        
-        // Refresh companies data if we're on the companies tab
+        // Refresh companies data
         if (activeTab === 'companies') {
-          fetchTabData();
+          fetchCompanies();
         }
-        
         // Update stats
-        setStats(prev => ({
-          ...prev,
-          totalCompanies: prev.totalCompanies + (data.data?.length || 0)
-        }));
+        fetchAdminStats();
       } else {
-        // On Failure: Show error message
         throw new Error(data.error || text[language].uploadError);
       }
-
     } catch (error: any) {
       console.error('Bulk upload error:', error);
       toast.error(error.message || text[language].uploadError);
@@ -475,37 +657,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     }
   };
 
-  // Report action handlers
+  // Updated report action handlers with new Arabic status values
   const handleDismissReport = async (reportId: string) => {
-    // Add to processing set
+    if (processingReports.has(reportId)) return;
+
     setProcessingReports(prev => new Set(prev).add(reportId));
 
     try {
-      // Update the report status to 'dismissed'
       const { error } = await supabase
         .from('reports')
-        .update({ status: 'dismissed' })
+        .update({ status: 'مرفوض' }) // Updated to Arabic "Declined"
         .eq('id', reportId);
 
-      if (error) {
-        throw error;
+      if (error) throw error;
+
+      // Remove from current view if we're not showing all reports
+      if (reportFilter !== 'all') {
+        setReports(prev => prev.filter(report => report.id !== reportId));
+      } else {
+        // Update the status in the current view
+        setReports(prev => prev.map(report => 
+          report.id === reportId 
+            ? { ...report, status: 'مرفوض' }
+            : report
+        ));
       }
 
-      // Remove the report from the UI
-      setReports(prev => prev.filter(report => report.id !== reportId));
-      
       // Update stats
-      setStats(prev => ({
-        ...prev,
-        pendingReports: Math.max(0, prev.pendingReports - 1)
-      }));
-
-      toast.success(text[language].reportDismissed);
+      setStats(prev => ({ ...prev, pendingReports: Math.max(0, prev.pendingReports - 1) }));
+      
+      toast.success(text[language].actionSuccess);
     } catch (error: any) {
       console.error('Error dismissing report:', error);
-      toast.error(text[language].errorOccurred);
+      toast.error(text[language].actionError);
     } finally {
-      // Remove from processing set
       setProcessingReports(prev => {
         const newSet = new Set(prev);
         newSet.delete(reportId);
@@ -515,47 +700,47 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
   };
 
   const handleUpholdReport = async (report: Report) => {
-    // Add to processing set
+    if (processingReports.has(report.id)) return;
+
     setProcessingReports(prev => new Set(prev).add(report.id));
 
     try {
-      // Step A: Hide the Original Content
-      // Update the review status to 'removed'
+      // Step A: Hide the original content (set review status to 'removed')
       const { error: reviewError } = await supabase
         .from('reviews')
         .update({ status: 'removed' })
         .eq('id', report.review_id);
 
-      if (reviewError) {
-        throw reviewError;
-      }
+      if (reviewError) throw reviewError;
 
-      // Step B: Update the Report Status
-      // Update the report status to 'resolved'
+      // Step B: Update the report status to 'مقبول' (Accepted in Arabic)
       const { error: reportError } = await supabase
         .from('reports')
-        .update({ status: 'resolved' })
+        .update({ status: 'مقبول' }) // Updated to Arabic "Accepted"
         .eq('id', report.id);
 
-      if (reportError) {
-        throw reportError;
+      if (reportError) throw reportError;
+
+      // Remove from current view if we're not showing all reports
+      if (reportFilter !== 'all') {
+        setReports(prev => prev.filter(r => r.id !== report.id));
+      } else {
+        // Update the status in the current view
+        setReports(prev => prev.map(r => 
+          r.id === report.id 
+            ? { ...r, status: 'مقبول' }
+            : r
+        ));
       }
 
-      // Remove the report from the UI
-      setReports(prev => prev.filter(r => r.id !== report.id));
-      
       // Update stats
-      setStats(prev => ({
-        ...prev,
-        pendingReports: Math.max(0, prev.pendingReports - 1)
-      }));
-
-      toast.success(text[language].reportUpheld);
+      setStats(prev => ({ ...prev, pendingReports: Math.max(0, prev.pendingReports - 1) }));
+      
+      toast.success(text[language].actionSuccess);
     } catch (error: any) {
       console.error('Error upholding report:', error);
-      toast.error(text[language].errorOccurred);
+      toast.error(text[language].actionError);
     } finally {
-      // Remove from processing set
       setProcessingReports(prev => {
         const newSet = new Set(prev);
         newSet.delete(report.id);
@@ -564,17 +749,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     }
   };
 
-  const downloadCsvTemplate = () => {
-    const csvContent = 'name,logo_url,website,domain_name,category_name\n"Example Company","https://example.com/logo.png","https://example.com","example.com","خدمات الاستشارات العقارية"';
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'companies_template.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
   };
 
   const renderStars = (rating: number | null) => {
@@ -593,39 +774,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     return stars;
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US');
-  };
+  // Filter data based on search
+  const filteredUsers = users.filter(user =>
+    user.email?.toLowerCase().includes(userSearch.toLowerCase()) ||
+    `${user.first_name || ''} ${user.last_name || ''}`.toLowerCase().includes(userSearch.toLowerCase())
+  );
 
-  const getStatusColor = (status: string | null) => {
-    switch (status) {
-      case 'published':
-        return 'bg-green-100 text-green-800';
-      case 'pending_approval':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'removed':
-        return 'bg-red-100 text-red-800';
-      case 'flagged_for_review':
-        return 'bg-orange-100 text-orange-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
+  const filteredCompanies = companies.filter(company =>
+    company.name?.toLowerCase().includes(companySearch.toLowerCase()) ||
+    company.website?.toLowerCase().includes(companySearch.toLowerCase())
+  );
 
-  const getStatusText = (status: string | null) => {
-    switch (status) {
-      case 'published':
-        return text[language].published;
-      case 'pending_approval':
-        return text[language].pending;
-      case 'removed':
-        return text[language].removed;
-      case 'flagged_for_review':
-        return text[language].flagged;
-      default:
-        return text[language].pending;
-    }
-  };
+  const filteredReviews = reviews.filter(review =>
+    review.title?.toLowerCase().includes(reviewSearch.toLowerCase()) ||
+    review.body?.toLowerCase().includes(reviewSearch.toLowerCase()) ||
+    review.company_name?.toLowerCase().includes(reviewSearch.toLowerCase())
+  );
 
   // Loading state
   if (authLoading || loading) {
@@ -669,584 +833,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       </div>
     );
   }
-
-  // Overview View
-  const OverviewView = () => (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-dark-500 mb-2">
-          {text[language].overview}
-        </h1>
-        <div className="w-16 h-1 bg-red-500 rounded-full"></div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
-              <Users className="h-6 w-6 text-blue-600" />
-            </div>
-          </div>
-          <h3 className="text-2xl font-bold text-dark-500 mb-1">{stats.totalUsers}</h3>
-          <p className="text-gray-600 text-sm">{text[language].totalUsers}</p>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center">
-              <Building2 className="h-6 w-6 text-green-600" />
-            </div>
-          </div>
-          <h3 className="text-2xl font-bold text-dark-500 mb-1">{stats.totalCompanies}</h3>
-          <p className="text-gray-600 text-sm">{text[language].totalCompanies}</p>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-yellow-50 rounded-lg flex items-center justify-center">
-              <MessageSquare className="h-6 w-6 text-yellow-600" />
-            </div>
-          </div>
-          <h3 className="text-2xl font-bold text-dark-500 mb-1">{stats.totalReviews}</h3>
-          <p className="text-gray-600 text-sm">{text[language].totalReviews}</p>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-red-50 rounded-lg flex items-center justify-center">
-              <Flag className="h-6 w-6 text-red-600" />
-            </div>
-          </div>
-          <h3 className="text-2xl font-bold text-dark-500 mb-1">{stats.pendingReports}</h3>
-          <p className="text-gray-600 text-sm">{text[language].pendingReports}</p>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Users View
-  const UsersView = () => (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-dark-500 mb-2">
-          {text[language].users}
-        </h1>
-        <div className="w-16 h-1 bg-red-500 rounded-full"></div>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].name}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].role}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].status}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].lastUpdated}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].actions}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {users.map((user) => (
-                <tr key={user.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                      <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                        {user.avatar_url ? (
-                          <img src={user.avatar_url} alt="" className="w-full h-full object-cover rounded-full" />
-                        ) : (
-                          <User className="h-4 w-4 text-gray-400" />
-                        )}
-                      </div>
-                      <span className="text-sm font-medium text-gray-900">
-                        {`${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Unnamed User'}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      user.is_admin 
-                        ? 'bg-red-100 text-red-800' 
-                        : 'bg-blue-100 text-blue-800'
-                    }`}>
-                      {user.is_admin ? text[language].admin : text[language].user}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      user.is_suspended 
-                        ? 'bg-red-100 text-red-800' 
-                        : 'bg-green-100 text-green-800'
-                    }`}>
-                      {user.is_suspended ? text[language].suspended : text[language].active}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(user.updated_at)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                      <button className="text-blue-600 hover:text-blue-900">
-                        <Eye className="h-4 w-4" />
-                      </button>
-                      <button className="text-gray-600 hover:text-gray-900">
-                        <Edit className="h-4 w-4" />
-                      </button>
-                      <button className={`${user.is_suspended ? 'text-green-600 hover:text-green-900' : 'text-red-600 hover:text-red-900'}`}>
-                        {user.is_suspended ? <CheckCircle className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Companies View
-  const CompaniesView = () => (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-dark-500 mb-2">
-            {text[language].companies}
-          </h1>
-          <div className="w-16 h-1 bg-red-500 rounded-full"></div>
-        </div>
-        <button
-          onClick={() => setIsBulkUploadOpen(true)}
-          className="flex items-center space-x-2 rtl:space-x-reverse bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200"
-        >
-          <Upload className="h-4 w-4" />
-          <span>{text[language].bulkUpload}</span>
-        </button>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].name}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].website}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].status}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].created}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].actions}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {companies.map((company) => (
-                <tr key={company.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                      <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                        {company.logo_url ? (
-                          <img src={company.logo_url} alt="" className="w-full h-full object-cover rounded-full" />
-                        ) : (
-                          <Building2 className="h-4 w-4 text-gray-400" />
-                        )}
-                      </div>
-                      <span className="text-sm font-medium text-gray-900">
-                        {company.name || 'Unnamed Company'}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {company.website ? (
-                      <a href={company.website} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">
-                        {company.website}
-                      </a>
-                    ) : (
-                      '-'
-                    )}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      company.is_claimed 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      {company.is_claimed ? text[language].claimed : text[language].unclaimed}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(company.created_at)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                      <button
-                        onClick={() => onNavigate('company', company.id)}
-                        className="text-blue-600 hover:text-blue-900"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
-                      <button className="text-gray-600 hover:text-gray-900">
-                        <Edit className="h-4 w-4" />
-                      </button>
-                      <button className="text-red-600 hover:text-red-900">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Reviews View
-  const ReviewsView = () => (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-dark-500 mb-2">
-          {text[language].reviews}
-        </h1>
-        <div className="w-16 h-1 bg-red-500 rounded-full"></div>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].title}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].rating}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].reviewer}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].company}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].status}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].created}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].actions}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {reviews.map((review) => (
-                <tr key={review.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="max-w-xs">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {review.title || 'No title'}
-                      </p>
-                      <p className="text-sm text-gray-500 truncate">
-                        {review.body || 'No content'}
-                      </p>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-1 rtl:space-x-reverse">
-                      {renderStars(review.overall_rating)}
-                      <span className="text-sm text-gray-600 ml-2 rtl:mr-2">
-                        ({review.overall_rating || 0})
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {review.is_anonymous 
-                      ? text[language].anonymous
-                      : review.profiles 
-                        ? `${review.profiles.first_name || ''} ${review.profiles.last_name || ''}`.trim() || text[language].anonymous
-                        : text[language].anonymous
-                    }
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {review.companies?.name || 'Unknown Company'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(review.status)}`}>
-                      {getStatusText(review.status)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(review.created_at)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                      <button className="text-blue-600 hover:text-blue-900">
-                        <Eye className="h-4 w-4" />
-                      </button>
-                      <button className="text-gray-600 hover:text-gray-900">
-                        <Edit className="h-4 w-4" />
-                      </button>
-                      <button className="text-red-600 hover:text-red-900">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Reports View
-  const ReportsView = () => (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-dark-500 mb-2">
-          {text[language].reports}
-        </h1>
-        <div className="w-16 h-1 bg-red-500 rounded-full"></div>
-      </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].reason}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].details}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].status}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].reportedOn}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].actions}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {reports.map((report) => (
-                <tr key={report.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <p className="text-sm font-medium text-gray-900">
-                      {report.reason}
-                    </p>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="max-w-xs">
-                      <p className="text-sm text-gray-500 truncate">
-                        {report.details || '-'}
-                      </p>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      report.status === 'pending' 
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : report.status === 'reviewed'
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'bg-green-100 text-green-800'
-                    }`}>
-                      {report.status === 'pending' 
-                        ? text[language].pending
-                        : report.status === 'reviewed'
-                        ? text[language].reviewed
-                        : text[language].resolved
-                      }
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(report.created_at)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                      <button 
-                        className="text-blue-600 hover:text-blue-900"
-                        title={text[language].view}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
-                      
-                      {/* Green Checkmark Button - Dismiss Report */}
-                      <button 
-                        onClick={() => handleDismissReport(report.id)}
-                        disabled={processingReports.has(report.id)}
-                        className="text-green-600 hover:text-green-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={text[language].dismissReport}
-                      >
-                        {processingReports.has(report.id) ? (
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
-                        ) : (
-                          <CheckCircle className="h-4 w-4" />
-                        )}
-                      </button>
-                      
-                      {/* Red Cross Button - Uphold Report & Hide Content */}
-                      <button 
-                        onClick={() => handleUpholdReport(report)}
-                        disabled={processingReports.has(report.id)}
-                        className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title={text[language].upholdReport}
-                      >
-                        {processingReports.has(report.id) ? (
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
-                        ) : (
-                          <X className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Bulk Upload Modal
-  const BulkUploadModal = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-dark-500">
-              {text[language].bulkUploadCompanies}
-            </h2>
-            <button
-              onClick={() => setIsBulkUploadOpen(false)}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <X className="h-6 w-6" />
-            </button>
-          </div>
-
-          <div className="space-y-6">
-            {/* File Upload Section */}
-            <div>
-              <label className="block text-sm font-semibold text-dark-500 mb-3">
-                {text[language].selectCsvFile}
-              </label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-                <div className="space-y-4">
-                  <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center mx-auto">
-                    <FileText className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <div>
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="text-blue-600 hover:text-blue-700 font-medium"
-                    >
-                      {language === 'ar' ? 'انقر لاختيار ملف' : 'Click to select file'}
-                    </button>
-                    <p className="text-gray-500 text-sm mt-1">
-                      {language === 'ar' ? 'أو اسحب وأفلت ملف CSV هنا' : 'or drag and drop a CSV file here'}
-                    </p>
-                  </div>
-                  {selectedFile && (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                      <p className="text-green-800 text-sm font-medium">
-                        {language === 'ar' ? 'الملف المحدد:' : 'Selected file:'} {selectedFile.name}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* CSV Format Information */}
-            <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="font-semibold text-dark-500 mb-3 flex items-center space-x-2 rtl:space-x-reverse">
-                <AlertTriangle className="h-4 w-4 text-orange-500" />
-                <span>{text[language].csvFormat}</span>
-              </h3>
-              <p className="text-gray-600 text-sm mb-3">
-                {text[language].csvFormatDesc}
-              </p>
-              <ul className="space-y-1 text-sm text-gray-600">
-                <li>• {text[language].nameColumn}</li>
-                <li>• {text[language].logoColumn}</li>
-                <li>• {text[language].websiteColumn}</li>
-                <li>• {text[language].domainColumn}</li>
-                <li>• {text[language].categoryColumn}</li>
-              </ul>
-              <button
-                onClick={downloadCsvTemplate}
-                className="mt-3 flex items-center space-x-2 rtl:space-x-reverse text-blue-600 hover:text-blue-700 text-sm font-medium"
-              >
-                <Download className="h-4 w-4" />
-                <span>{text[language].downloadTemplate}</span>
-              </button>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex space-x-3 rtl:space-x-reverse pt-6 border-t border-gray-200">
-              <button
-                onClick={() => setIsBulkUploadOpen(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-              >
-                {text[language].cancel}
-              </button>
-              <button
-                onClick={handleBulkUpload}
-                disabled={!selectedFile || isUploading}
-                className="flex-1 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 rtl:space-x-reverse"
-              >
-                {isUploading ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span>{text[language].uploading}</span>
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-4 w-4" />
-                    <span>{text[language].uploadAndProcess}</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 
   return (
     <div className={`min-h-screen bg-gray-50 ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
@@ -1316,6 +902,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                 >
                   <Flag className="h-5 w-5" />
                   <span className="font-medium">{text[language].reports}</span>
+                  {stats.pendingReports > 0 && (
+                    <span className="bg-red-500 text-white text-xs rounded-full px-2 py-1 ml-auto rtl:mr-auto rtl:ml-0">
+                      {stats.pendingReports}
+                    </span>
+                  )}
+                </button>
+                
+                <button
+                  onClick={() => setActiveTab('settings')}
+                  className={`w-full flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-lg text-right transition-all duration-200 ${
+                    activeTab === 'settings'
+                      ? 'bg-red-50 text-red-600 border-r-4 border-red-500 rtl:border-l-4 rtl:border-r-0'
+                      : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Settings className="h-5 w-5" />
+                  <span className="font-medium">{text[language].settings}</span>
                 </button>
               </nav>
             </div>
@@ -1323,17 +926,815 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
           {/* Main Content Area */}
           <div className="lg:col-span-3">
-            {activeTab === 'overview' && <OverviewView />}
-            {activeTab === 'users' && <UsersView />}
-            {activeTab === 'companies' && <CompaniesView />}
-            {activeTab === 'reviews' && <ReviewsView />}
-            {activeTab === 'reports' && <ReportsView />}
+            {/* Overview Tab */}
+            {activeTab === 'overview' && (
+              <div className="space-y-8">
+                <div>
+                  <h1 className="text-3xl font-bold text-dark-500 mb-2">
+                    {text[language].overview}
+                  </h1>
+                  <div className="w-16 h-1 bg-red-500 rounded-full"></div>
+                </div>
+
+                {/* Stats Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
+                        <Users className="h-6 w-6 text-blue-600" />
+                      </div>
+                      <TrendingUp className="h-5 w-5 text-green-500" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-dark-500 mb-1">{stats.totalUsers}</h3>
+                    <p className="text-gray-600 text-sm">{text[language].totalUsers}</p>
+                  </div>
+
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center">
+                        <Building2 className="h-6 w-6 text-green-600" />
+                      </div>
+                      <TrendingUp className="h-5 w-5 text-green-500" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-dark-500 mb-1">{stats.totalCompanies}</h3>
+                    <p className="text-gray-600 text-sm">{text[language].totalCompanies}</p>
+                  </div>
+
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="w-12 h-12 bg-yellow-50 rounded-lg flex items-center justify-center">
+                        <MessageSquare className="h-6 w-6 text-yellow-600" />
+                      </div>
+                      <TrendingUp className="h-5 w-5 text-green-500" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-dark-500 mb-1">{stats.totalReviews}</h3>
+                    <p className="text-gray-600 text-sm">{text[language].totalReviews}</p>
+                  </div>
+
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="w-12 h-12 bg-red-50 rounded-lg flex items-center justify-center">
+                        <Flag className="h-6 w-6 text-red-600" />
+                      </div>
+                      <AlertTriangle className="h-5 w-5 text-red-500" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-dark-500 mb-1">{stats.pendingReports}</h3>
+                    <p className="text-gray-600 text-sm">{text[language].pendingReports}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Users Tab */}
+            {activeTab === 'users' && (
+              <div className="space-y-6">
+                <div>
+                  <h1 className="text-3xl font-bold text-dark-500 mb-2">
+                    {text[language].users}
+                  </h1>
+                  <div className="w-16 h-1 bg-red-500 rounded-full"></div>
+                </div>
+
+                {/* Filters and Search */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0 md:space-x-4 rtl:md:space-x-reverse">
+                    {/* Filter Buttons */}
+                    <div className="flex space-x-2 rtl:space-x-reverse">
+                      <button
+                        onClick={() => setUserFilter('all')}
+                        className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                          userFilter === 'all'
+                            ? 'bg-red-500 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {text[language].allUsers}
+                      </button>
+                      <button
+                        onClick={() => setUserFilter('admin')}
+                        className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                          userFilter === 'admin'
+                            ? 'bg-red-500 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {text[language].adminUsers}
+                      </button>
+                      <button
+                        onClick={() => setUserFilter('suspended')}
+                        className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                          userFilter === 'suspended'
+                            ? 'bg-red-500 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {text[language].suspendedUsers}
+                      </button>
+                    </div>
+
+                    {/* Search */}
+                    <div className="relative">
+                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none rtl:left-0 rtl:right-auto rtl:pl-3 rtl:pr-0">
+                        <Search className="h-4 w-4 text-gray-400" />
+                      </div>
+                      <input
+                        type="text"
+                        value={userSearch}
+                        onChange={(e) => setUserSearch(e.target.value)}
+                        placeholder={text[language].searchUsers}
+                        className="w-full px-4 py-2 pr-10 rtl:pl-10 rtl:pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
+                        dir={language === 'ar' ? 'rtl' : 'ltr'}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Users Table */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].email}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].name}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].role}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].status}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].joinDate}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].actions}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredUsers.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                              {text[language].noDataAvailable}
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredUsers.map((user) => (
+                            <tr key={user.id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {user.email}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {`${user.first_name || ''} ${user.last_name || ''}`.trim() || '-'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                  user.is_admin 
+                                    ? 'bg-red-100 text-red-800' 
+                                    : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {user.is_admin ? text[language].admin : text[language].user}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                  user.is_suspended 
+                                    ? 'bg-red-100 text-red-800' 
+                                    : 'bg-green-100 text-green-800'
+                                }`}>
+                                  {user.is_suspended ? text[language].suspended : text[language].active}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {formatDate(user.created_at)}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <div className="flex space-x-2 rtl:space-x-reverse">
+                                  <button className="text-blue-600 hover:text-blue-900 transition-colors duration-200">
+                                    <Eye className="h-4 w-4" />
+                                  </button>
+                                  <button className="text-green-600 hover:text-green-900 transition-colors duration-200">
+                                    <Edit className="h-4 w-4" />
+                                  </button>
+                                  <button className="text-red-600 hover:text-red-900 transition-colors duration-200">
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Companies Tab */}
+            {activeTab === 'companies' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h1 className="text-3xl font-bold text-dark-500 mb-2">
+                      {text[language].companies}
+                    </h1>
+                    <div className="w-16 h-1 bg-red-500 rounded-full"></div>
+                  </div>
+                  <button
+                    onClick={() => setIsBulkUploadOpen(true)}
+                    className="flex items-center space-x-2 rtl:space-x-reverse bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200"
+                  >
+                    <Upload className="h-4 w-4" />
+                    <span>{text[language].bulkUpload}</span>
+                  </button>
+                </div>
+
+                {/* Filters and Search */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0 md:space-x-4 rtl:md:space-x-reverse">
+                    {/* Filter Buttons */}
+                    <div className="flex space-x-2 rtl:space-x-reverse">
+                      <button
+                        onClick={() => setCompanyFilter('all')}
+                        className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                          companyFilter === 'all'
+                            ? 'bg-red-500 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {text[language].allCompanies}
+                      </button>
+                      <button
+                        onClick={() => setCompanyFilter('claimed')}
+                        className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                          companyFilter === 'claimed'
+                            ? 'bg-red-500 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {text[language].claimedCompanies}
+                      </button>
+                      <button
+                        onClick={() => setCompanyFilter('unclaimed')}
+                        className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                          companyFilter === 'unclaimed'
+                            ? 'bg-red-500 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {text[language].unclaimedCompanies}
+                      </button>
+                    </div>
+
+                    {/* Search */}
+                    <div className="relative">
+                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none rtl:left-0 rtl:right-auto rtl:pl-3 rtl:pr-0">
+                        <Search className="h-4 w-4 text-gray-400" />
+                      </div>
+                      <input
+                        type="text"
+                        value={companySearch}
+                        onChange={(e) => setCompanySearch(e.target.value)}
+                        placeholder={text[language].searchCompanies}
+                        className="w-full px-4 py-2 pr-10 rtl:pl-10 rtl:pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
+                        dir={language === 'ar' ? 'rtl' : 'ltr'}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Companies Table */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].companyName}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].website}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].category}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].claimStatus}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].createdDate}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].actions}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredCompanies.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                              {text[language].noDataAvailable}
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredCompanies.map((company) => (
+                            <tr key={company.id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                {company.name || '-'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {company.website ? (
+                                  <a 
+                                    href={company.website} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:text-blue-900"
+                                  >
+                                    {company.website}
+                                  </a>
+                                ) : '-'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {company.category_name || '-'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                  company.is_claimed 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {company.is_claimed ? text[language].claimed : text[language].unclaimed}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {formatDate(company.created_at)}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <div className="flex space-x-2 rtl:space-x-reverse">
+                                  <button className="text-blue-600 hover:text-blue-900 transition-colors duration-200">
+                                    <Eye className="h-4 w-4" />
+                                  </button>
+                                  <button className="text-green-600 hover:text-green-900 transition-colors duration-200">
+                                    <Edit className="h-4 w-4" />
+                                  </button>
+                                  <button className="text-red-600 hover:text-red-900 transition-colors duration-200">
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Reviews Tab */}
+            {activeTab === 'reviews' && (
+              <div className="space-y-6">
+                <div>
+                  <h1 className="text-3xl font-bold text-dark-500 mb-2">
+                    {text[language].reviews}
+                  </h1>
+                  <div className="w-16 h-1 bg-red-500 rounded-full"></div>
+                </div>
+
+                {/* Filters and Search */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0 md:space-x-4 rtl:md:space-x-reverse">
+                    {/* Filter Buttons */}
+                    <div className="flex space-x-2 rtl:space-x-reverse">
+                      <button
+                        onClick={() => setReviewFilter('all')}
+                        className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                          reviewFilter === 'all'
+                            ? 'bg-red-500 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {text[language].allReviews}
+                      </button>
+                      <button
+                        onClick={() => setReviewFilter('published')}
+                        className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                          reviewFilter === 'published'
+                            ? 'bg-red-500 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {text[language].publishedReviews}
+                      </button>
+                      <button
+                        onClick={() => setReviewFilter('pending')}
+                        className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                          reviewFilter === 'pending'
+                            ? 'bg-red-500 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {text[language].pendingReviews}
+                      </button>
+                      <button
+                        onClick={() => setReviewFilter('flagged')}
+                        className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                          reviewFilter === 'flagged'
+                            ? 'bg-red-500 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        {text[language].flaggedReviews}
+                      </button>
+                    </div>
+
+                    {/* Search */}
+                    <div className="relative">
+                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none rtl:left-0 rtl:right-auto rtl:pl-3 rtl:pr-0">
+                        <Search className="h-4 w-4 text-gray-400" />
+                      </div>
+                      <input
+                        type="text"
+                        value={reviewSearch}
+                        onChange={(e) => setReviewSearch(e.target.value)}
+                        placeholder={text[language].searchReviews}
+                        className="w-full px-4 py-2 pr-10 rtl:pl-10 rtl:pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
+                        dir={language === 'ar' ? 'rtl' : 'ltr'}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Reviews Table */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].reviewTitle}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].reviewer}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].company}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].rating}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].reviewStatus}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].reviewDate}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].actions}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredReviews.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                              {text[language].noDataAvailable}
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredReviews.map((review) => (
+                            <tr key={review.id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
+                                <div className="truncate">
+                                  {review.title || review.body?.substring(0, 50) + '...' || '-'}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {review.reviewer_name}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {review.company_name}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center space-x-1 rtl:space-x-reverse">
+                                  {renderStars(review.overall_rating)}
+                                  <span className="text-sm text-gray-600 ml-2 rtl:mr-2 rtl:ml-0">
+                                    {review.overall_rating || 0}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                  review.status === 'published' 
+                                    ? 'bg-green-100 text-green-800'
+                                    : review.status === 'pending_approval'
+                                    ? 'bg-yellow-100 text-yellow-800'
+                                    : review.status === 'flagged_for_review'
+                                    ? 'bg-red-100 text-red-800'
+                                    : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {review.status === 'published' 
+                                    ? text[language].published
+                                    : review.status === 'pending_approval'
+                                    ? text[language].pending
+                                    : review.status === 'flagged_for_review'
+                                    ? text[language].flagged
+                                    : text[language].removed
+                                  }
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {formatDate(review.created_at)}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <div className="flex space-x-2 rtl:space-x-reverse">
+                                  <button className="text-blue-600 hover:text-blue-900 transition-colors duration-200">
+                                    <Eye className="h-4 w-4" />
+                                  </button>
+                                  <button className="text-green-600 hover:text-green-900 transition-colors duration-200">
+                                    <Check className="h-4 w-4" />
+                                  </button>
+                                  <button className="text-red-600 hover:text-red-900 transition-colors duration-200">
+                                    <X className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Reports Tab */}
+            {activeTab === 'reports' && (
+              <div className="space-y-6">
+                <div>
+                  <h1 className="text-3xl font-bold text-dark-500 mb-2">
+                    {text[language].reports}
+                  </h1>
+                  <div className="w-16 h-1 bg-red-500 rounded-full"></div>
+                </div>
+
+                {/* Report Filter Tabs */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                  <div className="flex space-x-2 rtl:space-x-reverse">
+                    <button
+                      onClick={() => setReportFilter('all')}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                        reportFilter === 'all'
+                          ? 'bg-red-500 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {text[language].allReports}
+                    </button>
+                    <button
+                      onClick={() => setReportFilter('accepted')}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                        reportFilter === 'accepted'
+                          ? 'bg-red-500 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {text[language].acceptedReports}
+                    </button>
+                    <button
+                      onClick={() => setReportFilter('declined')}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                        reportFilter === 'declined'
+                          ? 'bg-red-500 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {text[language].declinedReports}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Reports Table */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].reportReason}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].reporter}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].reportedContent}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].company}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].reportStatus}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].reportDate}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].actions}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {reports.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                              {text[language].noDataAvailable}
+                            </td>
+                          </tr>
+                        ) : (
+                          reports.map((report) => (
+                            <tr key={report.id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4 text-sm text-gray-900">
+                                <div className="font-medium">{report.reason}</div>
+                                {report.details && (
+                                  <div className="text-gray-500 text-xs mt-1 max-w-xs truncate">
+                                    {report.details}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {report.reporter_name}
+                              </td>
+                              <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
+                                <div className="font-medium truncate">
+                                  {report.review_title}
+                                </div>
+                                <div className="text-gray-500 text-xs mt-1 truncate">
+                                  {report.review_body}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {report.company_name}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                  report.status === 'مقبول' 
+                                    ? 'bg-green-100 text-green-800'
+                                    : report.status === 'مرفوض'
+                                    ? 'bg-red-100 text-red-800'
+                                    : 'bg-yellow-100 text-yellow-800'
+                                }`}>
+                                  {report.status === 'مقبول' 
+                                    ? (language === 'ar' ? 'مقبول' : 'Accepted')
+                                    : report.status === 'مرفوض'
+                                    ? (language === 'ar' ? 'مرفوض' : 'Declined')
+                                    : (language === 'ar' ? 'معلق' : 'Pending')
+                                  }
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {formatDate(report.created_at)}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                {report.status === 'pending' && (
+                                  <div className="flex space-x-2 rtl:space-x-reverse">
+                                    <button
+                                      onClick={() => handleDismissReport(report.id)}
+                                      disabled={processingReports.has(report.id)}
+                                      className="text-green-600 hover:text-green-900 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      title={text[language].dismissReport}
+                                    >
+                                      {processingReports.has(report.id) ? (
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+                                      ) : (
+                                        <CheckCircle className="h-4 w-4" />
+                                      )}
+                                    </button>
+                                    <button
+                                      onClick={() => handleUpholdReport(report)}
+                                      disabled={processingReports.has(report.id)}
+                                      className="text-red-600 hover:text-red-900 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                                      title={text[language].upholdReport}
+                                    >
+                                      {processingReports.has(report.id) ? (
+                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600"></div>
+                                      ) : (
+                                        <XCircle className="h-4 w-4" />
+                                      )}
+                                    </button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Settings Tab */}
+            {activeTab === 'settings' && (
+              <div className="space-y-6">
+                <div>
+                  <h1 className="text-3xl font-bold text-dark-500 mb-2">
+                    {text[language].systemSettings}
+                  </h1>
+                  <div className="w-16 h-1 bg-red-500 rounded-full"></div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
+                  <p className="text-gray-600 text-center py-12">
+                    {text[language].noDataAvailable}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
 
       {/* Bulk Upload Modal */}
-      {isBulkUploadOpen && <BulkUploadModal />}
+      {isBulkUploadOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-8 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-dark-500">
+                {text[language].bulkUploadTitle}
+              </h2>
+              <button
+                onClick={() => setIsBulkUploadOpen(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div>
+                <p className="text-sm text-gray-600 mb-4">
+                  {text[language].csvInstructions}
+                </p>
+                <a
+                  href="data:text/csv;charset=utf-8,name,logo_url,website,domain_name,category_name%0AExample Company,https://example.com/logo.png,https://example.com,example.com,خدمات الاستشارات العقارية"
+                  download="companies_template.csv"
+                  className="text-blue-600 hover:text-blue-800 text-sm underline"
+                >
+                  {text[language].downloadTemplate}
+                </a>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  {text[language].selectCsvFile}
+                </label>
+                <input
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileSelect}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  disabled={isUploading}
+                />
+              </div>
+
+              <div className="flex space-x-4 rtl:space-x-reverse">
+                <button
+                  onClick={() => setIsBulkUploadOpen(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                  disabled={isUploading}
+                >
+                  {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                </button>
+                <button
+                  onClick={handleBulkUpload}
+                  disabled={!selectedFile || isUploading}
+                  className="flex-1 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 rtl:space-x-reverse"
+                >
+                  {isUploading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>{text[language].uploading}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4" />
+                      <span>{text[language].uploadAndProcess}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Footer language={language} />
     </div>
