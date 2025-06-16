@@ -130,6 +130,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       totalReviews: 'إجمالي التقييمات',
       pendingReports: 'البلاغات المعلقة',
       
+      // Users
+      name: 'الاسم',
+      email: 'البريد الإلكتروني',
+      role: 'الدور',
+      status: 'الحالة',
+      lastUpdated: 'آخر تحديث',
+      actions: 'الإجراءات',
+      admin: 'مدير',
+      user: 'مستخدم',
+      active: 'نشط',
+      suspended: 'موقوف',
+      
       // Companies
       bulkUpload: 'رفع مجمع',
       bulkUploadCompanies: 'رفع الشركات بشكل مجمع',
@@ -143,8 +155,38 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       domainColumn: 'domain_name - اسم النطاق (مطلوب)',
       categoryColumn: 'category_name - اسم الفئة (اختياري)',
       downloadTemplate: 'تحميل نموذج',
+      website: 'الموقع',
+      claimed: 'مطالب بها',
+      unclaimed: 'غير مطالب بها',
+      created: 'تاريخ الإنشاء',
+      
+      // Reviews
+      title: 'العنوان',
+      rating: 'التقييم',
+      reviewer: 'المراجع',
+      company: 'الشركة',
+      anonymous: 'مجهول',
+      published: 'منشور',
+      pending: 'في الانتظار',
+      removed: 'محذوف',
+      flagged: 'مبلغ عنه',
+      
+      // Reports
+      reason: 'السبب',
+      details: 'التفاصيل',
+      reporter: 'المبلغ',
+      reportedOn: 'تاريخ البلاغ',
+      reviewed: 'تمت المراجعة',
+      resolved: 'تم الحل',
+      
+      // Common
       close: 'إغلاق',
       cancel: 'إلغاء',
+      view: 'عرض',
+      edit: 'تعديل',
+      delete: 'حذف',
+      suspend: 'إيقاف',
+      activate: 'تفعيل',
       
       // Messages
       loading: 'جاري التحميل...',
@@ -171,6 +213,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       totalReviews: 'Total Reviews',
       pendingReports: 'Pending Reports',
       
+      // Users
+      name: 'Name',
+      email: 'Email',
+      role: 'Role',
+      status: 'Status',
+      lastUpdated: 'Last Updated',
+      actions: 'Actions',
+      admin: 'Admin',
+      user: 'User',
+      active: 'Active',
+      suspended: 'Suspended',
+      
       // Companies
       bulkUpload: 'Bulk Upload',
       bulkUploadCompanies: 'Bulk Upload Companies',
@@ -184,8 +238,38 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       domainColumn: 'domain_name - Domain name (required)',
       categoryColumn: 'category_name - Category name (optional)',
       downloadTemplate: 'Download Template',
+      website: 'Website',
+      claimed: 'Claimed',
+      unclaimed: 'Unclaimed',
+      created: 'Created',
+      
+      // Reviews
+      title: 'Title',
+      rating: 'Rating',
+      reviewer: 'Reviewer',
+      company: 'Company',
+      anonymous: 'Anonymous',
+      published: 'Published',
+      pending: 'Pending',
+      removed: 'Removed',
+      flagged: 'Flagged',
+      
+      // Reports
+      reason: 'Reason',
+      details: 'Details',
+      reporter: 'Reporter',
+      reportedOn: 'Reported On',
+      reviewed: 'Reviewed',
+      resolved: 'Resolved',
+      
+      // Common
       close: 'Close',
       cancel: 'Cancel',
+      view: 'View',
+      edit: 'Edit',
+      delete: 'Delete',
+      suspend: 'Suspend',
+      activate: 'Activate',
       
       // Messages
       loading: 'Loading...',
@@ -391,6 +475,56 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     window.URL.revokeObjectURL(url);
   };
 
+  const renderStars = (rating: number | null) => {
+    const stars = [];
+    const ratingValue = rating || 0;
+    for (let i = 0; i < 5; i++) {
+      stars.push(
+        <Star
+          key={i}
+          className={`h-4 w-4 ${
+            i < ratingValue ? 'fill-current text-highlight-500' : 'text-gray-300'
+          }`}
+        />
+      );
+    }
+    return stars;
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US');
+  };
+
+  const getStatusColor = (status: string | null) => {
+    switch (status) {
+      case 'published':
+        return 'bg-green-100 text-green-800';
+      case 'pending_approval':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'removed':
+        return 'bg-red-100 text-red-800';
+      case 'flagged_for_review':
+        return 'bg-orange-100 text-orange-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusText = (status: string | null) => {
+    switch (status) {
+      case 'published':
+        return text[language].published;
+      case 'pending_approval':
+        return text[language].pending;
+      case 'removed':
+        return text[language].removed;
+      case 'flagged_for_review':
+        return text[language].flagged;
+      default:
+        return text[language].pending;
+    }
+  };
+
   // Loading state
   if (authLoading || loading) {
     return (
@@ -489,6 +623,98 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     </div>
   );
 
+  // Users View
+  const UsersView = () => (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-dark-500 mb-2">
+          {text[language].users}
+        </h1>
+        <div className="w-16 h-1 bg-red-500 rounded-full"></div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].name}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].role}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].status}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].lastUpdated}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].actions}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {users.map((user) => (
+                <tr key={user.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-3 rtl:space-x-reverse">
+                      <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                        {user.avatar_url ? (
+                          <img src={user.avatar_url} alt="" className="w-full h-full object-cover rounded-full" />
+                        ) : (
+                          <User className="h-4 w-4 text-gray-400" />
+                        )}
+                      </div>
+                      <span className="text-sm font-medium text-gray-900">
+                        {`${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Unnamed User'}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      user.is_admin 
+                        ? 'bg-red-100 text-red-800' 
+                        : 'bg-blue-100 text-blue-800'
+                    }`}>
+                      {user.is_admin ? text[language].admin : text[language].user}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      user.is_suspended 
+                        ? 'bg-red-100 text-red-800' 
+                        : 'bg-green-100 text-green-800'
+                    }`}>
+                      {user.is_suspended ? text[language].suspended : text[language].active}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {formatDate(user.updated_at)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                      <button className="text-blue-600 hover:text-blue-900">
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button className="text-gray-600 hover:text-gray-900">
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button className={`${user.is_suspended ? 'text-green-600 hover:text-green-900' : 'text-red-600 hover:text-red-900'}`}>
+                        {user.is_suspended ? <CheckCircle className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
   // Companies View
   const CompaniesView = () => (
     <div className="space-y-6">
@@ -514,19 +740,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {language === 'ar' ? 'الاسم' : 'Name'}
+                  {text[language].name}
                 </th>
                 <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {language === 'ar' ? 'الموقع' : 'Website'}
+                  {text[language].website}
                 </th>
                 <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {language === 'ar' ? 'الحالة' : 'Status'}
+                  {text[language].status}
                 </th>
                 <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {language === 'ar' ? 'تاريخ الإنشاء' : 'Created'}
+                  {text[language].created}
                 </th>
                 <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {language === 'ar' ? 'الإجراءات' : 'Actions'}
+                  {text[language].actions}
                 </th>
               </tr>
             </thead>
@@ -562,14 +788,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                         ? 'bg-green-100 text-green-800' 
                         : 'bg-gray-100 text-gray-800'
                     }`}>
-                      {company.is_claimed 
-                        ? (language === 'ar' ? 'مطالب بها' : 'Claimed')
-                        : (language === 'ar' ? 'غير مطالب بها' : 'Unclaimed')
-                      }
+                      {company.is_claimed ? text[language].claimed : text[language].unclaimed}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(company.created_at).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US')}
+                    {formatDate(company.created_at)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center space-x-2 rtl:space-x-reverse">
@@ -584,6 +807,194 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                       </button>
                       <button className="text-red-600 hover:text-red-900">
                         <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Reviews View
+  const ReviewsView = () => (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-dark-500 mb-2">
+          {text[language].reviews}
+        </h1>
+        <div className="w-16 h-1 bg-red-500 rounded-full"></div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].title}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].rating}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].reviewer}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].company}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].status}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].created}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].actions}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {reviews.map((review) => (
+                <tr key={review.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="max-w-xs">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {review.title || 'No title'}
+                      </p>
+                      <p className="text-sm text-gray-500 truncate">
+                        {review.body || 'No content'}
+                      </p>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-1 rtl:space-x-reverse">
+                      {renderStars(review.overall_rating)}
+                      <span className="text-sm text-gray-600 ml-2 rtl:mr-2">
+                        ({review.overall_rating || 0})
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {review.is_anonymous 
+                      ? text[language].anonymous
+                      : review.profiles 
+                        ? `${review.profiles.first_name || ''} ${review.profiles.last_name || ''}`.trim() || text[language].anonymous
+                        : text[language].anonymous
+                    }
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {review.companies?.name || 'Unknown Company'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(review.status)}`}>
+                      {getStatusText(review.status)}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {formatDate(review.created_at)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                      <button className="text-blue-600 hover:text-blue-900">
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button className="text-gray-600 hover:text-gray-900">
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button className="text-red-600 hover:text-red-900">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Reports View
+  const ReportsView = () => (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-dark-500 mb-2">
+          {text[language].reports}
+        </h1>
+        <div className="w-16 h-1 bg-red-500 rounded-full"></div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].reason}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].details}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].status}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].reportedOn}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].actions}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {reports.map((report) => (
+                <tr key={report.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <p className="text-sm font-medium text-gray-900">
+                      {report.reason}
+                    </p>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="max-w-xs">
+                      <p className="text-sm text-gray-500 truncate">
+                        {report.details || '-'}
+                      </p>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      report.status === 'pending' 
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : report.status === 'reviewed'
+                        ? 'bg-blue-100 text-blue-800'
+                        : 'bg-green-100 text-green-800'
+                    }`}>
+                      {report.status === 'pending' 
+                        ? text[language].pending
+                        : report.status === 'reviewed'
+                        ? text[language].reviewed
+                        : text[language].resolved
+                      }
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {formatDate(report.created_at)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                      <button className="text-blue-600 hover:text-blue-900">
+                        <Eye className="h-4 w-4" />
+                      </button>
+                      <button className="text-green-600 hover:text-green-900">
+                        <CheckCircle className="h-4 w-4" />
+                      </button>
+                      <button className="text-red-600 hover:text-red-900">
+                        <X className="h-4 w-4" />
                       </button>
                     </div>
                   </td>
@@ -786,8 +1197,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
           {/* Main Content Area */}
           <div className="lg:col-span-3">
             {activeTab === 'overview' && <OverviewView />}
+            {activeTab === 'users' && <UsersView />}
             {activeTab === 'companies' && <CompaniesView />}
-            {/* Add other tab views here */}
+            {activeTab === 'reviews' && <ReviewsView />}
+            {activeTab === 'reports' && <ReportsView />}
           </div>
         </div>
       </div>
