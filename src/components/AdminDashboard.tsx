@@ -530,7 +530,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
           is_anonymous,
           created_at,
           companies(name),
-          profiles(first_name, last_name)
+          profiles!reviews_profile_id_fkey(first_name, last_name)
         `)
         .order('created_at', { ascending: false });
 
