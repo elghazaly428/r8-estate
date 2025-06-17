@@ -29,7 +29,8 @@ import {
   submitReplyReport,
   submitCompanyReply,
   CompanyWithCategory, 
-  ReviewWithProfile 
+  ReviewWithProfile,
+  supabase
 } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 
@@ -51,6 +52,8 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
   const [reviews, setReviews] = useState<ReviewWithProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isCompanyRepresentative, setIsCompanyRepresentative] = useState(false);
+  const [checkingRepresentative, setCheckingRepresentative] = useState(false);
   
   // Reply state
   const [replyingToReviewId, setReplyingToReviewId] = useState<number | null>(null);
@@ -180,6 +183,42 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
 
     fetchCompanyData();
   }, [companyId, user?.id]);
+
+  // Check if current user is a company representative for this company
+  useEffect(() => {
+    const checkCompanyRepresentative = async () => {
+      if (!user || !companyId) {
+        setIsCompanyRepresentative(false);
+        return;
+      }
+
+      try {
+        setCheckingRepresentative(true);
+        
+        const { data, error } = await supabase
+          .from('company_representatives')
+          .select('company_id')
+          .eq('company_id', companyId)
+          .eq('profile_id', user.id)
+          .limit(1);
+
+        if (error) {
+          console.error('Error checking company representative:', error);
+          setIsCompanyRepresentative(false);
+          return;
+        }
+
+        setIsCompanyRepresentative(data && data.length > 0);
+      } catch (error) {
+        console.error('Error in checkCompanyRepresentative:', error);
+        setIsCompanyRepresentative(false);
+      } finally {
+        setCheckingRepresentative(false);
+      }
+    };
+
+    checkCompanyRepresentative();
+  }, [user, companyId]);
 
   const renderStars = (rating: number) => {
     const stars = [];
@@ -593,15 +632,16 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
                         <span className="text-sm">({review.not_helpful_count || 0})</span>
                       </button>
 
-                      {/* Reply Button */}
-                      <button
-                        onClick={() => setReplyingToReviewId(review.id)}
-                        className="flex items-center space-x-1 rtl:space-x-reverse text-gray-600 hover:text-primary-500 transition-colors duration-200"
-                        disabled={!user}
-                      >
-                        <MessageSquare className="h-4 w-4" />
-                        <span className="text-sm">{text[language].reply}</span>
-                      </button>
+                      {/* Reply Button - Only show for company representatives */}
+                      {isCompanyRepresentative && !checkingRepresentative && !review.company_reply && (
+                        <button
+                          onClick={() => setReplyingToReviewId(review.id)}
+                          className="flex items-center space-x-1 rtl:space-x-reverse text-gray-600 hover:text-primary-500 transition-colors duration-200"
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                          <span className="text-sm">{text[language].reply}</span>
+                        </button>
+                      )}
                     </div>
 
                     <div className="flex items-center space-x-2 rtl:space-x-reverse">
@@ -679,8 +719,8 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
                     </div>
                   )}
 
-                  {/* Reply Form */}
-                  {replyingToReviewId === review.id && (
+                  {/* Reply Form - Only show for company representatives */}
+                  {isCompanyRepresentative && !checkingRepresentative && replyingToReviewId === review.id && (
                     <div className="mt-4 bg-gray-50 p-4 rounded-lg">
                       <textarea
                         value={replyText}
