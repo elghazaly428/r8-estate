@@ -201,7 +201,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
   const hasResults = companies.length > 0;
 
   return (
-    <div ref={searchRef} className="relative w-full max-w-2xl mx-auto">
+    <div ref={searchRef} className="relative w-full max-w-2xl mx-auto" style={{ zIndex: 1000 }}>
       <div className="relative">
         {/* Main Search Bar with Three Components */}
         <div className="flex bg-white rounded-xl shadow-lg border-2 border-gray-100 hover:border-primary-500 transition-colors duration-300 overflow-hidden">
@@ -244,13 +244,15 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
               <ChevronDown className={`h-4 w-4 transition-transform duration-200 flex-shrink-0 ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
 
-            {/* Category Dropdown Menu - ABSOLUTE POSITIONING (sticks to search bar) */}
+            {/* Category Dropdown Menu - ABSOLUTE POSITIONING with VERY HIGH Z-INDEX */}
             {isCategoryDropdownOpen && (
               <div 
-                className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-2xl border border-gray-200 max-h-80 overflow-hidden z-50"
+                className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-2xl border border-gray-200 max-h-80 overflow-hidden"
                 style={{
                   width: '400px', // Wider dropdown for full category names
-                  minWidth: '350px'
+                  minWidth: '350px',
+                  zIndex: 9999, // VERY HIGH Z-INDEX to ensure it's on top
+                  position: 'absolute' // Ensure it's positioned absolutely
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
@@ -363,7 +365,10 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
 
         {/* Search Results Dropdown */}
         {isDropdownOpen && searchQuery.length >= 2 && (
-          <div className="search-dropdown absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-200 z-40 max-h-96 overflow-y-auto">
+          <div 
+            className="search-dropdown absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-200 max-h-96 overflow-y-auto"
+            style={{ zIndex: 9998 }} // High z-index but lower than category dropdown
+          >
             
             {/* Loading State */}
             {isSearching && (
