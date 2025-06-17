@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff, Mail, Lock, Home, Grid3X3, RefreshCw } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, ArrowLeft, RefreshCw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { supabase } from '../lib/supabase';
+import Header from './Header';
+import Footer from './Footer';
 
 interface LoginProps {
   language: 'ar' | 'en';
@@ -28,10 +30,7 @@ const Login: React.FC<LoginProps> = ({ language, onLanguageChange, onNavigate })
       loginBtn: 'تسجيل الدخول',
       noAccount: 'ليس لديك حساب؟',
       signUp: 'أنشئ حساب جديد',
-      home: 'الرئيسية',
-      categories: 'الفئات',
-      login: 'تسجيل الدخول',
-      signup: 'إنشاء حساب',
+      backToHome: 'العودة للرئيسية',
       loggingIn: 'جاري تسجيل الدخول...',
       fillAllFields: 'يرجى ملء جميع الحقول',
       loginSuccess: 'تم تسجيل الدخول بنجاح!',
@@ -49,10 +48,7 @@ const Login: React.FC<LoginProps> = ({ language, onLanguageChange, onNavigate })
       loginBtn: 'Log In',
       noAccount: "Don't have an account?",
       signUp: 'Sign up',
-      home: 'Home',
-      categories: 'Categories',
-      login: 'Log in',
-      signup: 'Sign up',
+      backToHome: 'Back to Home',
       loggingIn: 'Logging in...',
       fillAllFields: 'Please fill in all fields',
       loginSuccess: 'Login successful!',
@@ -150,66 +146,23 @@ const Login: React.FC<LoginProps> = ({ language, onLanguageChange, onNavigate })
 
   return (
     <div className={`min-h-screen bg-gray-50 ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
-      {/* Navigation Bar */}
-      <header className="bg-white shadow-sm border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* Logo - Right side */}
-            <button 
-              onClick={() => onNavigate('home')}
-              className="flex items-center space-x-2 rtl:space-x-reverse hover:opacity-80 transition-opacity duration-200"
-            >
-              <img 
-                src="/Picture1.png" 
-                alt="R8 ESTATE" 
-                className="h-10 w-auto"
-              />
-              <div className="text-xl font-bold">
-                <span className="text-accent-500">R8</span>
-                <span className="text-primary-500">ESTATE</span>
-              </div>
-            </button>
-
-            {/* Center Navigation */}
-            <div className="hidden md:flex items-center space-x-8 rtl:space-x-reverse">
-              <button 
-                onClick={() => onNavigate('home')}
-                className="flex items-center space-x-2 rtl:space-x-reverse text-dark-500 hover:text-primary-500 font-medium transition-colors duration-200"
-              >
-                <Home className="h-4 w-4" />
-                <span>{text[language].home}</span>
-              </button>
-              <button 
-                onClick={() => onNavigate('categories')}
-                className="flex items-center space-x-2 rtl:space-x-reverse text-dark-500 hover:text-primary-500 font-medium transition-colors duration-200"
-              >
-                <Grid3X3 className="h-4 w-4" />
-                <span>{text[language].categories}</span>
-              </button>
-            </div>
-
-            {/* Right side buttons */}
-            <div className="flex items-center space-x-4 rtl:space-x-reverse">
-              <button 
-                onClick={() => onNavigate('login')}
-                className="btn-primary text-white px-6 py-2 rounded-lg font-medium"
-              >
-                {text[language].login}
-              </button>
-              <button 
-                onClick={() => onNavigate('signup')}
-                className="btn-secondary text-dark-500 hover:text-primary-500 px-4 py-2 rounded-lg font-medium transition-all duration-200"
-              >
-                {text[language].signup}
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+      {/* Use the main Header component */}
+      <Header language={language} onLanguageChange={onLanguageChange} onNavigate={onNavigate} />
 
       {/* Main Content */}
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8">
+          {/* Back Button */}
+          <div className="text-center">
+            <button
+              onClick={() => onNavigate('home')}
+              className="inline-flex items-center space-x-2 rtl:space-x-reverse text-primary-500 hover:text-primary-600 transition-colors duration-200 mb-6"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>{text[language].backToHome}</span>
+            </button>
+          </div>
+
           {/* Heading */}
           <div className="text-center">
             <h1 className="text-3xl font-bold text-dark-500 mb-2">
@@ -329,6 +282,8 @@ const Login: React.FC<LoginProps> = ({ language, onLanguageChange, onNavigate })
           </div>
         </div>
       </div>
+
+      <Footer language={language} onNavigate={onNavigate} />
     </div>
   );
 };
