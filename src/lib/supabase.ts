@@ -68,6 +68,102 @@ export interface Notification {
   type: string | null
 }
 
+export interface CompanySearchResult {
+  id: number
+  name: string
+  logo_url: string | null
+  website: string | null
+  location: string | null
+  description: string | null
+  category_name: string | null
+  average_rating: number | null
+  review_count: number
+  is_claimed: boolean | null
+}
+
+// Company search function
+export const searchCompaniesWithRatings = async (searchTerm: string): Promise<CompanySearchResult[]> => {
+  try {
+    // Search companies by name, description, or location
+    const { data: companies, error } = await supabase
+      .from('companies')
+      .select(`
+        id,
+        name,
+        logo_url,
+        website,
+        location,
+        description,
+        is_claimed,
+        categories!companies_category_id_fkey(name)
+      `)
+      .or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,location.ilike.%${searchTerm}%`)
+      .limit(20);
+
+    if (error) {
+      console.error('Supabase error in searchCompaniesWithRatings:', error);
+      throw error;
+    }
+
+    if (!companies || companies.length === 0) {
+      return [];
+    }
+
+    // Get review statistics for each company
+    const companyIds = companies.map(company => company.id);
+    const { data: reviewStats, error: reviewError } = await supabase
+      .from('reviews')
+      .select('company_id, overall_rating')
+      .in('company_id', companyIds)
+      .eq('status', 'published');
+
+    if (reviewError) {
+      console.error('Supabase error fetching review stats:', reviewError);
+      throw reviewError;
+    }
+
+    // Calculate average ratings and review counts
+    const companyStats = companyIds.map(companyId => {
+      const companyReviews = reviewStats?.filter(review => review.company_id === companyId) || [];
+      const validRatings = companyReviews
+        .map(review => review.overall_rating)
+        .filter(rating => rating !== null && rating !== undefined) as number[];
+      
+      const averageRating = validRatings.length > 0 
+        ? validRatings.reduce((sum, rating) => sum + rating, 0) / validRatings.length 
+        : null;
+      
+      return {
+        companyId,
+        averageRating,
+        reviewCount: companyReviews.length
+      };
+    });
+
+    // Combine company data with review statistics
+    const results: CompanySearchResult[] = companies.map(company => {
+      const stats = companyStats.find(stat => stat.companyId === company.id);
+      return {
+        id: company.id,
+        name: company.name || '',
+        logo_url: company.logo_url,
+        website: company.website,
+        location: company.location,
+        description: company.description,
+        category_name: company.categories?.name || null,
+        average_rating: stats?.averageRating || null,
+        review_count: stats?.reviewCount || 0,
+        is_claimed: company.is_claimed
+      };
+    });
+
+    return results;
+  } catch (error: any) {
+    console.error('Error searching companies with ratings:', error);
+    return [];
+  }
+};
+
 // Review vote functions - Updated to handle both helpful and not_helpful votes
 export const toggleReviewVote = async (
   reviewId: number, 
