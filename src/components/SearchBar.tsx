@@ -226,101 +226,48 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
           <div className="w-px bg-gray-200"></div>
 
           {/* Category Dropdown - Middle */}
-          <div className="relative" ref={categoryDropdownRef}>
-            <button
-              type="button"
-              onClick={handleCategoryDropdownToggle}
-              className="h-full px-6 py-4 text-gray-700 hover:text-primary-500 hover:bg-gray-50 transition-all duration-200 flex items-center space-x-2 rtl:space-x-reverse whitespace-nowrap min-w-0 focus:outline-none focus:bg-gray-50"
-            >
-              <span className="text-sm font-medium truncate max-w-32">
-                {getSelectedCategoryName()}
-              </span>
-              <ChevronDown className={`h-4 w-4 transition-transform duration-200 flex-shrink-0 ${
-                isCategoryDropdownOpen ? 'rotate-180' : ''
-              }`} />
-            </button>
+<DropdownMenu>
+  <DropdownMenuTrigger asChild>
+    <Button
+      variant="ghost"
+      className="h-full px-6 py-4 text-gray-700 hover:text-primary-500 hover:bg-gray-50 transition-all duration-200 flex items-center space-x-2 rtl:space-x-reverse whitespace-nowrap min-w-0 focus:outline-none focus:bg-gray-50"
+    >
+      <span className="text-sm font-medium truncate max-w-32">
+        {getSelectedCategoryName()}
+      </span>
+      <ChevronDown className="h-4 w-4 transition-transform duration-200" />
+    </Button>
+  </DropdownMenuTrigger>
 
-            {/* Category Dropdown Menu */}
-            {isCategoryDropdownOpen && (
-              <div className="absolute top-full left-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl z-50 min-w-80 max-h-80 overflow-hidden">
-                
-                {/* Search Input at the Top */}
-                <div className="p-3 border-b border-gray-100 bg-gray-50">
-                  <div className="relative">
-                    <div className="absolute inset-y-0 right-0 pr-3 rtl:left-0 rtl:right-auto rtl:pl-3 rtl:pr-0 flex items-center pointer-events-none">
-                      <Search className="h-4 w-4 text-gray-400" />
-                    </div>
-                    <input
-                      type="text"
-                      value={categorySearchQuery}
-                      onChange={(e) => setCategorySearchQuery(e.target.value)}
-                      placeholder={text[language].searchCategories}
-                      className="w-full px-3 py-2 pr-10 rtl:pl-10 rtl:pr-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 text-sm"
-                      dir={language === 'ar' ? 'rtl' : 'ltr'}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </div>
-                </div>
+  <DropdownMenuContent className="w-[240px]" align="start">
+    <DropdownMenuLabel>{text[language].categories}</DropdownMenuLabel>
+    <DropdownMenuSeparator />
+    {/* You can add a search input here if you wish */}
+    <div className="max-h-60 overflow-y-auto">
+      <DropdownMenuRadioGroup
+        value={selectedCategoryId?.toString() ?? 'null'}
+        onValueChange={(value) => {
+          handleCategorySelect(value === 'null' ? null : parseInt(value), 
+            categories.find(c => c.id.toString() === value)?.name
+          );
+        }}
+      >
+        {/* All Categories Option */}
+        <DropdownMenuRadioItem value="null">
+          {text[language].allCategories}
+        </DropdownMenuRadioItem>
 
-                {/* Scrollable Category List */}
-                <div className="max-h-60 overflow-y-auto">
-                  {loadingCategories ? (
-                    /* Loading State */
-                    <div className="px-4 py-6 text-center">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-500 mx-auto mb-2"></div>
-                      <p className="text-gray-500 text-sm">{text[language].loadingCategories}</p>
-                    </div>
-                  ) : (
-                    <>
-                      {/* All Categories Option */}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCategorySelect(null, text[language].allCategories);
-                        }}
-                        className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 ${
-                          !selectedCategoryId ? 'bg-primary-50 text-primary-600' : 'text-gray-700'
-                        }`}
-                      >
-                        <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                          <X className="h-4 w-4" />
-                          <span className="font-medium">{text[language].allCategories}</span>
-                        </div>
-                      </button>
-                      
-                      {/* Render Categories from Database */}
-                      {filteredCategories.length > 0 ? (
-                        filteredCategories.map((category) => (
-                          <button
-                            key={category.id}
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleCategorySelect(category.id, category.name || undefined);
-                            }}
-                            className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0 ${
-                              selectedCategoryId === category.id ? 'bg-primary-50 text-primary-600' : 'text-gray-700'
-                            }`}
-                          >
-                            <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                              <Building2 className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                              <span className="truncate">{category.name || 'Unnamed Category'}</span>
-                            </div>
-                          </button>
-                        ))
-                      ) : (
-                        /* No Categories Available */
-                        <div className="px-4 py-6 text-center text-gray-500 text-sm">
-                          {categorySearchQuery ? text[language].noResults : (language === 'ar' ? 'لا توجد فئات متاحة' : 'No categories available')}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+        {/* Render Categories from Database */}
+        {categories.map((category) => (
+          <DropdownMenuRadioItem key={category.id} value={category.id.toString()}>
+            {category.name || 'Unnamed Category'}
+          </DropdownMenuRadioItem>
+        ))}
+      </DropdownMenuRadioGroup>
+    </div>
+  </DropdownMenuContent>
+</DropdownMenu>
+          
 
           {/* Vertical Separator */}
           <div className="w-px bg-gray-200"></div>
