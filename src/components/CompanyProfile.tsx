@@ -106,7 +106,8 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
       submitting: 'جاري الإرسال...',
       replySubmitted: 'تم إرسال الرد بنجاح',
       reportSubmitted: 'تم إرسال البلاغ بنجاح',
-      errorOccurred: 'حدث خطأ'
+      errorOccurred: 'حدث خطأ',
+      cannotReportOwnContent: 'لا يمكنك الإبلاغ عن المحتوى الخاص بك'
     },
     en: {
       companyProfile: 'Company Profile',
@@ -146,7 +147,8 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
       submitting: 'Submitting...',
       replySubmitted: 'Reply submitted successfully',
       reportSubmitted: 'Report submitted successfully',
-      errorOccurred: 'An error occurred'
+      errorOccurred: 'An error occurred',
+      cannotReportOwnContent: 'You cannot report your own content'
     }
   };
 
@@ -381,6 +383,43 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
     } finally {
       setSubmittingReport(false);
     }
+  };
+
+  // Helper function to check if user can report a review
+  const canReportReview = (review: ReviewWithProfile) => {
+    if (!user) return false;
+    
+    // User cannot report their own review
+    if (review.profile_id === user.id) return false;
+    
+    return true;
+  };
+
+  // Helper function to check if user can report a reply
+  const canReportReply = (reply: any) => {
+    if (!user) return false;
+    
+    // User cannot report their own reply
+    if (reply.profile_id === user.id) return false;
+    
+    return true;
+  };
+
+  // Handle report button click with validation
+  const handleReportReviewClick = (review: ReviewWithProfile) => {
+    if (!canReportReview(review)) {
+      toast.error(text[language].cannotReportOwnContent);
+      return;
+    }
+    setReportingReviewId(review.id);
+  };
+
+  const handleReportReplyClick = (reply: any) => {
+    if (!canReportReply(reply)) {
+      toast.error(text[language].cannotReportOwnContent);
+      return;
+    }
+    setReportingReplyId(reply.id);
   };
 
   const handleWriteReviewClick = () => {
@@ -645,10 +684,10 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
                     </div>
 
                     <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                      {/* Report Button - Only show for authenticated users */}
-                      {user && (
+                      {/* Report Button - Only show for authenticated users who can report this review */}
+                      {user && canReportReview(review) && (
                         <button
-                          onClick={() => setReportingReviewId(review.id)}
+                          onClick={() => handleReportReviewClick(review)}
                           className="flex items-center space-x-1 rtl:space-x-reverse text-gray-600 hover:text-red-500 transition-colors duration-200"
                         >
                           <Flag className="h-4 w-4" />
@@ -707,10 +746,10 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
                           <span className="text-xs">({review.company_reply!.not_helpful_count || 0})</span>
                         </button>
 
-                        {/* Report Reply Button - Only show for authenticated users */}
-                        {user && (
+                        {/* Report Reply Button - Only show for authenticated users who can report this reply */}
+                        {user && canReportReply(review.company_reply) && (
                           <button
-                            onClick={() => setReportingReplyId(review.company_reply!.id)}
+                            onClick={() => handleReportReplyClick(review.company_reply!)}
                             className="flex items-center space-x-1 rtl:space-x-reverse text-gray-600 hover:text-red-500 transition-colors duration-200"
                           >
                             <Flag className="h-3 w-3" />
