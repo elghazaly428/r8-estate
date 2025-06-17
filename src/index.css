@@ -29,12 +29,12 @@ html {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #E5395F; /* New Vibrant Red */
+  background: #2D65A2;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #d91e4a; /* Darker red on hover */
+  background: #1e4a73;
 }
 
 /* Star rating styles */
@@ -45,7 +45,7 @@ html {
 }
 
 .star {
-  color: #FFC107; /* Brand Yellow */
+  color: #FFC107;
 }
 
 /* Search dropdown animation */
@@ -71,126 +71,26 @@ html {
 
 .hover-lift:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(229, 57, 95, 0.15); /* New Vibrant Red shadow */
+  box-shadow: 0 8px 25px rgba(45, 101, 162, 0.15);
 }
 
 /* Button animations */
 .btn-primary {
-  background: linear-gradient(135deg, #E5395F 0%, #d91e4a 100%); /* New Vibrant Red gradient */
-  color: #FFFFFF; /* White text */
+  background: linear-gradient(135deg, #2D65A2 0%, #1e4a73 100%);
   transition: all 0.3s ease;
 }
 
 .btn-primary:hover {
-  background: linear-gradient(135deg, #d91e4a 0%, #b91c3c 100%); /* Darker red gradient on hover */
+  background: linear-gradient(135deg, #1e4a73 0%, #2D65A2 100%);
   transform: translateY(-1px);
-  box-shadow: 0 4px 15px rgba(229, 57, 95, 0.3); /* New Vibrant Red shadow */
+  box-shadow: 0 4px 15px rgba(45, 101, 162, 0.3);
 }
 
 .btn-secondary {
   transition: all 0.3s ease;
-  color: #1D2D44; /* New Dark Blue text */
-  border-color: #E5395F; /* New Vibrant Red border */
 }
 
 .btn-secondary:hover {
-  background-color: #fef2f4; /* Light red background on hover */
-  color: #E5395F; /* New Vibrant Red text on hover */
+  background-color: #f8fafc;
   transform: translateY(-1px);
-}
-
-/* Text color overrides */
-h1, h2, h3, h4, h5, h6 {
-  color: #1D2D44; /* New Dark Blue for headings */
-}
-
-.text-dark-500 {
-  color: #1D2D44 !important; /* New Dark Blue */
-}
-
-.text-primary-500 {
-  color: #E5395F !important; /* New Vibrant Red */
-}
-
-.text-accent-500 {
-  color: #FFC107 !important; /* Brand Yellow */
-}
-
-.text-highlight-500 {
-  color: #FFC107 !important; /* Brand Yellow */
-}
-
-/* Background color overrides */
-.bg-primary-500 {
-  background-color: #E5395F !important; /* New Vibrant Red */
-}
-
-.bg-primary-50 {
-  background-color: #fef2f4 !important; /* Light red */
-}
-
-.bg-accent-500 {
-  background-color: #FFC107 !important; /* Brand Yellow */
-}
-
-.bg-accent-50 {
-  background-color: #fffbeb !important; /* Light yellow */
-}
-
-.bg-dark-500 {
-  background-color: #1D2D44 !important; /* New Dark Blue */
-}
-
-/* Border color overrides */
-.border-primary-500 {
-  border-color: #E5395F !important; /* New Vibrant Red */
-}
-
-.border-accent-500 {
-  border-color: #FFC107 !important; /* Brand Yellow */
-}
-
-/* Hover state overrides */
-.hover\:text-primary-500:hover {
-  color: #E5395F !important; /* New Vibrant Red */
-}
-
-.hover\:bg-primary-500:hover {
-  background-color: #E5395F !important; /* New Vibrant Red */
-}
-
-.hover\:border-primary-500:hover {
-  border-color: #E5395F !important; /* New Vibrant Red */
-}
-
-/* Star rating specific styling */
-.fill-current.text-highlight-500 {
-  color: #FFC107 !important; /* Brand Yellow for filled stars */
-}
-
-/* Focus states */
-.focus\:ring-primary-500:focus {
-  --tw-ring-color: rgba(229, 57, 95, 0.5) !important; /* New Vibrant Red focus ring */
-}
-
-.focus\:border-primary-500:focus {
-  border-color: #E5395F !important; /* New Vibrant Red focus border */
-}
-
-/* Gradient backgrounds */
-.bg-gradient-to-br.from-primary-50.to-blue-50 {
-  background: linear-gradient(to bottom right, #fef2f4, #eff6ff);
-}
-
-.bg-gradient-to-r.from-primary-500.to-accent-500 {
-  background: linear-gradient(to right, #E5395F, #FFC107);
-}
-
-/* Logo and brand colors */
-.text-accent-500 {
-  color: #E5395F !important; /* Use vibrant red for R8 */
-}
-
-.text-primary-500 {
-  color: #1D2D44 !important; /* Use dark blue for ESTATE */
 }

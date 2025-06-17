@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { Search, Building2, Tag, Star, ChevronDown, X } from 'lucide-react';
 import { searchCompaniesWithRatings, CompanySearchResult, Category, getAllCategories } from '../lib/supabase';
 
@@ -20,10 +19,8 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
   const [categorySearchQuery, setCategorySearchQuery] = useState('');
   const [loadingCategories, setLoadingCategories] = useState(true);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
-  
   const searchRef = useRef<HTMLDivElement>(null);
-  const categoryButtonRef = useRef<HTMLButtonElement>(null);
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
 
   const text = {
     ar: {
@@ -52,47 +49,18 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
     }
   };
 
-  // Calculate dropdown position
-  const updateDropdownPosition = () => {
-    if (categoryButtonRef.current) {
-      const rect = categoryButtonRef.current.getBoundingClientRect();
-      setDropdownPosition({
-        top: rect.bottom + window.scrollY + 8, // 8px gap
-        left: rect.left + window.scrollX,
-        width: Math.max(rect.width, 400) // Minimum 400px width
-      });
-    }
-  };
-
-  // Update position when dropdown opens or window resizes
-  useEffect(() => {
-    if (isCategoryDropdownOpen) {
-      updateDropdownPosition();
-      
-      const handleResize = () => updateDropdownPosition();
-      const handleScroll = () => updateDropdownPosition();
-      
-      window.addEventListener('resize', handleResize);
-      window.addEventListener('scroll', handleScroll);
-      
-      return () => {
-        window.removeEventListener('resize', handleResize);
-        window.removeEventListener('scroll', handleScroll);
-      };
-    }
-  }, [isCategoryDropdownOpen]);
-
-  // Fetch categories on component mount
+  // Fetch categories on component mount using the existing getAllCategories function
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         setLoadingCategories(true);
         console.log('🔄 Fetching categories from database...');
         
+        // Use the existing getAllCategories function from supabase.ts
         const categoriesData = await getAllCategories();
         
         console.log('✅ Categories fetched successfully:', categoriesData.length, 'categories');
-        console.log('📋 Categories data:', categoriesData);
+        console.log('📋 First few categories:', categoriesData.slice(0, 3));
         
         setCategories(categoriesData);
         setFilteredCategories(categoriesData);
@@ -120,7 +88,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
     }
   }, [categorySearchQuery, categories]);
 
-  // Close dropdowns when clicking outside
+  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
@@ -131,8 +99,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
       }
       
       // Close category dropdown
-      if (!target.closest('.category-dropdown-portal') && 
-          !target.closest('.category-dropdown-button')) {
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(target)) {
         console.log('🔒 Closing category dropdown - clicked outside');
         setIsCategoryDropdownOpen(false);
         setCategorySearchQuery('');
@@ -151,6 +118,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
         setIsDropdownOpen(true);
 
         try {
+          // Search companies using RPC function
           const companiesResult = await searchCompaniesWithRatings(searchQuery.trim());
           setCompanies(companiesResult);
         } catch (error) {
@@ -211,7 +179,6 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
     const newState = !isCategoryDropdownOpen;
     console.log('🔄 Toggling category dropdown:', newState ? 'OPEN' : 'CLOSE');
     console.log('📊 Available categories:', categories.length);
-    console.log('🔍 Loading state:', loadingCategories);
     
     setIsCategoryDropdownOpen(newState);
     if (!newState) {
@@ -234,117 +201,8 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
 
   const hasResults = companies.length > 0;
 
-  // Category Dropdown Portal Component
-  const CategoryDropdownPortal = () => {
-    if (!isCategoryDropdownOpen) return null;
-
-    return createPortal(
-      <div 
-        className="category-dropdown-portal fixed bg-white rounded-lg shadow-2xl border border-gray-200 max-h-80 overflow-hidden"
-        style={{
-          top: `${dropdownPosition.top}px`,
-          left: `${dropdownPosition.left}px`,
-          width: `${dropdownPosition.width}px`,
-          minWidth: '350px',
-          zIndex: 999999, // MAXIMUM Z-INDEX
-          position: 'fixed'
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header with search */}
-        <div className="p-4 border-b border-gray-100 bg-gray-50">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">{text[language].categories}</h3>
-          <div className="relative">
-            <input
-              type="text"
-              value={categorySearchQuery}
-              onChange={(e) => {
-                e.stopPropagation();
-                setCategorySearchQuery(e.target.value);
-              }}
-              placeholder={text[language].searchCategories}
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
-              onClick={(e) => e.stopPropagation()}
-            />
-            <Search className="absolute right-3 rtl:left-3 rtl:right-auto top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-          </div>
-        </div>
-        
-        {/* Categories List */}
-        <div className="max-h-60 overflow-y-auto">
-          {/* All Categories Option */}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleCategorySelect(null);
-            }}
-            className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-50 transition-colors duration-150 flex items-center space-x-3 rtl:space-x-reverse border-b border-gray-50 ${
-              selectedCategoryId === null ? 'bg-primary-50 text-primary-600 font-medium' : 'text-gray-700'
-            }`}
-          >
-            <div className={`w-3 h-3 rounded-full flex-shrink-0 ${selectedCategoryId === null ? 'bg-primary-500' : 'border-2 border-gray-300'}`}></div>
-            <X className="h-4 w-4 text-gray-400 flex-shrink-0" />
-            <span className="flex-1">{text[language].allCategories}</span>
-          </button>
-
-          {/* Loading State */}
-          {loadingCategories && (
-            <div className="px-4 py-6 text-center">
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-500 mx-auto mb-2"></div>
-              <p className="text-xs text-gray-500">{text[language].loadingCategories}</p>
-            </div>
-          )}
-
-          {/* Categories List */}
-          {!loadingCategories && filteredCategories.map((category) => (
-            <button
-              key={category.id}
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleCategorySelect(category.id, category.name || undefined);
-              }}
-              className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-50 transition-colors duration-150 flex items-center space-x-3 rtl:space-x-reverse border-b border-gray-50 last:border-b-0 ${
-                selectedCategoryId === category.id ? 'bg-primary-50 text-primary-600 font-medium' : 'text-gray-700'
-              }`}
-              title={category.name || 'Unnamed Category'} // Tooltip for full name
-            >
-              <div className={`w-3 h-3 rounded-full flex-shrink-0 ${selectedCategoryId === category.id ? 'bg-primary-500' : 'border-2 border-gray-300'}`}></div>
-              <Tag className="h-4 w-4 text-gray-400 flex-shrink-0" />
-              <span className="flex-1 leading-relaxed" style={{
-                wordWrap: 'break-word',
-                whiteSpace: 'normal',
-                lineHeight: '1.4'
-              }}>
-                {category.name || 'Unnamed Category'}
-              </span>
-            </button>
-          ))}
-
-          {/* No Categories Found */}
-          {!loadingCategories && filteredCategories.length === 0 && categorySearchQuery.trim() !== '' && (
-            <div className="px-4 py-6 text-center text-sm text-gray-500">
-              <div className="text-2xl mb-2">🔍</div>
-              {text[language].noResults}
-            </div>
-          )}
-
-          {/* No Categories Available */}
-          {!loadingCategories && categories.length === 0 && (
-            <div className="px-4 py-6 text-center text-sm text-gray-500">
-              <div className="text-2xl mb-2">📂</div>
-              No categories available
-            </div>
-          )}
-        </div>
-      </div>,
-      document.body
-    );
-  };
-
   return (
-    <div ref={searchRef} className="relative w-full max-w-2xl mx-auto" style={{ zIndex: 1000 }}>
+    <div ref={searchRef} className="relative w-full max-w-2xl mx-auto">
       <div className="relative">
         {/* Main Search Bar with Three Components */}
         <div className="flex bg-white rounded-xl shadow-lg border-2 border-gray-100 hover:border-primary-500 transition-colors duration-300 overflow-hidden">
@@ -368,24 +226,100 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
           <div className="w-px bg-gray-200"></div>
 
           {/* Category Dropdown - Middle */}
-          <div className="relative">
+          <div className="relative" ref={categoryDropdownRef}>
             <button
-              ref={categoryButtonRef}
               type="button"
               onClick={handleCategoryDropdownToggle}
-              className="category-dropdown-button h-full px-6 py-4 text-gray-700 hover:text-primary-500 hover:bg-gray-50 transition-all duration-200 flex items-center space-x-2 rtl:space-x-reverse focus:outline-none focus:bg-gray-50"
-              style={{ minWidth: '200px' }} // Ensure minimum width for button
+              className="h-full px-6 py-4 text-gray-700 hover:text-primary-500 hover:bg-gray-50 transition-all duration-200 flex items-center space-x-2 rtl:space-x-reverse whitespace-nowrap min-w-0 focus:outline-none focus:bg-gray-50"
             >
-              <span className="text-sm font-medium flex-1 text-left rtl:text-right" style={{ 
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                maxWidth: '150px'
-              }}>
+              <span className="text-sm font-medium truncate max-w-32">
                 {getSelectedCategoryName()}
               </span>
-              <ChevronDown className={`h-4 w-4 transition-transform duration-200 flex-shrink-0 ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`h-4 w-4 transition-transform duration-200 flex-shrink-0 ${
+                isCategoryDropdownOpen ? 'rotate-180' : ''
+              }`} />
             </button>
+
+            {/* Category Dropdown Menu */}
+            {isCategoryDropdownOpen && (
+              <div className="absolute top-full left-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl z-50 min-w-80 max-h-80 overflow-hidden">
+                
+                {/* Search Input at the Top */}
+                <div className="p-3 border-b border-gray-100 bg-gray-50">
+                  <div className="relative">
+                    <div className="absolute inset-y-0 right-0 pr-3 rtl:left-0 rtl:right-auto rtl:pl-3 rtl:pr-0 flex items-center pointer-events-none">
+                      <Search className="h-4 w-4 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      value={categorySearchQuery}
+                      onChange={(e) => setCategorySearchQuery(e.target.value)}
+                      placeholder={text[language].searchCategories}
+                      className="w-full px-3 py-2 pr-10 rtl:pl-10 rtl:pr-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 text-sm"
+                      dir={language === 'ar' ? 'rtl' : 'ltr'}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </div>
+                </div>
+
+                {/* Scrollable Category List */}
+                <div className="max-h-60 overflow-y-auto">
+                  {loadingCategories ? (
+                    /* Loading State */
+                    <div className="px-4 py-6 text-center">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-500 mx-auto mb-2"></div>
+                      <p className="text-gray-500 text-sm">{text[language].loadingCategories}</p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* All Categories Option */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCategorySelect(null, text[language].allCategories);
+                        }}
+                        className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 ${
+                          !selectedCategoryId ? 'bg-primary-50 text-primary-600' : 'text-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                          <X className="h-4 w-4" />
+                          <span className="font-medium">{text[language].allCategories}</span>
+                        </div>
+                      </button>
+                      
+                      {/* Render Categories from Database */}
+                      {filteredCategories.length > 0 ? (
+                        filteredCategories.map((category) => (
+                          <button
+                            key={category.id}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCategorySelect(category.id, category.name || undefined);
+                            }}
+                            className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0 ${
+                              selectedCategoryId === category.id ? 'bg-primary-50 text-primary-600' : 'text-gray-700'
+                            }`}
+                          >
+                            <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                              <Building2 className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                              <span className="truncate">{category.name || 'Unnamed Category'}</span>
+                            </div>
+                          </button>
+                        ))
+                      ) : (
+                        /* No Categories Available */
+                        <div className="px-4 py-6 text-center text-gray-500 text-sm">
+                          {categorySearchQuery ? text[language].noResults : (language === 'ar' ? 'لا توجد فئات متاحة' : 'No categories available')}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Vertical Separator */}
@@ -406,10 +340,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
 
         {/* Search Results Dropdown */}
         {isDropdownOpen && searchQuery.length >= 2 && (
-          <div 
-            className="search-dropdown absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-200 max-h-96 overflow-y-auto"
-            style={{ zIndex: 9998 }} // High z-index but lower than category dropdown
-          >
+          <div className="search-dropdown absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-gray-200 z-40 max-h-96 overflow-y-auto">
             
             {/* Loading State */}
             {isSearching && (
@@ -498,9 +429,6 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
           </div>
         )}
       </div>
-
-      {/* Category Dropdown Portal - Rendered at document.body level */}
-      <CategoryDropdownPortal />
     </div>
   );
 };
