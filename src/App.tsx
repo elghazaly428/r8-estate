@@ -78,10 +78,12 @@ function App() {
   const handleReturnNavigation = () => {
     if (navigationHistory) {
       const { page, companyId, categoryId } = navigationHistory;
-      setCurrentPage(page as any);
-      if (companyId) setSelectedCompanyId(companyId);
-      if (categoryId) setSelectedCategoryId(categoryId);
-      setNavigationHistory(null); // Clear history after using it
+      
+      // Clear history first to prevent loops
+      setNavigationHistory(null);
+      
+      // Use handleNavigation to properly navigate back
+      handleNavigation(page, companyId, categoryId, false);
     } else {
       // Fallback to home if no history
       handleNavigation('home', undefined, undefined, false);
