@@ -49,18 +49,17 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
     }
   };
 
-  // Fetch categories on component mount using the existing getAllCategories function
+  // Fetch categories on component mount
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         setLoadingCategories(true);
         console.log('🔄 Fetching categories from database...');
         
-        // Use the existing getAllCategories function from supabase.ts
         const categoriesData = await getAllCategories();
         
         console.log('✅ Categories fetched successfully:', categoriesData.length, 'categories');
-        console.log('📋 First few categories:', categoriesData.slice(0, 3));
+        console.log('📋 Categories data:', categoriesData);
         
         setCategories(categoriesData);
         setFilteredCategories(categoriesData);
@@ -88,7 +87,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
     }
   }, [categorySearchQuery, categories]);
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
@@ -118,7 +117,6 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
         setIsDropdownOpen(true);
 
         try {
-          // Search companies using RPC function
           const companiesResult = await searchCompaniesWithRatings(searchQuery.trim());
           setCompanies(companiesResult);
         } catch (error) {
@@ -179,6 +177,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
     const newState = !isCategoryDropdownOpen;
     console.log('🔄 Toggling category dropdown:', newState ? 'OPEN' : 'CLOSE');
     console.log('📊 Available categories:', categories.length);
+    console.log('🔍 Loading state:', loadingCategories);
     
     setIsCategoryDropdownOpen(newState);
     if (!newState) {
@@ -238,11 +237,10 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
               <ChevronDown className={`h-4 w-4 transition-transform duration-200 flex-shrink-0 ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
 
-            {/* Category Dropdown Menu - Fixed positioning and z-index */}
+            {/* Category Dropdown Menu */}
             {isCategoryDropdownOpen && (
               <div 
-                className="absolute top-full right-0 rtl:left-0 rtl:right-auto mt-1 w-80 bg-white rounded-lg shadow-2xl border border-gray-200 max-h-80 overflow-hidden"
-                style={{ zIndex: 9999 }}
+                className="absolute top-full left-0 right-0 mt-1 w-80 bg-white rounded-lg shadow-2xl border border-gray-200 max-h-80 overflow-hidden z-50"
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* Header with search */}
@@ -252,12 +250,15 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
                     <input
                       type="text"
                       value={categorySearchQuery}
-                      onChange={(e) => setCategorySearchQuery(e.target.value)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        setCategorySearchQuery(e.target.value);
+                      }}
                       placeholder={text[language].searchCategories}
                       className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                       onClick={(e) => e.stopPropagation()}
                     />
-                    <Search className="absolute right-3 rtl:left-3 rtl:right-auto top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Search className="absolute right-3 rtl:left-3 rtl:right-auto top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
                   </div>
                 </div>
                 
@@ -294,7 +295,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleCategorySelect(category.id, category.name);
+                        handleCategorySelect(category.id, category.name || undefined);
                       }}
                       className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-50 transition-colors duration-150 flex items-center space-x-3 rtl:space-x-reverse border-b border-gray-50 last:border-b-0 ${
                         selectedCategoryId === category.id ? 'bg-primary-50 text-primary-600 font-medium' : 'text-gray-700'
