@@ -57,6 +57,17 @@ export interface CompanyReply {
   status: string | null
 }
 
+export interface Notification {
+  id: number
+  created_at: string
+  recipient_profile_id: string | null
+  message: string | null
+  link_url: string | null
+  is_read: boolean | null
+  notification_type: string | null
+  type: string | null
+}
+
 // Review vote functions - Updated to handle both helpful and not_helpful votes
 export const toggleReviewVote = async (
   reviewId: number, 
@@ -232,6 +243,48 @@ export const toggleReplyVote = async (
       notHelpfulCount: 0,
       userVote: null
     };
+  }
+};
+
+// Notification functions
+export const getUnreadNotificationCount = async (userId: string): Promise<number> => {
+  try {
+    const { count, error } = await supabase
+      .from('notifications')
+      .select('*', { count: 'exact', head: true })
+      .eq('recipient_profile_id', userId)
+      .eq('is_read', false);
+
+    if (error) {
+      console.error('Supabase error in getUnreadNotificationCount:', error);
+      throw error;
+    }
+
+    return count || 0;
+  } catch (error: any) {
+    console.error('Error fetching unread notification count:', error);
+    return 0;
+  }
+};
+
+export const getRecentNotifications = async (userId: string, limit: number = 10): Promise<Notification[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('recipient_profile_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('Supabase error in getRecentNotifications:', error);
+      throw error;
+    }
+
+    return data || [];
+  } catch (error: any) {
+    console.error('Error fetching recent notifications:', error);
+    return [];
   }
 };
 
