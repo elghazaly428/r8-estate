@@ -130,8 +130,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
   const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [isSearching, setIsSearching] = useState(false);
-  const [showDebugInfo, setShowDebugInfo] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const [isAssigning, setIsAssigning] = useState(false);
 
   const text = {
@@ -157,12 +155,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       cancel: 'إلغاء',
       assign: 'تعيين',
       assigning: 'جاري التعيين...',
-      assignmentSuccess: 'تم تعيين الممثل بنجاح',
+      assignmentSuccess: 'تم تعيين الممثل بنجاح! تم إرسال إشعار للمستخدم.',
       assignmentError: 'حدث خطأ أثناء التعيين',
       companyAlreadyClaimed: 'هذه الشركة مُدارة بالفعل',
       userAlreadyRepresentative: 'هذا المستخدم يدير شركة أخرى بالفعل',
       confirmAssignmentMessage: 'هل أنت متأكد من منح {userName} صلاحية إدارة {companyName}؟',
-      debugInfo: 'معلومات التشخيص',
       domain: 'النطاق',
       noDomain: 'لا يوجد نطاق',
       status: 'الحالة',
@@ -203,12 +200,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       cancel: 'Cancel',
       assign: 'Assign',
       assigning: 'Assigning...',
-      assignmentSuccess: 'Representative assigned successfully',
+      assignmentSuccess: 'Representative assigned successfully! User has been notified.',
       assignmentError: 'Error assigning representative',
       companyAlreadyClaimed: 'This company is already managed',
       userAlreadyRepresentative: 'This user is already managing another company',
       confirmAssignmentMessage: 'Are you sure you want to grant {userName} representative access for {companyName}?',
-      debugInfo: 'Debug Info',
       domain: 'Domain',
       noDomain: 'No Domain',
       status: 'Status',
@@ -368,13 +364,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     }
 
     setIsSearching(true);
-    const debug: string[] = [];
     
     try {
-      debug.push(`🔍 Searching for email: "${query}"`);
-      debug.push(`🏢 Company: ${selectedCompany.name}`);
-      debug.push(`🌐 Company domain: ${selectedCompany.domain_name || 'Not set'}`);
-
       // Search profiles table by email
       const { data: profileResults, error: profileError } = await supabase
         .from('profiles')
@@ -382,16 +373,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
         .ilike('email', `%${query}%`);
       
       if (profileError) {
-        debug.push(`❌ Error searching profiles: ${profileError.message}`);
         throw profileError;
       }
 
-      debug.push(`📊 Found ${profileResults?.length || 0} profiles matching email pattern`);
-
       if (!profileResults || profileResults.length === 0) {
-        debug.push(`❌ No profiles found with email containing "${query}"`);
         setSearchResults([]);
-        setDebugInfo(debug);
         return;
       }
 
@@ -400,56 +386,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       
       if (selectedCompany.domain_name) {
         const companyDomain = selectedCompany.domain_name.toLowerCase();
-        debug.push(`🔍 Filtering by company domain: ${companyDomain}`);
         
         filteredResults = profileResults.filter(profile => {
           if (!profile.email) return false;
           
           const emailDomain = profile.email.split('@')[1]?.toLowerCase();
-          const matches = emailDomain === companyDomain;
-          
-          debug.push(`📧 ${profile.email} -> domain: ${emailDomain} -> ${matches ? '✅ MATCH' : '❌ NO MATCH'}`);
-          
-          return matches;
+          return emailDomain === companyDomain;
         });
-        
-        debug.push(`📝 After domain filtering: ${filteredResults.length} profiles`);
-      } else {
-        debug.push(`⚠️ ${text[language].domainMismatch}`);
       }
-
-      // Check if we found the target user (mahmoud@palmhillsdevelopments.com)
-      const targetUser = filteredResults.find(profile => 
-        profile.email?.toLowerCase().includes('mahmoud@palmhillsdevelopments.com')
-      );
-      
-      if (targetUser) {
-        debug.push(`🎯 Found target user: ${targetUser.first_name} ${targetUser.last_name} (${targetUser.email})`);
-      } else {
-        debug.push(`❌ Target user "mahmoud@palmhillsdevelopments.com" not found in results`);
-        
-        // Check if the user exists but doesn't match domain
-        const anyMahmoud = profileResults.find(profile => 
-          profile.email?.toLowerCase().includes('mahmoud@palmhillsdevelopments.com')
-        );
-        
-        if (anyMahmoud) {
-          debug.push(`⚠️ Found mahmoud in all results but filtered out due to domain mismatch`);
-          debug.push(`   User domain: ${anyMahmoud.email?.split('@')[1]}`);
-          debug.push(`   Company domain: ${selectedCompany.domain_name}`);
-        }
-      }
-
-      debug.push(`✅ Final results: ${filteredResults.length} profiles`);
 
       setSearchResults(filteredResults);
-      setDebugInfo(debug);
 
     } catch (error: any) {
-      debug.push(`❌ Search error: ${error.message}`);
       console.error('Error searching users:', error);
       setSearchResults([]);
-      setDebugInfo(debug);
       toast.error('Error searching users');
     } finally {
       setIsSearching(false);
@@ -463,7 +413,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
         performSearch(searchQuery.trim());
       } else {
         setSearchResults([]);
-        setDebugInfo([]);
       }
     }, 300);
 
@@ -530,6 +479,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
         });
 
       if (insertError) throw insertError;
+
+      // Log admin action
+      await supabase
+        .from('admin_actions')
+        .insert({
+          admin_profile_id: user!.id,
+          action_type: 'assigned_rep',
+          target_profile_id: selectedUser.id,
+          target_company_id: selectedCompany.id,
+          details: `Assigned ${userName} as representative for ${selectedCompany.name}`
+        });
 
       // Create notification for the user
       await supabase
@@ -750,7 +710,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                         setAssignModalOpen(true);
                         setSearchQuery('');
                         setSearchResults([]);
-                        setDebugInfo([]);
                       }}
                       disabled={company.is_claimed}
                       className={`inline-flex items-center space-x-2 rtl:space-x-reverse px-3 py-1 rounded-lg text-sm font-medium transition-colors duration-200 ${
@@ -832,7 +791,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                   setSelectedUser(null);
                   setSearchQuery('');
                   setSearchResults([]);
-                  setDebugInfo([]);
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -869,27 +827,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                   />
                 </div>
               </div>
-
-              {/* Debug Info Toggle */}
-              <button
-                onClick={() => setShowDebugInfo(!showDebugInfo)}
-                className="flex items-center space-x-2 rtl:space-x-reverse text-sm text-blue-600 hover:text-blue-700"
-              >
-                <Info className="h-4 w-4" />
-                <span>{text[language].debugInfo}</span>
-                <ChevronDown className={`h-4 w-4 transition-transform ${showDebugInfo ? 'rotate-180' : ''}`} />
-              </button>
-
-              {/* Debug Info Panel */}
-              {showDebugInfo && debugInfo.length > 0 && (
-                <div className="bg-gray-50 rounded-lg p-3 text-xs font-mono">
-                  {debugInfo.map((info, index) => (
-                    <div key={index} className="mb-1">
-                      {info}
-                    </div>
-                  ))}
-                </div>
-              )}
 
               {/* Search Results */}
               {isSearching && (
@@ -963,7 +900,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                     setSelectedUser(null);
                     setSearchQuery('');
                     setSearchResults([]);
-                    setDebugInfo([]);
                   }}
                   className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
                   disabled={isAssigning}
