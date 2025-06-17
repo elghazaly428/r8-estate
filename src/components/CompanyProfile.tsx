@@ -36,7 +36,7 @@ import { useAuth } from '../hooks/useAuth';
 interface CompanyProfileProps {
   language: 'ar' | 'en';
   onLanguageChange: (lang: 'ar' | 'en') => void;
-  onNavigate: (page: string, companyId?: number) => void;
+  onNavigate: (page: string, companyId?: number, categoryId?: number, saveHistory?: boolean) => void;
   companyId?: number | null;
 }
 
@@ -344,6 +344,11 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
     }
   };
 
+  const handleWriteReviewClick = () => {
+    // This will save the current company page to navigation history
+    onNavigate('write-review', companyId!, undefined, true);
+  };
+
   if (loading) {
     return (
       <div className={`min-h-screen bg-gray-50 ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
@@ -354,7 +359,7 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
             <p className="text-gray-600">{text[language].loading}</p>
           </div>
         </div>
-        <Footer language={language} />
+        <Footer language={language} onNavigate={onNavigate} />
       </div>
     );
   }
@@ -371,14 +376,14 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
             </h1>
             <p className="text-gray-600 mb-6">{error}</p>
             <button
-              onClick={() => onNavigate('home')}
+              onClick={() => onNavigate('home', undefined, undefined, false)}
               className="btn-primary px-6 py-3 rounded-lg font-medium text-white hover-lift"
             >
               {language === 'ar' ? 'العودة للرئيسية' : 'Back to Home'}
             </button>
           </div>
         </div>
-        <Footer language={language} />
+        <Footer language={language} onNavigate={onNavigate} />
       </div>
     );
   }
@@ -469,7 +474,7 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
             {/* Write Review Button */}
             <div className="flex-shrink-0">
               <button 
-                onClick={() => onNavigate('write-review', companyId!)}
+                onClick={handleWriteReviewClick}
                 className="btn-primary px-6 py-3 rounded-lg font-medium text-white hover-lift flex items-center space-x-2 rtl:space-x-reverse"
               >
                 <Edit className="h-4 w-4" />
@@ -504,7 +509,7 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
                 {text[language].beFirstToReview}
               </p>
               <button 
-                onClick={() => onNavigate('write-review', companyId!)}
+                onClick={handleWriteReviewClick}
                 className="btn-primary px-6 py-3 rounded-lg font-medium text-white hover-lift"
               >
                 {text[language].writeReview}
@@ -814,7 +819,7 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
         </div>
       )}
 
-      <Footer language={language} />
+      <Footer language={language} onNavigate={onNavigate} />
     </div>
   );
 };

@@ -16,7 +16,7 @@ import { supabase, getCompanyById, Company } from '../lib/supabase';
 interface WriteReviewProps {
   language: 'ar' | 'en';
   onLanguageChange: (lang: 'ar' | 'en') => void;
-  onNavigate: (page: string, companyId?: number) => void;
+  onNavigate: (page: string, companyId?: number, categoryId?: number, saveHistory?: boolean) => void;
   companyId?: number | null;
 }
 
@@ -126,8 +126,9 @@ const WriteReview: React.FC<WriteReviewProps> = ({
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         
         if (authError || !user) {
-          // Redirect to login if not authenticated
-          onNavigate('login');
+          // Save navigation history before redirecting to login
+          // This will save the current write-review page with companyId
+          onNavigate('login', undefined, undefined, true);
           return;
         }
 
@@ -263,7 +264,7 @@ const WriteReview: React.FC<WriteReviewProps> = ({
 
       // Success - show message and redirect
       toast.success(text[language].reviewSubmitted);
-      onNavigate('company', companyId!);
+      onNavigate('company', companyId!, undefined, false);
     } catch (error: any) {
       console.error('Error submitting review:', error);
       toast.error(`${text[language].errorSubmitting}: ${error.message}`);
@@ -283,7 +284,7 @@ const WriteReview: React.FC<WriteReviewProps> = ({
             <p className="text-gray-600">{text[language].loading}</p>
           </div>
         </div>
-        <Footer language={language} />
+        <Footer language={language} onNavigate={onNavigate} />
       </div>
     );
   }
@@ -301,14 +302,14 @@ const WriteReview: React.FC<WriteReviewProps> = ({
             </h1>
             <p className="text-gray-600 mb-6">{error}</p>
             <button
-              onClick={() => onNavigate('home')}
+              onClick={() => onNavigate('home', undefined, undefined, false)}
               className="btn-primary px-6 py-3 rounded-lg font-medium text-white hover-lift"
             >
               {text[language].backToHome}
             </button>
           </div>
         </div>
-        <Footer language={language} />
+        <Footer language={language} onNavigate={onNavigate} />
       </div>
     );
   }
@@ -321,7 +322,7 @@ const WriteReview: React.FC<WriteReviewProps> = ({
         {/* Header Section */}
         <div className="mb-8">
           <button
-            onClick={() => onNavigate('company', companyId!)}
+            onClick={() => onNavigate('company', companyId!, undefined, false)}
             className="flex items-center space-x-2 rtl:space-x-reverse text-primary-500 hover:text-primary-600 transition-colors duration-200 mb-4"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -493,7 +494,7 @@ const WriteReview: React.FC<WriteReviewProps> = ({
         </div>
       </div>
 
-      <Footer language={language} />
+      <Footer language={language} onNavigate={onNavigate} />
     </div>
   );
 };
