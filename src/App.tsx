@@ -31,13 +31,13 @@ function App() {
 
   const text = {
     ar: {
-      heroTitle: 'مهمتنا: تعزيز الشفافية للقطاع العقاري',
+      heroTitle: 'منصة تقييم القطاع العقاري الأولي في مصر',
       heroSubtitle: 'اكتشف وقيم أفضل العقارات والمطورين في مصر. تقييمات حقيقية من عملاء حقيقين',
       ctaQuestion: 'لسا طالع من تجربة مع شركة ؟',
       ctaAction: 'شاركها معانا'
     },
     en: {
-      heroTitle: 'Our Mission: Enhancing Transparency for the Real Estate Sector',
+      heroTitle: 'The Primary Real Estate Sector Review Platform in Egypt',
       heroSubtitle: 'Discover and review the best real estate and developers in Egypt. Real reviews from real customers',
       ctaQuestion: 'Just had an experience with a company?',
       ctaAction: 'Share it with us'
