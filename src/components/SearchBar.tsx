@@ -49,18 +49,17 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
     }
   };
 
-  // Fetch categories on component mount using the existing getAllCategories function
+  // Fetch categories on component mount
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         setLoadingCategories(true);
         console.log('🔄 Fetching categories from database...');
         
-        // Use the existing getAllCategories function from supabase.ts
         const categoriesData = await getAllCategories();
         
         console.log('✅ Categories fetched successfully:', categoriesData.length, 'categories');
-        console.log('📋 First few categories:', categoriesData.slice(0, 3));
+        console.log('📋 Categories data:', categoriesData.slice(0, 3));
         
         setCategories(categoriesData);
         setFilteredCategories(categoriesData);
@@ -93,14 +92,11 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
       
-      // Close search dropdown
       if (searchRef.current && !searchRef.current.contains(target)) {
         setIsDropdownOpen(false);
       }
       
-      // Close category dropdown
       if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(target)) {
-        console.log('🔒 Closing category dropdown - clicked outside');
         setIsCategoryDropdownOpen(false);
         setCategorySearchQuery('');
       }
@@ -118,7 +114,6 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
         setIsDropdownOpen(true);
 
         try {
-          // Search companies using RPC function
           const companiesResult = await searchCompaniesWithRatings(searchQuery.trim());
           setCompanies(companiesResult);
         } catch (error) {
@@ -143,7 +138,6 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
   };
 
   const handleSearch = () => {
-    console.log('🔍 Executing search with:', { searchQuery: searchQuery.trim(), categoryId: selectedCategoryId });
     if (onSearch) {
       onSearch(searchQuery.trim(), selectedCategoryId);
       setIsDropdownOpen(false);
@@ -172,18 +166,10 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
     setCategorySearchQuery('');
   };
 
-  const handleCategoryDropdownToggle = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const newState = !isCategoryDropdownOpen;
-    console.log('🔄 Toggling category dropdown:', newState ? 'OPEN' : 'CLOSE');
-    console.log('📊 Available categories:', categories.length);
-    
-    setIsCategoryDropdownOpen(newState);
-    if (!newState) {
-      setCategorySearchQuery('');
-    }
+  const getSelectedCategoryName = () => {
+    if (!selectedCategoryId) return text[language].allCategories;
+    const category = categories.find(cat => cat.id === selectedCategoryId);
+    return category?.name || text[language].allCategories;
   };
 
   const formatReviewCount = (count: number): string => {
@@ -191,12 +177,6 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
       return `${Math.floor(count / 1000)}K`;
     }
     return count.toString();
-  };
-
-  const getSelectedCategoryName = () => {
-    if (!selectedCategoryId) return text[language].allCategories;
-    const category = categories.find(cat => cat.id === selectedCategoryId);
-    return category?.name || text[language].allCategories;
   };
 
   const hasResults = companies.length > 0;
@@ -225,11 +205,20 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
           {/* Vertical Separator */}
           <div className="w-px bg-gray-200"></div>
 
-          {/* Category Dropdown - Middle */}
+          {/* Category Dropdown - Improved Version */}
           <div className="relative" ref={categoryDropdownRef}>
             <button
               type="button"
-              onClick={handleCategoryDropdownToggle}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('🔄 Category dropdown clicked, current state:', isCategoryDropdownOpen);
+                console.log('📊 Available categories:', categories.length);
+                setIsCategoryDropdownOpen(!isCategoryDropdownOpen);
+                if (isCategoryDropdownOpen) {
+                  setCategorySearchQuery('');
+                }
+              }}
               className="h-full px-6 py-4 text-gray-700 hover:text-primary-500 hover:bg-gray-50 transition-all duration-200 flex items-center space-x-2 rtl:space-x-reverse whitespace-nowrap min-w-0 focus:outline-none focus:bg-gray-50"
             >
               <span className="text-sm font-medium truncate max-w-32">
@@ -244,8 +233,12 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
             {isCategoryDropdownOpen && (
               <div className="absolute top-full left-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl z-50 min-w-80 max-h-80 overflow-hidden">
                 
-                {/* Search Input at the Top */}
+                {/* Header with Search */}
                 <div className="p-3 border-b border-gray-100 bg-gray-50">
+                  <div className="flex items-center space-x-2 rtl:space-x-reverse mb-2">
+                    <Tag className="h-4 w-4 text-primary-500" />
+                    <span className="font-semibold text-dark-500 text-sm">{text[language].categories}</span>
+                  </div>
                   <div className="relative">
                     <div className="absolute inset-y-0 right-0 pr-3 rtl:left-0 rtl:right-auto rtl:pl-3 rtl:pr-0 flex items-center pointer-events-none">
                       <Search className="h-4 w-4 text-gray-400" />
@@ -280,12 +273,12 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
                           handleCategorySelect(null, text[language].allCategories);
                         }}
                         className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 ${
-                          !selectedCategoryId ? 'bg-primary-50 text-primary-600' : 'text-gray-700'
+                          !selectedCategoryId ? 'bg-primary-50 text-primary-600 font-medium' : 'text-gray-700'
                         }`}
                       >
                         <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                          <X className="h-4 w-4" />
-                          <span className="font-medium">{text[language].allCategories}</span>
+                          <X className="h-4 w-4 text-gray-400" />
+                          <span>{text[language].allCategories}</span>
                         </div>
                       </button>
                       
@@ -297,10 +290,11 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
+                              console.log('✅ Category clicked:', category.name);
                               handleCategorySelect(category.id, category.name || undefined);
                             }}
                             className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0 ${
-                              selectedCategoryId === category.id ? 'bg-primary-50 text-primary-600' : 'text-gray-700'
+                              selectedCategoryId === category.id ? 'bg-primary-50 text-primary-600 font-medium' : 'text-gray-700'
                             }`}
                           >
                             <div className="flex items-center space-x-2 rtl:space-x-reverse">
@@ -318,6 +312,18 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
                     </>
                   )}
                 </div>
+
+                {/* Footer with count */}
+                {!loadingCategories && categories.length > 0 && (
+                  <div className="px-4 py-2 bg-gray-50 border-t border-gray-100">
+                    <p className="text-xs text-gray-500 text-center">
+                      {language === 'ar' 
+                        ? `${filteredCategories.length} من ${categories.length} فئة`
+                        : `${filteredCategories.length} of ${categories.length} categories`
+                      }
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -364,9 +370,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
                       className="w-full text-left hover:bg-gray-50 p-3 rounded-lg transition-colors duration-200 group"
                       onClick={() => handleCompanyClick(company)}
                     >
-                      {/* Company Info Layout */}
                       <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                        {/* Company Logo */}
                         <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-xs flex-shrink-0 group-hover:scale-105 transition-transform duration-200">
                           {company.logo_url ? (
                             <img 
@@ -379,12 +383,10 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
                           )}
                         </div>
                         
-                        {/* Company Name */}
                         <div className="font-bold text-gray-900 text-base group-hover:text-primary-500 transition-colors duration-200 flex-shrink-0">
                           {company.name || 'Unnamed Company'}
                         </div>
                         
-                        {/* Website URL */}
                         {company.website && (
                           <>
                             <span className="text-gray-400 text-sm">•</span>
@@ -394,7 +396,6 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
                           </>
                         )}
                         
-                        {/* Review Count */}
                         {company.review_count > 0 && (
                           <>
                             <span className="text-gray-400 text-sm">•</span>
@@ -404,7 +405,6 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
                           </>
                         )}
                         
-                        {/* Rating Badge */}
                         <div className="flex-grow"></div>
                         {company.avg_rating > 0 && (
                           <div className="flex items-center space-x-1 rtl:space-x-reverse bg-green-500 text-white px-2 py-1 rounded text-xs font-bold flex-shrink-0">
