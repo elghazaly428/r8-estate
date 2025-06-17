@@ -28,6 +28,13 @@ function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  
+  // Navigation history for return functionality
+  const [navigationHistory, setNavigationHistory] = useState<{
+    page: string;
+    companyId?: number;
+    categoryId?: number;
+  } | null>(null);
 
   const text = {
     ar: {
@@ -44,8 +51,18 @@ function App() {
     }
   };
 
-  const handleNavigation = (page: string, companyId?: number, categoryId?: number) => {
+  const handleNavigation = (page: string, companyId?: number, categoryId?: number, saveHistory: boolean = true) => {
+    // Save current page to history before navigating (except for login/signup)
+    if (saveHistory && currentPage !== 'login' && currentPage !== 'signup' && page !== currentPage) {
+      setNavigationHistory({
+        page: currentPage,
+        companyId: selectedCompanyId || undefined,
+        categoryId: selectedCategoryId || undefined
+      });
+    }
+
     setCurrentPage(page as 'home' | 'search' | 'signup' | 'login' | 'company' | 'categories' | 'write-review' | 'dashboard' | 'company-dashboard' | 'admin' | 'about' | 'pricing' | 'terms' | 'privacy' | 'contact' | 'notifications');
+    
     if (page === 'company' && companyId) {
       setSelectedCompanyId(companyId);
     }
@@ -55,6 +72,19 @@ function App() {
     }
     if (page === 'write-review' && companyId) {
       setSelectedCompanyId(companyId);
+    }
+  };
+
+  const handleReturnNavigation = () => {
+    if (navigationHistory) {
+      const { page, companyId, categoryId } = navigationHistory;
+      setCurrentPage(page as any);
+      if (companyId) setSelectedCompanyId(companyId);
+      if (categoryId) setSelectedCategoryId(categoryId);
+      setNavigationHistory(null); // Clear history after using it
+    } else {
+      // Fallback to home if no history
+      handleNavigation('home', undefined, undefined, false);
     }
   };
 
@@ -543,7 +573,13 @@ function App() {
   if (currentPage === 'login') {
     return (
       <>
-        <Login language={language} onLanguageChange={setLanguage} onNavigate={handleNavigation} />
+        <Login 
+          language={language} 
+          onLanguageChange={setLanguage} 
+          onNavigate={handleNavigation}
+          onReturn={handleReturnNavigation}
+          navigationHistory={navigationHistory}
+        />
         <Toaster
           position={language === 'ar' ? 'bottom-left' : 'bottom-right'}
           toastOptions={{
@@ -578,7 +614,13 @@ function App() {
   if (currentPage === 'signup') {
     return (
       <>
-        <SignUp language={language} onLanguageChange={setLanguage} onNavigate={handleNavigation} />
+        <SignUp 
+          language={language} 
+          onLanguageChange={setLanguage} 
+          onNavigate={handleNavigation}
+          onReturn={handleReturnNavigation}
+          navigationHistory={navigationHistory}
+        />
         <Toaster
           position={language === 'ar' ? 'bottom-left' : 'bottom-right'}
           toastOptions={{

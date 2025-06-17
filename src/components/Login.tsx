@@ -8,10 +8,16 @@ import Footer from './Footer';
 interface LoginProps {
   language: 'ar' | 'en';
   onLanguageChange: (lang: 'ar' | 'en') => void;
-  onNavigate: (page: string) => void;
+  onNavigate: (page: string, companyId?: number, categoryId?: number, saveHistory?: boolean) => void;
+  onReturn?: () => void;
+  navigationHistory?: {
+    page: string;
+    companyId?: number;
+    categoryId?: number;
+  } | null;
 }
 
-const Login: React.FC<LoginProps> = ({ language, onLanguageChange, onNavigate }) => {
+const Login: React.FC<LoginProps> = ({ language, onLanguageChange, onNavigate, onReturn, navigationHistory }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isResendingConfirmation, setIsResendingConfirmation] = useState(false);
@@ -31,6 +37,7 @@ const Login: React.FC<LoginProps> = ({ language, onLanguageChange, onNavigate })
       noAccount: 'ليس لديك حساب؟',
       signUp: 'أنشئ حساب جديد',
       backToHome: 'العودة للرئيسية',
+      backToPrevious: 'العودة للصفحة السابقة',
       loggingIn: 'جاري تسجيل الدخول...',
       fillAllFields: 'يرجى ملء جميع الحقول',
       loginSuccess: 'تم تسجيل الدخول بنجاح!',
@@ -49,6 +56,7 @@ const Login: React.FC<LoginProps> = ({ language, onLanguageChange, onNavigate })
       noAccount: "Don't have an account?",
       signUp: 'Sign up',
       backToHome: 'Back to Home',
+      backToPrevious: 'Back to Previous Page',
       loggingIn: 'Logging in...',
       fillAllFields: 'Please fill in all fields',
       loginSuccess: 'Login successful!',
@@ -122,10 +130,16 @@ const Login: React.FC<LoginProps> = ({ language, onLanguageChange, onNavigate })
         throw error;
       }
 
-      // If login is successful, show success message and redirect to homepage
+      // If login is successful, show success message and redirect
       if (data.user) {
         toast.success(text[language].loginSuccess);
-        onNavigate('home');
+        
+        // Return to previous page if available, otherwise go to home
+        if (onReturn && navigationHistory) {
+          onReturn();
+        } else {
+          onNavigate('home', undefined, undefined, false);
+        }
       }
     } catch (error: any) {
       // Display error message to user
@@ -144,6 +158,24 @@ const Login: React.FC<LoginProps> = ({ language, onLanguageChange, onNavigate })
     }
   };
 
+  const handleBackClick = () => {
+    if (onReturn && navigationHistory) {
+      onReturn();
+    } else {
+      onNavigate('home', undefined, undefined, false);
+    }
+  };
+
+  const getBackButtonText = () => {
+    if (navigationHistory) {
+      if (navigationHistory.page === 'company') {
+        return language === 'ar' ? 'العودة للشركة' : 'Back to Company';
+      }
+      return text[language].backToPrevious;
+    }
+    return text[language].backToHome;
+  };
+
   return (
     <div className={`min-h-screen bg-gray-50 ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
       {/* Use the main Header component */}
@@ -155,11 +187,11 @@ const Login: React.FC<LoginProps> = ({ language, onLanguageChange, onNavigate })
           {/* Back Button */}
           <div className="text-center">
             <button
-              onClick={() => onNavigate('home')}
+              onClick={handleBackClick}
               className="inline-flex items-center space-x-2 rtl:space-x-reverse text-primary-500 hover:text-primary-600 transition-colors duration-200 mb-6"
             >
               <ArrowLeft className="h-4 w-4" />
-              <span>{text[language].backToHome}</span>
+              <span>{getBackButtonText()}</span>
             </button>
           </div>
 
@@ -271,7 +303,7 @@ const Login: React.FC<LoginProps> = ({ language, onLanguageChange, onNavigate })
               <p className="text-gray-600">
                 {text[language].noAccount}{' '}
                 <button 
-                  onClick={() => onNavigate('signup')}
+                  onClick={() => onNavigate('signup', undefined, undefined, false)}
                   className="text-primary-500 hover:text-primary-600 font-semibold transition-colors duration-200"
                   disabled={isLoading}
                 >

@@ -8,10 +8,16 @@ import Footer from './Footer';
 interface SignUpProps {
   language: 'ar' | 'en';
   onLanguageChange: (lang: 'ar' | 'en') => void;
-  onNavigate: (page: string) => void;
+  onNavigate: (page: string, companyId?: number, categoryId?: number, saveHistory?: boolean) => void;
+  onReturn?: () => void;
+  navigationHistory?: {
+    page: string;
+    companyId?: number;
+    categoryId?: number;
+  } | null;
 }
 
-const SignUp: React.FC<SignUpProps> = ({ language, onLanguageChange, onNavigate }) => {
+const SignUp: React.FC<SignUpProps> = ({ language, onLanguageChange, onNavigate, onReturn, navigationHistory }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -35,6 +41,7 @@ const SignUp: React.FC<SignUpProps> = ({ language, onLanguageChange, onNavigate 
       alreadyHaveAccount: 'لديك حساب بالفعل؟',
       login: 'سجل الدخول',
       backToHome: 'العودة للرئيسية',
+      backToPrevious: 'العودة للصفحة السابقة',
       creating: 'جاري إنشاء الحساب...',
       successMessage: 'تم إنشاء الحساب بنجاح! يرجى التحقق من بريدك الإلكتروني للحصول على رابط التأكيد.',
       passwordMismatch: 'كلمات المرور غير متطابقة',
@@ -52,6 +59,7 @@ const SignUp: React.FC<SignUpProps> = ({ language, onLanguageChange, onNavigate 
       alreadyHaveAccount: 'Already have an account?',
       login: 'Log in',
       backToHome: 'Back to Home',
+      backToPrevious: 'Back to Previous Page',
       creating: 'Creating account...',
       successMessage: 'Success! Please check your email for a confirmation link.',
       passwordMismatch: 'Passwords do not match',
@@ -145,6 +153,24 @@ const SignUp: React.FC<SignUpProps> = ({ language, onLanguageChange, onNavigate 
     }
   };
 
+  const handleBackClick = () => {
+    if (onReturn && navigationHistory) {
+      onReturn();
+    } else {
+      onNavigate('home', undefined, undefined, false);
+    }
+  };
+
+  const getBackButtonText = () => {
+    if (navigationHistory) {
+      if (navigationHistory.page === 'company') {
+        return language === 'ar' ? 'العودة للشركة' : 'Back to Company';
+      }
+      return text[language].backToPrevious;
+    }
+    return text[language].backToHome;
+  };
+
   return (
     <div className={`min-h-screen bg-gray-50 ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
       {/* Use the main Header component */}
@@ -156,11 +182,11 @@ const SignUp: React.FC<SignUpProps> = ({ language, onLanguageChange, onNavigate 
           {/* Back Button */}
           <div className="text-center">
             <button
-              onClick={() => onNavigate('home')}
+              onClick={handleBackClick}
               className="inline-flex items-center space-x-2 rtl:space-x-reverse text-primary-500 hover:text-primary-600 transition-colors duration-200 mb-6"
             >
               <ArrowLeft className="h-4 w-4" />
-              <span>{text[language].backToHome}</span>
+              <span>{getBackButtonText()}</span>
             </button>
           </div>
 
@@ -326,7 +352,7 @@ const SignUp: React.FC<SignUpProps> = ({ language, onLanguageChange, onNavigate 
               <p className="text-gray-600">
                 {text[language].alreadyHaveAccount}{' '}
                 <button 
-                  onClick={() => onNavigate('login')}
+                  onClick={() => onNavigate('login', undefined, undefined, false)}
                   className="text-primary-500 hover:text-primary-600 font-semibold transition-colors duration-200"
                   disabled={isLoading}
                 >
