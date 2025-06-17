@@ -12,7 +12,7 @@ interface AboutProps {
 const About: React.FC<AboutProps> = ({ language, onLanguageChange, onNavigate }) => {
   const text = {
     ar: {
-      mission: 'مهمتنا: إضفاء الشفافية على سوق العقارات',
+      mission: 'مهمتنا: تعزيز الشفافية للقطاع العقاري',
       ourStory: 'قصتنا',
       ourTeam: 'فريقنا',
       storyParagraph1: 'تأسست R8 ESTATE في عام 2024 برؤية واضحة: جعل سوق العقارات في مصر أكثر شفافية وموثوقية. لاحظنا أن العملاء يواجهون صعوبة في العثور على معلومات موثوقة حول الشركات العقارية، مما يجعل اتخاذ القرارات الاستثمارية أمراً صعباً ومحفوفاً بالمخاطر.',
@@ -24,7 +24,7 @@ const About: React.FC<AboutProps> = ({ language, onLanguageChange, onNavigate })
       headOfOperationsTitle: 'رئيس العمليات'
     },
     en: {
-      mission: 'Our Mission: To Bring Transparency to the Real Estate Market',
+      mission: 'Our Mission: To Enhance Transparency for the Real Estate Sector',
       ourStory: 'Our Story',
       ourTeam: 'Our Team',
       storyParagraph1: 'R8 ESTATE was founded in 2024 with a clear vision: to make the real estate market in Egypt more transparent and trustworthy. We noticed that customers faced difficulty finding reliable information about real estate companies, making investment decisions challenging and risky.',
