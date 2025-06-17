@@ -82,11 +82,21 @@ function App() {
       // Clear history first to prevent loops
       setNavigationHistory(null);
       
-      // Use handleNavigation to properly navigate back
-      handleNavigation(page, companyId, categoryId, false);
+      // Navigate back to the saved page with proper parameters
+      if (page === 'company' && companyId) {
+        setCurrentPage('company');
+        setSelectedCompanyId(companyId);
+      } else if (page === 'search' && categoryId) {
+        setCurrentPage('search');
+        setSelectedCategoryId(categoryId);
+        setSearchQuery('');
+      } else {
+        // For other pages, just set the page
+        setCurrentPage(page as 'home' | 'search' | 'signup' | 'login' | 'company' | 'categories' | 'write-review' | 'dashboard' | 'company-dashboard' | 'admin' | 'about' | 'pricing' | 'terms' | 'privacy' | 'contact' | 'notifications');
+      }
     } else {
       // Fallback to home if no history
-      handleNavigation('home', undefined, undefined, false);
+      setCurrentPage('home');
     }
   };
 
