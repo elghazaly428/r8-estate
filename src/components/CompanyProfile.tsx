@@ -107,7 +107,10 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
       replySubmitted: 'تم إرسال الرد بنجاح',
       reportSubmitted: 'تم إرسال البلاغ بنجاح',
       errorOccurred: 'حدث خطأ',
-      cannotReportOwnContent: 'لا يمكنك الإبلاغ عن المحتوى الخاص بك'
+      cannotReportOwnContent: 'لا يمكنك الإبلاغ عن المحتوى الخاص بك',
+      linkCopied: 'تم نسخ الرابط',
+      shareReview: 'مشاركة التقييم',
+      shareReply: 'مشاركة الرد'
     },
     en: {
       companyProfile: 'Company Profile',
@@ -148,7 +151,10 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
       replySubmitted: 'Reply submitted successfully',
       reportSubmitted: 'Report submitted successfully',
       errorOccurred: 'An error occurred',
-      cannotReportOwnContent: 'You cannot report your own content'
+      cannotReportOwnContent: 'You cannot report your own content',
+      linkCopied: 'Link copied to clipboard',
+      shareReview: 'Share Review',
+      shareReply: 'Share Reply'
     }
   };
 
@@ -422,6 +428,67 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
     setReportingReplyId(reply.id);
   };
 
+  // Handle share functionality
+  const handleShareReview = async (reviewId: number) => {
+    try {
+      const shareUrl = `${window.location.origin}/company/${companyId}#review-${reviewId}`;
+      
+      if (navigator.share) {
+        // Use native sharing if available
+        await navigator.share({
+          title: text[language].shareReview,
+          text: company?.name ? `${text[language].shareReview} - ${company.name}` : text[language].shareReview,
+          url: shareUrl,
+        });
+      } else {
+        // Fallback to clipboard
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success(text[language].linkCopied);
+      }
+    } catch (error) {
+      console.error('Error sharing review:', error);
+      // Fallback: copy to clipboard
+      try {
+        const shareUrl = `${window.location.origin}/company/${companyId}#review-${reviewId}`;
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success(text[language].linkCopied);
+      } catch (clipboardError) {
+        console.error('Error copying to clipboard:', clipboardError);
+        toast.error(text[language].errorOccurred);
+      }
+    }
+  };
+
+  const handleShareReply = async (replyId: string) => {
+    try {
+      const shareUrl = `${window.location.origin}/company/${companyId}#reply-${replyId}`;
+      
+      if (navigator.share) {
+        // Use native sharing if available
+        await navigator.share({
+          title: text[language].shareReply,
+          text: company?.name ? `${text[language].shareReply} - ${company.name}` : text[language].shareReply,
+          url: shareUrl,
+        });
+      } else {
+        // Fallback to clipboard
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success(text[language].linkCopied);
+      }
+    } catch (error) {
+      console.error('Error sharing reply:', error);
+      // Fallback: copy to clipboard
+      try {
+        const shareUrl = `${window.location.origin}/company/${companyId}#reply-${replyId}`;
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success(text[language].linkCopied);
+      } catch (clipboardError) {
+        console.error('Error copying to clipboard:', clipboardError);
+        toast.error(text[language].errorOccurred);
+      }
+    }
+  };
+
   const handleWriteReviewClick = () => {
     // This will save the current company page to navigation history
     onNavigate('write-review', companyId!, undefined, true);
@@ -596,7 +663,7 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
           ) : (
             <div className="space-y-6">
               {reviews.map((review) => (
-                <div key={review.id} className="border border-gray-100 rounded-lg p-6">
+                <div key={review.id} id={`review-${review.id}`} className="border border-gray-100 rounded-lg p-6">
                   {/* Review Header */}
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex items-center space-x-4 rtl:space-x-reverse">
@@ -695,8 +762,11 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
                         </button>
                       )}
 
-                      {/* Share Button */}
-                      <button className="flex items-center space-x-1 rtl:space-x-reverse text-gray-600 hover:text-primary-500 transition-colors duration-200">
+                      {/* Share Button - Always visible */}
+                      <button 
+                        onClick={() => handleShareReview(review.id)}
+                        className="flex items-center space-x-1 rtl:space-x-reverse text-gray-600 hover:text-primary-500 transition-colors duration-200"
+                      >
                         <Share2 className="h-4 w-4" />
                         <span className="text-sm">{text[language].share}</span>
                       </button>
@@ -705,7 +775,7 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
 
                   {/* Company Reply */}
                   {review.company_reply && (
-                    <div className="mt-4 bg-blue-50 border-l-4 border-blue-500 p-4">
+                    <div id={`reply-${review.company_reply.id}`} className="mt-4 bg-blue-50 border-l-4 border-blue-500 p-4">
                       <div className="flex items-center space-x-2 rtl:space-x-reverse mb-2">
                         <Building2 className="h-4 w-4 text-blue-600" />
                         <span className="font-semibold text-blue-800">{text[language].companyReply}</span>
@@ -715,47 +785,60 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
                       </p>
                       
                       {/* Reply Actions */}
-                      <div className="flex items-center space-x-4 rtl:space-x-reverse">
-                        {/* Helpful Button for Reply */}
-                        <button
-                          onClick={() => handleReplyVote(review.company_reply!.id, 'helpful')}
-                          className={`flex items-center space-x-1 rtl:space-x-reverse px-2 py-1 rounded transition-colors duration-200 ${
-                            review.company_reply!.user_vote_type === 'helpful'
-                              ? 'bg-green-100 text-green-700'
-                              : 'text-gray-600 hover:bg-gray-100'
-                          }`}
-                          disabled={!user}
-                        >
-                          <ThumbsUp className="h-3 w-3" />
-                          <span className="text-xs">{text[language].helpful}</span>
-                          <span className="text-xs">({review.company_reply!.helpful_count || 0})</span>
-                        </button>
-
-                        {/* Not Helpful Button for Reply */}
-                        <button
-                          onClick={() => handleReplyVote(review.company_reply!.id, 'not_helpful')}
-                          className={`flex items-center space-x-1 rtl:space-x-reverse px-2 py-1 rounded transition-colors duration-200 ${
-                            review.company_reply!.user_vote_type === 'not_helpful'
-                              ? 'bg-red-100 text-red-700'
-                              : 'text-gray-600 hover:bg-gray-100'
-                          }`}
-                          disabled={!user}
-                        >
-                          <ThumbsDown className="h-3 w-3" />
-                          <span className="text-xs">{text[language].notHelpful}</span>
-                          <span className="text-xs">({review.company_reply!.not_helpful_count || 0})</span>
-                        </button>
-
-                        {/* Report Reply Button - Only show for authenticated users who can report this reply */}
-                        {user && canReportReply(review.company_reply) && (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4 rtl:space-x-reverse">
+                          {/* Helpful Button for Reply */}
                           <button
-                            onClick={() => handleReportReplyClick(review.company_reply!)}
-                            className="flex items-center space-x-1 rtl:space-x-reverse text-gray-600 hover:text-red-500 transition-colors duration-200"
+                            onClick={() => handleReplyVote(review.company_reply!.id, 'helpful')}
+                            className={`flex items-center space-x-1 rtl:space-x-reverse px-2 py-1 rounded transition-colors duration-200 ${
+                              review.company_reply!.user_vote_type === 'helpful'
+                                ? 'bg-green-100 text-green-700'
+                                : 'text-gray-600 hover:bg-gray-100'
+                            }`}
+                            disabled={!user}
                           >
-                            <Flag className="h-3 w-3" />
-                            <span className="text-xs">{text[language].report}</span>
+                            <ThumbsUp className="h-3 w-3" />
+                            <span className="text-xs">{text[language].helpful}</span>
+                            <span className="text-xs">({review.company_reply!.helpful_count || 0})</span>
                           </button>
-                        )}
+
+                          {/* Not Helpful Button for Reply */}
+                          <button
+                            onClick={() => handleReplyVote(review.company_reply!.id, 'not_helpful')}
+                            className={`flex items-center space-x-1 rtl:space-x-reverse px-2 py-1 rounded transition-colors duration-200 ${
+                              review.company_reply!.user_vote_type === 'not_helpful'
+                                ? 'bg-red-100 text-red-700'
+                                : 'text-gray-600 hover:bg-gray-100'
+                            }`}
+                            disabled={!user}
+                          >
+                            <ThumbsDown className="h-3 w-3" />
+                            <span className="text-xs">{text[language].notHelpful}</span>
+                            <span className="text-xs">({review.company_reply!.not_helpful_count || 0})</span>
+                          </button>
+                        </div>
+
+                        <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                          {/* Report Reply Button - Only show for authenticated users who can report this reply */}
+                          {user && canReportReply(review.company_reply) && (
+                            <button
+                              onClick={() => handleReportReplyClick(review.company_reply!)}
+                              className="flex items-center space-x-1 rtl:space-x-reverse text-gray-600 hover:text-red-500 transition-colors duration-200"
+                            >
+                              <Flag className="h-3 w-3" />
+                              <span className="text-xs">{text[language].report}</span>
+                            </button>
+                          )}
+
+                          {/* Share Reply Button - Always visible */}
+                          <button 
+                            onClick={() => handleShareReply(review.company_reply!.id)}
+                            className="flex items-center space-x-1 rtl:space-x-reverse text-gray-600 hover:text-primary-500 transition-colors duration-200"
+                          >
+                            <Share2 className="h-3 w-3" />
+                            <span className="text-xs">{text[language].share}</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
