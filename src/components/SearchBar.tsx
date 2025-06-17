@@ -20,7 +20,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
   const [categorySearchQuery, setCategorySearchQuery] = useState('');
   const [loadingCategories, setLoadingCategories] = useState(true);
   const searchRef = useRef<HTMLDivElement>(null);
-  const categoryDropdownRef = useRef<HTMLDivElement>(null);
+  const categoryButtonRef = useRef<HTMLButtonElement>(null);
 
   const text = {
     ar: {
@@ -98,7 +98,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
       }
       
       // Close category dropdown
-      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(target)) {
+      if (!target.closest('.category-dropdown-container')) {
         console.log('🔒 Closing category dropdown - clicked outside');
         setIsCategoryDropdownOpen(false);
         setCategorySearchQuery('');
@@ -225,31 +225,32 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
           <div className="w-px bg-gray-200"></div>
 
           {/* Category Dropdown - Middle */}
-          <div ref={categoryDropdownRef} className="relative">
+          <div className="relative category-dropdown-container">
             <button
+              ref={categoryButtonRef}
               type="button"
               onClick={handleCategoryDropdownToggle}
-              className="h-full px-6 py-4 text-gray-700 hover:text-primary-500 hover:bg-gray-50 transition-all duration-200 flex items-center space-x-2 rtl:space-x-reverse whitespace-nowrap min-w-0 focus:outline-none focus:bg-gray-50"
+              className="h-full px-6 py-4 text-gray-700 hover:text-primary-500 hover:bg-gray-50 transition-all duration-200 flex items-center space-x-2 rtl:space-x-reverse focus:outline-none focus:bg-gray-50"
+              style={{ minWidth: '200px' }} // Ensure minimum width for button
             >
-              <span className="text-sm font-medium truncate max-w-32">
+              <span className="text-sm font-medium flex-1 text-left rtl:text-right" style={{ 
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                maxWidth: '150px'
+              }}>
                 {getSelectedCategoryName()}
               </span>
               <ChevronDown className={`h-4 w-4 transition-transform duration-200 flex-shrink-0 ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
 
-            {/* Category Dropdown Menu - FIXED POSITIONING */}
+            {/* Category Dropdown Menu - ABSOLUTE POSITIONING (sticks to search bar) */}
             {isCategoryDropdownOpen && (
               <div 
-                className="fixed bg-white rounded-lg shadow-2xl border border-gray-200 max-h-80 overflow-hidden"
+                className="absolute top-full left-0 mt-2 bg-white rounded-lg shadow-2xl border border-gray-200 max-h-80 overflow-hidden z-50"
                 style={{
-                  zIndex: 9999,
-                  width: '320px',
-                  top: categoryDropdownRef.current ? 
-                    categoryDropdownRef.current.getBoundingClientRect().bottom + window.scrollY + 4 : 
-                    'auto',
-                  left: categoryDropdownRef.current ? 
-                    Math.max(16, categoryDropdownRef.current.getBoundingClientRect().left + window.scrollX - 160) : 
-                    'auto'
+                  width: '400px', // Wider dropdown for full category names
+                  minWidth: '350px'
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
@@ -287,7 +288,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
                   >
                     <div className={`w-3 h-3 rounded-full flex-shrink-0 ${selectedCategoryId === null ? 'bg-primary-500' : 'border-2 border-gray-300'}`}></div>
                     <X className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                    <span className="truncate">{text[language].allCategories}</span>
+                    <span className="flex-1">{text[language].allCategories}</span>
                   </button>
 
                   {/* Loading State */}
@@ -310,10 +311,17 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
                       className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-50 transition-colors duration-150 flex items-center space-x-3 rtl:space-x-reverse border-b border-gray-50 last:border-b-0 ${
                         selectedCategoryId === category.id ? 'bg-primary-50 text-primary-600 font-medium' : 'text-gray-700'
                       }`}
+                      title={category.name || 'Unnamed Category'} // Tooltip for full name
                     >
                       <div className={`w-3 h-3 rounded-full flex-shrink-0 ${selectedCategoryId === category.id ? 'bg-primary-500' : 'border-2 border-gray-300'}`}></div>
                       <Tag className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                      <span className="truncate">{category.name || 'Unnamed Category'}</span>
+                      <span className="flex-1 leading-relaxed" style={{
+                        wordWrap: 'break-word',
+                        whiteSpace: 'normal',
+                        lineHeight: '1.4'
+                      }}>
+                        {category.name || 'Unnamed Category'}
+                      </span>
                     </button>
                   ))}
 
