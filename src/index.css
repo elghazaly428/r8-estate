@@ -3,20 +3,12 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Global text color override - Apply new Dark Blue to all text */
 * {
   font-family: 'Cairo', sans-serif;
-  color: #1D2D44; /* New Dark Blue for all text elements */
-}
-
-/* Body and root text color */
-body {
-  color: #1D2D44; /* New Dark Blue */
 }
 
 html {
   scroll-behavior: smooth;
-  color: #1D2D44; /* New Dark Blue */
 }
 
 .rtl {
@@ -25,16 +17,6 @@ html {
 
 .ltr {
   direction: ltr;
-}
-
-/* Ensure all headings use the new Dark Blue */
-h1, h2, h3, h4, h5, h6 {
-  color: #1D2D44 !important; /* New Dark Blue for all headings */
-}
-
-/* Ensure all paragraphs, labels, and text elements use the new color */
-p, label, span, div, a, li, td, th, input, textarea, select {
-  color: #1D2D44; /* New Dark Blue */
 }
 
 /* Custom scrollbar */
@@ -95,7 +77,7 @@ p, label, span, div, a, li, td, th, input, textarea, select {
 /* Button animations */
 .btn-primary {
   background: linear-gradient(135deg, #E5395F 0%, #d91e4a 100%); /* New Vibrant Red gradient */
-  color: #FFFFFF !important; /* White text for primary buttons */
+  color: #FFFFFF; /* White text */
   transition: all 0.3s ease;
 }
 
@@ -103,22 +85,25 @@ p, label, span, div, a, li, td, th, input, textarea, select {
   background: linear-gradient(135deg, #d91e4a 0%, #b91c3c 100%); /* Darker red gradient on hover */
   transform: translateY(-1px);
   box-shadow: 0 4px 15px rgba(229, 57, 95, 0.3); /* New Vibrant Red shadow */
-  color: #FFFFFF !important; /* Ensure white text on hover */
 }
 
 .btn-secondary {
   transition: all 0.3s ease;
-  color: #1D2D44 !important; /* New Dark Blue text */
+  color: #1D2D44; /* New Dark Blue text */
   border-color: #E5395F; /* New Vibrant Red border */
 }
 
 .btn-secondary:hover {
   background-color: #fef2f4; /* Light red background on hover */
-  color: #E5395F !important; /* New Vibrant Red text on hover */
+  color: #E5395F; /* New Vibrant Red text on hover */
   transform: translateY(-1px);
 }
 
-/* Text color overrides with higher specificity */
+/* Text color overrides */
+h1, h2, h3, h4, h5, h6 {
+  color: #1D2D44; /* New Dark Blue for headings */
+}
+
 .text-dark-500 {
   color: #1D2D44 !important; /* New Dark Blue */
 }
@@ -133,28 +118,6 @@ p, label, span, div, a, li, td, th, input, textarea, select {
 
 .text-highlight-500 {
   color: #FFC107 !important; /* Brand Yellow */
-}
-
-/* Ensure gray text uses appropriate shades while maintaining readability */
-.text-gray-600 {
-  color: #475569 !important; /* Darker gray for better contrast */
-}
-
-.text-gray-700 {
-  color: #334155 !important; /* Even darker gray */
-}
-
-.text-gray-500 {
-  color: #64748b !important; /* Medium gray */
-}
-
-.text-gray-400 {
-  color: #94a3b8 !important; /* Light gray for subtle elements */
-}
-
-/* White text overrides for specific cases */
-.text-white {
-  color: #FFFFFF !important;
 }
 
 /* Background color overrides */
@@ -223,75 +186,11 @@ p, label, span, div, a, li, td, th, input, textarea, select {
   background: linear-gradient(to right, #E5395F, #FFC107);
 }
 
-/* Logo and brand colors - specific overrides */
+/* Logo and brand colors */
 .text-accent-500 {
   color: #E5395F !important; /* Use vibrant red for R8 */
 }
 
 .text-primary-500 {
   color: #1D2D44 !important; /* Use dark blue for ESTATE */
-}
-
-/* Input and form element text colors */
-input, textarea, select {
-  color: #1D2D44 !important; /* New Dark Blue for form inputs */
-}
-
-input::placeholder, textarea::placeholder {
-  color: #94a3b8 !important; /* Light gray for placeholders */
-}
-
-/* Link colors */
-a {
-  color: #1D2D44; /* Default link color */
-}
-
-a:hover {
-  color: #E5395F; /* Vibrant red on hover */
-}
-
-/* Table text */
-table, th, td {
-  color: #1D2D44 !important; /* New Dark Blue for table content */
-}
-
-/* List text */
-ul, ol, li {
-  color: #1D2D44 !important; /* New Dark Blue for lists */
-}
-
-/* Button text - ensure proper contrast */
-button {
-  color: #1D2D44; /* Default button text color */
-}
-
-/* Specific overrides for elements that should remain white */
-.btn-primary, .btn-primary *, 
-.bg-primary-500 *, 
-.bg-dark-500 *,
-.text-white, .text-white * {
-  color: #FFFFFF !important;
-}
-
-/* Ensure navigation and header text uses the new color */
-nav, nav *, header, header * {
-  color: #1D2D44;
-}
-
-/* Footer text should remain white on dark background */
-footer, footer * {
-  color: #FFFFFF !important;
-}
-
-/* Ensure proper contrast for success/error states */
-.text-green-500, .text-green-600, .text-green-700 {
-  color: #059669 !important;
-}
-
-.text-red-500, .text-red-600, .text-red-700 {
-  color: #dc2626 !important;
-}
-
-.text-yellow-500, .text-yellow-600 {
-  color: #d97706 !important;
 }
