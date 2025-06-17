@@ -325,7 +325,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
         .from('reviews')
         .select(`
           *,
-          profiles(first_name, last_name),
+          profiles!reviews_profile_id_fkey(first_name, last_name),
           companies(name)
         `)
         .order('created_at', { ascending: false })
@@ -345,7 +345,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
         .select(`
           *,
           reviews(title, companies(name)),
-          profiles(first_name, last_name)
+          profiles!reports_reporter_profile_id_fkey(first_name, last_name)
         `)
         .order('created_at', { ascending: false });
 
