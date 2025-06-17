@@ -1,3 +1,62 @@
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+// Types
+export interface Profile {
+  id: string
+  first_name: string | null
+  last_name: string | null
+  avatar_url: string | null
+  is_admin: boolean
+  is_suspended: boolean
+  updated_at: string
+}
+
+export interface Company {
+  id: number
+  name: string | null
+  logo_url: string | null
+  website: string | null
+  domain_name: string | null
+  is_claimed: boolean | null
+  category_id: number | null
+  established_in: number | null
+  location: string | null
+  description: string | null
+  created_at: string
+}
+
+export interface Review {
+  id: number
+  created_at: string
+  profile_id: string | null
+  company_id: number | null
+  title: string | null
+  body: string | null
+  rating_communication: number | null
+  rating_responsiveness: number | null
+  rating_value: number | null
+  rating_friendliness: number | null
+  overall_rating: number | null
+  date_of_experience: string | null
+  has_document: boolean | null
+  is_anonymous: boolean | null
+  status: 'pending_approval' | 'published' | 'removed' | 'flagged_for_review' | null
+}
+
+export interface CompanyReply {
+  id: number
+  created_at: string
+  reply_body: string | null
+  review_id: number | null
+  profile_id: string | null
+  status: string | null
+}
+
 // Review vote functions - Updated to handle both helpful and not_helpful votes
 export const toggleReviewVote = async (
   reviewId: number, 
