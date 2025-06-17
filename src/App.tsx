@@ -31,13 +31,13 @@ function App() {
 
   const text = {
     ar: {
-      heroTitle: 'اقرأ التقييمات. اكتب التقييمات. ابحث عن شركة يمكنك الوثوق بها.',
+      heroTitle: 'منصة تقييم القطاع العقاري الأولي في مصر',
       heroSubtitle: 'منصة التقييم الرائدة للعقارات في مصر',
       ctaQuestion: 'لسا طالع من تجربة مع شركة ؟',
       ctaAction: 'شاركها معانا'
     },
     en: {
-      heroTitle: 'Read reviews. Write reviews. Find a company you can trust.',
+      heroTitle: 'The Primary Real Estate Sector Review Platform in Egypt',
       heroSubtitle: 'The leading real estate review platform in Egypt',
       ctaQuestion: 'Just had an experience with a company?',
       ctaAction: 'Share it with us'
@@ -58,9 +58,13 @@ function App() {
     }
   };
 
-  const handleSearch = (query: string) => {
+  const handleSearch = (query: string, categoryId?: number | null) => {
     setSearchQuery(query);
-    setSelectedCategoryId(null); // Clear category filter when searching
+    if (categoryId) {
+      setSelectedCategoryId(categoryId);
+    } else {
+      setSelectedCategoryId(null); // Clear category filter when searching with text only
+    }
     setCurrentPage('search');
   };
 
