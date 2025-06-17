@@ -126,9 +126,9 @@ const WriteReview: React.FC<WriteReviewProps> = ({
         const { data: { user }, error: authError } = await supabase.auth.getUser();
         
         if (authError || !user) {
-          // Save navigation history before redirecting to login
-          // This will save the current write-review page with companyId
-          onNavigate('login', undefined, undefined, true);
+          // DON'T save navigation history here - preserve the existing history
+          // The history should already contain the company page from when user clicked "Write Review"
+          onNavigate('login', undefined, undefined, false);
           return;
         }
 
