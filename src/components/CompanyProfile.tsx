@@ -1152,7 +1152,7 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
                       >
                         <ThumbsUp className="h-4 w-4" />
                         <span className="text-sm">{text[language].helpful}</span>
-                        {review.vote_count > 0 && (
+                        {(review.vote_count || 0) > 0 && (
                           <span className="text-sm">({review.vote_count})</span>
                         )}
                       </button>
@@ -1228,7 +1228,7 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
                         >
                           <ThumbsUp className="h-3 w-3" />
                           <span>{text[language].helpful}</span>
-                          {review.company_reply!.vote_count > 0 && (
+                          {(review.company_reply!.vote_count || 0) > 0 && (
                             <span>({review.company_reply!.vote_count})</span>
                           )}
                         </button>

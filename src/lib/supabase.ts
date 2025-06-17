@@ -169,16 +169,14 @@ export interface CompanyWithCategory extends Company {
 
 export interface ReviewWithProfile extends Review {
   profiles: Profile | null
-  helpful_votes?: number
-  not_helpful_votes?: number
-  user_vote_type?: 'helpful' | 'not_helpful' | null
+  vote_count?: number
+  user_has_voted?: boolean
   company_reply?: CompanyReplyWithVotes | null
 }
 
 export interface CompanyReplyWithVotes extends CompanyReply {
-  helpful_votes?: number
-  not_helpful_votes?: number
-  user_vote_type?: 'helpful' | 'not_helpful' | null
+  vote_count?: number
+  user_has_voted?: boolean
 }
 
 // Notification functions
@@ -580,26 +578,14 @@ export const getReviewsByCompanyId = async (companyId: number, userId?: string):
     if (userId) {
       const reviewsWithVotes = await Promise.all(
         data.map(async (review) => {
-          // Get review vote counts by type
-          const { data: helpfulVotes } = await supabase
+          // Get review vote counts
+          const { data: votes } = await supabase
             .from('review_votes')
-            .select('profile_id')
-            .eq('review_id', review.id)
-            .eq('vote_type', 'helpful');
+            .select('vote_type, profile_id')
+            .eq('review_id', review.id);
 
-          const { data: notHelpfulVotes } = await supabase
-            .from('review_votes')
-            .select('profile_id')
-            .eq('review_id', review.id)
-            .eq('vote_type', 'not_helpful');
-
-          // Check user's vote on review
-          const { data: userVote } = await supabase
-            .from('review_votes')
-            .select('vote_type')
-            .eq('review_id', review.id)
-            .eq('profile_id', userId)
-            .limit(1);
+          const voteCount = votes?.filter(v => v.vote_type === 'helpful').length || 0;
+          const userHasVoted = votes?.some(v => v.profile_id === userId && v.vote_type === 'helpful') || false;
 
           // Find company reply for this review
           const companyReply = replies?.find(reply => reply.review_id === review.id) || null;
@@ -607,40 +593,26 @@ export const getReviewsByCompanyId = async (companyId: number, userId?: string):
           // If there's a reply, get its vote data
           let companyReplyWithVotes: CompanyReplyWithVotes | null = null;
           if (companyReply) {
-            // Get reply vote counts by type
-            const { data: replyHelpfulVotes } = await supabase
+            // Get reply vote counts
+            const { data: replyVotes } = await supabase
               .from('reply_votes')
-              .select('profile_id')
-              .eq('reply_id', companyReply.id)
-              .eq('vote_type', 'helpful');
+              .select('vote_type, profile_id')
+              .eq('reply_id', companyReply.id);
 
-            const { data: replyNotHelpfulVotes } = await supabase
-              .from('reply_votes')
-              .select('profile_id')
-              .eq('reply_id', companyReply.id)
-              .eq('vote_type', 'not_helpful');
-
-            // Check user's vote on reply
-            const { data: userReplyVote } = await supabase
-              .from('reply_votes')
-              .select('vote_type')
-              .eq('reply_id', companyReply.id)
-              .eq('profile_id', userId)
-              .limit(1);
+            const replyVoteCount = replyVotes?.filter(v => v.vote_type === 'helpful').length || 0;
+            const userHasVotedReply = replyVotes?.some(v => v.profile_id === userId && v.vote_type === 'helpful') || false;
 
             companyReplyWithVotes = {
               ...companyReply,
-              helpful_votes: replyHelpfulVotes?.length || 0,
-              not_helpful_votes: replyNotHelpfulVotes?.length || 0,
-              user_vote_type: userReplyVote?.[0]?.vote_type || null
+              vote_count: replyVoteCount,
+              user_has_voted: userHasVotedReply
             };
           }
 
           return {
             ...review,
-            helpful_votes: helpfulVotes?.length || 0,
-            not_helpful_votes: notHelpfulVotes?.length || 0,
-            user_vote_type: userVote?.[0]?.vote_type || null,
+            vote_count: voteCount,
+            user_has_voted: userHasVoted,
             company_reply: companyReplyWithVotes
           };
         })
@@ -652,18 +624,13 @@ export const getReviewsByCompanyId = async (companyId: number, userId?: string):
     // If no user, just get vote counts and replies
     const reviewsWithVotes = await Promise.all(
       data.map(async (review) => {
-        // Get review vote counts by type
-        const { data: helpfulVotes } = await supabase
+        // Get review vote counts
+        const { data: votes } = await supabase
           .from('review_votes')
-          .select('profile_id')
-          .eq('review_id', review.id)
-          .eq('vote_type', 'helpful');
+          .select('vote_type')
+          .eq('review_id', review.id);
 
-        const { data: notHelpfulVotes } = await supabase
-          .from('review_votes')
-          .select('profile_id')
-          .eq('review_id', review.id)
-          .eq('vote_type', 'not_helpful');
+        const voteCount = votes?.filter(v => v.vote_type === 'helpful').length || 0;
 
         // Find company reply for this review
         const companyReply = replies?.find(reply => reply.review_id === review.id) || null;
@@ -671,31 +638,24 @@ export const getReviewsByCompanyId = async (companyId: number, userId?: string):
         // If there's a reply, get its vote counts
         let companyReplyWithVotes: CompanyReplyWithVotes | null = null;
         if (companyReply) {
-          const { data: replyHelpfulVotes } = await supabase
+          const { data: replyVotes } = await supabase
             .from('reply_votes')
-            .select('profile_id')
-            .eq('reply_id', companyReply.id)
-            .eq('vote_type', 'helpful');
+            .select('vote_type')
+            .eq('reply_id', companyReply.id);
 
-          const { data: replyNotHelpfulVotes } = await supabase
-            .from('reply_votes')
-            .select('profile_id')
-            .eq('reply_id', companyReply.id)
-            .eq('vote_type', 'not_helpful');
+          const replyVoteCount = replyVotes?.filter(v => v.vote_type === 'helpful').length || 0;
 
           companyReplyWithVotes = {
             ...companyReply,
-            helpful_votes: replyHelpfulVotes?.length || 0,
-            not_helpful_votes: replyNotHelpfulVotes?.length || 0,
-            user_vote_type: null
+            vote_count: replyVoteCount,
+            user_has_voted: false
           };
         }
 
         return {
           ...review,
-          helpful_votes: helpfulVotes?.length || 0,
-          not_helpful_votes: notHelpfulVotes?.length || 0,
-          user_vote_type: null,
+          vote_count: voteCount,
+          user_has_voted: false,
           company_reply: companyReplyWithVotes
         };
       })
@@ -708,12 +668,11 @@ export const getReviewsByCompanyId = async (companyId: number, userId?: string):
   }
 };
 
-// Updated review vote functions with new voting logic
+// Updated review vote function - simplified to only handle "helpful" votes
 export const toggleReviewVote = async (
   reviewId: number, 
-  userId: string, 
-  voteType: 'helpful' | 'not_helpful'
-): Promise<{ success: boolean; helpfulVotes: number; notHelpfulVotes: number; userVoteType: 'helpful' | 'not_helpful' | null }> => {
+  userId: string
+): Promise<{ success: boolean; voteCount: number; isVoted: boolean }> => {
   try {
     // Check if user has already voted
     const { data: existingVote, error: checkError } = await supabase
@@ -728,10 +687,10 @@ export const toggleReviewVote = async (
       throw checkError;
     }
 
-    const currentVoteType = existingVote?.[0]?.vote_type || null;
+    const hasVoted = existingVote && existingVote.length > 0;
 
-    if (currentVoteType === voteType) {
-      // User clicked the same vote type - remove the vote
+    if (hasVoted) {
+      // User has voted - remove the vote
       const { error: deleteError } = await supabase
         .from('review_votes')
         .delete()
@@ -742,78 +701,52 @@ export const toggleReviewVote = async (
         console.error('Supabase error in toggleReviewVote (delete):', deleteError)
         throw deleteError;
       }
-    } else if (currentVoteType === null) {
-      // No existing vote - insert new vote
+    } else {
+      // User hasn't voted - add a helpful vote
       const { error: insertError } = await supabase
         .from('review_votes')
         .insert([{ 
           review_id: reviewId, 
           profile_id: userId, 
-          vote_type: voteType 
+          vote_type: 'helpful'
         }]);
 
       if (insertError) {
         console.error('Supabase error in toggleReviewVote (insert):', insertError)
         throw insertError;
       }
-    } else {
-      // Different vote type exists - update it
-      const { error: updateError } = await supabase
-        .from('review_votes')
-        .update({ vote_type: voteType })
-        .eq('review_id', reviewId)
-        .eq('profile_id', userId);
-
-      if (updateError) {
-        console.error('Supabase error in toggleReviewVote (update):', updateError)
-        throw updateError;
-      }
     }
 
-    // Get updated vote counts
-    const { data: helpfulVotes } = await supabase
-      .from('review_votes')
-      .select('profile_id')
-      .eq('review_id', reviewId)
-      .eq('vote_type', 'helpful');
-
-    const { data: notHelpfulVotes } = await supabase
-      .from('review_votes')
-      .select('profile_id')
-      .eq('review_id', reviewId)
-      .eq('vote_type', 'not_helpful');
-
-    // Get user's current vote
-    const { data: userVote } = await supabase
+    // Get updated vote count
+    const { data: votes } = await supabase
       .from('review_votes')
       .select('vote_type')
       .eq('review_id', reviewId)
-      .eq('profile_id', userId)
-      .limit(1);
+      .eq('vote_type', 'helpful');
+
+    const voteCount = votes?.length || 0;
+    const isVoted = !hasVoted; // If they had voted, now they don't. If they hadn't voted, now they do.
 
     return { 
       success: true, 
-      helpfulVotes: helpfulVotes?.length || 0,
-      notHelpfulVotes: notHelpfulVotes?.length || 0,
-      userVoteType: userVote?.[0]?.vote_type || null
+      voteCount,
+      isVoted
     };
   } catch (error: any) {
     console.error('Error toggling review vote:', error);
     return { 
       success: false, 
-      helpfulVotes: 0, 
-      notHelpfulVotes: 0, 
-      userVoteType: null 
+      voteCount: 0, 
+      isVoted: false 
     };
   }
 };
 
-// Updated reply vote functions with new voting logic
+// Updated reply vote function - simplified to only handle "helpful" votes
 export const toggleReplyVote = async (
   replyId: string, 
-  userId: string, 
-  voteType: 'helpful' | 'not_helpful'
-): Promise<{ success: boolean; helpfulVotes: number; notHelpfulVotes: number; userVoteType: 'helpful' | 'not_helpful' | null }> => {
+  userId: string
+): Promise<{ success: boolean; voteCount: number; isVoted: boolean }> => {
   try {
     // Check if user has already voted
     const { data: existingVote, error: checkError } = await supabase
@@ -828,10 +761,10 @@ export const toggleReplyVote = async (
       throw checkError;
     }
 
-    const currentVoteType = existingVote?.[0]?.vote_type || null;
+    const hasVoted = existingVote && existingVote.length > 0;
 
-    if (currentVoteType === voteType) {
-      // User clicked the same vote type - remove the vote
+    if (hasVoted) {
+      // User has voted - remove the vote
       const { error: deleteError } = await supabase
         .from('reply_votes')
         .delete()
@@ -842,68 +775,43 @@ export const toggleReplyVote = async (
         console.error('Supabase error in toggleReplyVote (delete):', deleteError)
         throw deleteError;
       }
-    } else if (currentVoteType === null) {
-      // No existing vote - insert new vote
+    } else {
+      // User hasn't voted - add a helpful vote
       const { error: insertError } = await supabase
         .from('reply_votes')
         .insert([{ 
           reply_id: replyId, 
           profile_id: userId, 
-          vote_type: voteType 
+          vote_type: 'helpful'
         }]);
 
       if (insertError) {
         console.error('Supabase error in toggleReplyVote (insert):', insertError)
         throw insertError;
       }
-    } else {
-      // Different vote type exists - update it
-      const { error: updateError } = await supabase
-        .from('reply_votes')
-        .update({ vote_type: voteType })
-        .eq('reply_id', replyId)
-        .eq('profile_id', userId);
-
-      if (updateError) {
-        console.error('Supabase error in toggleReplyVote (update):', updateError)
-        throw updateError;
-      }
     }
 
-    // Get updated vote counts
-    const { data: helpfulVotes } = await supabase
-      .from('reply_votes')
-      .select('profile_id')
-      .eq('reply_id', replyId)
-      .eq('vote_type', 'helpful');
-
-    const { data: notHelpfulVotes } = await supabase
-      .from('reply_votes')
-      .select('profile_id')
-      .eq('reply_id', replyId)
-      .eq('vote_type', 'not_helpful');
-
-    // Get user's current vote
-    const { data: userVote } = await supabase
+    // Get updated vote count
+    const { data: votes } = await supabase
       .from('reply_votes')
       .select('vote_type')
       .eq('reply_id', replyId)
-      .eq('profile_id', userId)
-      .limit(1);
+      .eq('vote_type', 'helpful');
+
+    const voteCount = votes?.length || 0;
+    const isVoted = !hasVoted; // If they had voted, now they don't. If they hadn't voted, now they do.
 
     return { 
       success: true, 
-      helpfulVotes: helpfulVotes?.length || 0,
-      notHelpfulVotes: notHelpfulVotes?.length || 0,
-      userVoteType: userVote?.[0]?.vote_type || null
+      voteCount,
+      isVoted
     };
   } catch (error: any) {
     console.error('Error toggling reply vote:', error);
     return { 
       success: false, 
-      helpfulVotes: 0, 
-      notHelpfulVotes: 0, 
-      userVoteType: null 
+      voteCount: 0, 
+      isVoted: false 
     };
   }
 };
