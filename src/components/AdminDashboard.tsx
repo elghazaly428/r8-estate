@@ -5,19 +5,21 @@ import {
   FileText, 
   AlertTriangle, 
   CheckCircle, 
+  X, 
   Search,
-  X,
-  UserPlus,
-  Mail,
-  Building,
-  Shield,
-  Eye,
+  Plus,
   Edit,
   Trash2,
+  Eye,
+  UserPlus,
+  Shield,
+  Clock,
   Filter,
+  Download,
+  Upload,
+  MoreHorizontal,
   ChevronDown,
-  Plus,
-  ExternalLink
+  Info
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import Header from './Header';
@@ -28,7 +30,14 @@ import { supabase } from '../lib/supabase';
 interface AdminDashboardProps {
   language: 'ar' | 'en';
   onLanguageChange: (lang: 'ar' | 'en') => void;
-  onNavigate: (page: string, companyId?: number) => void;
+  onNavigate: (page: string) => void;
+}
+
+interface AdminStats {
+  totalUsers: number;
+  totalCompanies: number;
+  totalReviews: number;
+  pendingReports: number;
 }
 
 interface Company {
@@ -39,6 +48,8 @@ interface Company {
   domain_name: string | null;
   is_claimed: boolean | null;
   category_id: number | null;
+  description: string | null;
+  established_in: number | null;
   location: string | null;
   created_at: string;
   categories?: {
@@ -50,535 +61,86 @@ interface UserProfile {
   id: string;
   first_name: string | null;
   last_name: string | null;
-  email?: string;
+  avatar_url: string | null;
+  is_admin: boolean | null;
+  is_suspended: boolean | null;
+  updated_at: string;
+  email?: string; // We'll get this from auth if available
 }
 
-interface AssignRepresentativeModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  company: Company | null;
-  language: 'ar' | 'en';
-  onSuccess: () => void;
+interface Review {
+  id: number;
+  title: string | null;
+  body: string | null;
+  overall_rating: number | null;
+  status: string | null;
+  created_at: string;
+  is_anonymous: boolean | null;
+  profiles?: {
+    first_name: string | null;
+    last_name: string | null;
+  } | null;
+  companies?: {
+    name: string | null;
+  } | null;
 }
 
-const AssignRepresentativeModal: React.FC<AssignRepresentativeModalProps> = ({
-  isOpen,
-  onClose,
-  company,
-  language,
-  onSuccess
-}) => {
-  const [emailQuery, setEmailQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
-  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
-  const [isSearching, setIsSearching] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showConfirmation, setShowConfirmation] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<string>('');
-
-  const text = {
-    ar: {
-      assignRepresentative: 'تعيين ممثل',
-      assignRepresentativeFor: 'تعيين ممثل لـ',
-      searchByEmail: 'البحث بالبريد الإلكتروني',
-      emailPlaceholder: 'اكتب البريد الإلكتروني...',
-      searching: 'جاري البحث...',
-      noResults: 'لا توجد نتائج',
-      selectUser: 'اختيار المستخدم',
-      selectedUser: 'المستخدم المختار',
-      confirmAssignment: 'تأكيد التعيين',
-      cancel: 'إلغاء',
-      confirmationMessage: 'أنت على وشك منح {userName} صلاحية ممثل لـ {companyName}. هل أنت متأكد؟',
-      confirm: 'تأكيد',
-      profileAlreadyManaged: 'هذا الملف الشخصي مُدار بالفعل.',
-      userAlreadyManaging: 'هذا المستخدم يدير شركة أخرى بالفعل.',
-      assignmentSuccessful: 'تم تعيين الممثل بنجاح',
-      domainMismatch: 'يجب أن يكون البريد الإلكتروني من نفس نطاق الشركة',
-      minCharacters: 'اكتب على الأقل 3 أحرف للبحث',
-      submitting: 'جاري التعيين...',
-      noDomainSet: 'لم يتم تعيين نطاق للشركة',
-      searchAllUsers: 'البحث في جميع المستخدمين (لا يوجد نطاق محدد)',
-      updateDomain: 'تحديث النطاق'
-    },
-    en: {
-      assignRepresentative: 'Assign Representative',
-      assignRepresentativeFor: 'Assign Representative for',
-      searchByEmail: 'Search by Email',
-      emailPlaceholder: 'Type email address...',
-      searching: 'Searching...',
-      noResults: 'No results found',
-      selectUser: 'Select User',
-      selectedUser: 'Selected User',
-      confirmAssignment: 'Confirm Assignment',
-      cancel: 'Cancel',
-      confirmationMessage: 'You are about to grant {userName} representative access for {companyName}. Are you sure?',
-      confirm: 'Confirm',
-      profileAlreadyManaged: 'This profile is already managed.',
-      userAlreadyManaging: 'This user is already managing another company.',
-      assignmentSuccessful: 'Representative assigned successfully',
-      domainMismatch: 'Email must be from the same company domain',
-      minCharacters: 'Type at least 3 characters to search',
-      submitting: 'Assigning...',
-      noDomainSet: 'No domain set for this company',
-      searchAllUsers: 'Searching all users (no domain restriction)',
-      updateDomain: 'Update Domain'
-    }
-  };
-
-  // Reset state when modal opens/closes
-  useEffect(() => {
-    if (isOpen) {
-      setEmailQuery('');
-      setSearchResults([]);
-      setSelectedUser(null);
-      setShowConfirmation(false);
-      setDebugInfo('');
-    }
-  }, [isOpen]);
-
-  // Live search functionality
-  useEffect(() => {
-    const performSearch = async () => {
-      if (emailQuery.length < 3) {
-        setSearchResults([]);
-        setDebugInfo('');
-        return;
-      }
-
-      setIsSearching(true);
-      setDebugInfo(`Searching for: "${emailQuery}"`);
-
-      try {
-        // Get users from auth.users table
-        const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
-
-        if (authError) {
-          console.error('Error fetching auth users:', authError);
-          setSearchResults([]);
-          setDebugInfo(`Error: ${authError.message}`);
-          return;
-        }
-
-        setDebugInfo(`Found ${authUsers.users.length} total users in auth`);
-
-        // Filter users by email search query
-        let filteredUsers = authUsers.users.filter(user => {
-          if (!user.email) return false;
-          return user.email.toLowerCase().includes(emailQuery.toLowerCase());
-        });
-
-        setDebugInfo(prev => prev + `\nFiltered to ${filteredUsers.length} users matching "${emailQuery}"`);
-
-        // If company has domain_name, apply domain filtering
-        if (company?.domain_name) {
-          const domainFilteredUsers = filteredUsers.filter(user => {
-            if (!user.email) return false;
-            const emailDomain = user.email.split('@')[1];
-            return emailDomain === company.domain_name;
-          });
-          
-          setDebugInfo(prev => prev + `\nDomain filter (${company.domain_name}): ${domainFilteredUsers.length} users`);
-          filteredUsers = domainFilteredUsers;
-        } else {
-          setDebugInfo(prev => prev + `\nNo domain filter applied (company.domain_name is null)`);
-        }
-
-        // Get profile data for filtered users
-        const userIds = filteredUsers.map(user => user.id);
-        
-        if (userIds.length === 0) {
-          setSearchResults([]);
-          setDebugInfo(prev => prev + `\nNo users found after filtering`);
-          return;
-        }
-
-        const { data: profiles, error: profileError } = await supabase
-          .from('profiles')
-          .select('id, first_name, last_name')
-          .in('id', userIds);
-
-        if (profileError) {
-          console.error('Error fetching profiles:', profileError);
-          setSearchResults([]);
-          setDebugInfo(prev => prev + `\nProfile fetch error: ${profileError.message}`);
-          return;
-        }
-
-        // Combine auth and profile data
-        const combinedResults = filteredUsers.map(authUser => {
-          const profile = profiles?.find(p => p.id === authUser.id);
-          return {
-            id: authUser.id,
-            email: authUser.email,
-            first_name: profile?.first_name || null,
-            last_name: profile?.last_name || null
-          };
-        });
-
-        setSearchResults(combinedResults);
-        setDebugInfo(prev => prev + `\nFinal results: ${combinedResults.length} users`);
-        
-        // Log the specific user we're looking for
-        const targetUser = combinedResults.find(u => u.email === 'mahmoud@palmhillsdevelopments.com');
-        if (targetUser) {
-          setDebugInfo(prev => prev + `\n✅ Found target user: ${targetUser.email}`);
-        } else {
-          setDebugInfo(prev => prev + `\n❌ Target user mahmoud@palmhillsdevelopments.com not found`);
-        }
-        
-      } catch (error) {
-        console.error('Error in search:', error);
-        setSearchResults([]);
-        setDebugInfo(`Search error: ${error}`);
-      } finally {
-        setIsSearching(false);
-      }
-    };
-
-    const debounceTimer = setTimeout(performSearch, 300);
-    return () => clearTimeout(debounceTimer);
-  }, [emailQuery, company?.domain_name]);
-
-  const handleUserSelect = (user: UserProfile) => {
-    setSelectedUser(user);
-    setEmailQuery(user.email || '');
-    setSearchResults([]);
-  };
-
-  const handleConfirmAssignment = () => {
-    if (!selectedUser || !company) return;
-    setShowConfirmation(true);
-  };
-
-  const executeAssignment = async () => {
-    if (!selectedUser || !company) return;
-
-    setIsSubmitting(true);
-
-    try {
-      // Step 1: Check if company is already claimed
-      const { data: companyData, error: companyError } = await supabase
-        .from('companies')
-        .select('is_claimed')
-        .eq('id', company.id)
-        .single();
-
-      if (companyError) {
-        throw new Error('Failed to check company status');
-      }
-
-      if (companyData.is_claimed) {
-        toast.error(text[language].profileAlreadyManaged);
-        return;
-      }
-
-      // Step 2: Check if user is already managing another company
-      const { data: existingRep, error: repError } = await supabase
-        .from('company_representatives')
-        .select('company_id')
-        .eq('profile_id', selectedUser.id)
-        .limit(1);
-
-      if (repError) {
-        throw new Error('Failed to check user representative status');
-      }
-
-      if (existingRep && existingRep.length > 0) {
-        toast.error(text[language].userAlreadyManaging);
-        return;
-      }
-
-      // Step 3: Execute the assignment
-      // Update company as claimed
-      const { error: updateError } = await supabase
-        .from('companies')
-        .update({ is_claimed: true })
-        .eq('id', company.id);
-
-      if (updateError) {
-        throw new Error('Failed to update company status');
-      }
-
-      // Insert company representative
-      const { error: insertRepError } = await supabase
-        .from('company_representatives')
-        .insert({
-          company_id: company.id,
-          profile_id: selectedUser.id
-        });
-
-      if (insertRepError) {
-        throw new Error('Failed to assign representative');
-      }
-
-      // Create notification for the user
-      const userName = `${selectedUser.first_name || ''} ${selectedUser.last_name || ''}`.trim() || 'User';
-      const notificationMessage = language === 'ar' 
-        ? `تم منحك صلاحية ممثل لشركة ${company.name}`
-        : `You have been granted representative access for ${company.name}`;
-
-      const { error: notificationError } = await supabase
-        .from('notifications')
-        .insert({
-          recipient_profile_id: selectedUser.id,
-          type: 'representative_assigned',
-          message: notificationMessage,
-          link_url: `/company/${company.id}`
-        });
-
-      if (notificationError) {
-        console.error('Failed to create notification:', notificationError);
-        // Don't fail the whole operation for notification error
-      }
-
-      toast.success(text[language].assignmentSuccessful);
-      onSuccess();
-      onClose();
-    } catch (error: any) {
-      console.error('Error executing assignment:', error);
-      toast.error(error.message || 'Assignment failed');
-    } finally {
-      setIsSubmitting(false);
-      setShowConfirmation(false);
-    }
-  };
-
-  const getUserDisplayName = (user: UserProfile) => {
-    const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim();
-    return fullName || user.email || 'Unknown User';
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-bold text-dark-500">
-            {text[language].assignRepresentativeFor} {company?.name}
-          </h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors duration-200"
-            disabled={isSubmitting}
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {!showConfirmation ? (
-          <>
-            {/* Company Domain Info */}
-            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-              <div className="text-sm">
-                <strong>Company:</strong> {company?.name}
-              </div>
-              <div className="text-sm">
-                <strong>Domain:</strong> {company?.domain_name || 'Not set'}
-              </div>
-              {!company?.domain_name && (
-                <div className="text-xs text-orange-600 mt-1">
-                  ⚠️ {text[language].noDomainSet} - {text[language].searchAllUsers}
-                </div>
-              )}
-            </div>
-
-            {/* Search Section */}
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-dark-500 mb-2">
-                {text[language].searchByEmail}
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 right-0 pr-3 rtl:left-0 rtl:right-auto rtl:pl-3 rtl:pr-0 flex items-center pointer-events-none">
-                  <Search className="h-4 w-4 text-gray-400" />
-                </div>
-                <input
-                  type="email"
-                  value={emailQuery}
-                  onChange={(e) => setEmailQuery(e.target.value)}
-                  placeholder={text[language].emailPlaceholder}
-                  className="w-full px-4 py-3 pr-10 rtl:pl-10 rtl:pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200"
-                  dir="ltr"
-                  disabled={isSubmitting}
-                />
-              </div>
-              
-              {/* Domain hint */}
-              {company?.domain_name ? (
-                <p className="text-xs text-gray-500 mt-1">
-                  {language === 'ar' ? 'يجب أن يكون من نطاق:' : 'Must be from domain:'} @{company.domain_name}
-                </p>
-              ) : (
-                <p className="text-xs text-orange-600 mt-1">
-                  {text[language].searchAllUsers}
-                </p>
-              )}
-            </div>
-
-            {/* Debug Info */}
-            {debugInfo && (
-              <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-                <details>
-                  <summary className="text-sm font-medium text-blue-800 cursor-pointer">
-                    Debug Info (Click to expand)
-                  </summary>
-                  <pre className="text-xs text-blue-700 mt-2 whitespace-pre-wrap">
-                    {debugInfo}
-                  </pre>
-                </details>
-              </div>
-            )}
-
-            {/* Search Results */}
-            {isSearching && (
-              <div className="text-center py-4">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-500 mx-auto mb-2"></div>
-                <p className="text-gray-500 text-sm">{text[language].searching}</p>
-              </div>
-            )}
-
-            {emailQuery.length >= 3 && !isSearching && searchResults.length === 0 && (
-              <div className="text-center py-4">
-                <p className="text-gray-500 text-sm">{text[language].noResults}</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  Try searching for: mahmoud@palmhillsdevelopments.com
-                </p>
-              </div>
-            )}
-
-            {searchResults.length > 0 && (
-              <div className="mb-6">
-                <div className="border border-gray-200 rounded-lg max-h-40 overflow-y-auto">
-                  {searchResults.map((user) => (
-                    <button
-                      key={user.id}
-                      onClick={() => handleUserSelect(user)}
-                      className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0"
-                    >
-                      <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                        <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-                          <Mail className="h-4 w-4 text-primary-500" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-dark-500">{getUserDisplayName(user)}</p>
-                          <p className="text-sm text-gray-500">{user.email}</p>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Selected User */}
-            {selectedUser && (
-              <div className="mb-6 p-4 bg-primary-50 rounded-lg border border-primary-200">
-                <h4 className="font-semibold text-dark-500 mb-2">{text[language].selectedUser}</h4>
-                <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                  <div className="w-10 h-10 bg-primary-500 rounded-full flex items-center justify-center">
-                    <Mail className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-dark-500">{getUserDisplayName(selectedUser)}</p>
-                    <p className="text-sm text-gray-600">{selectedUser.email}</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex space-x-3 rtl:space-x-reverse">
-              <button
-                onClick={onClose}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                disabled={isSubmitting}
-              >
-                {text[language].cancel}
-              </button>
-              <button
-                onClick={handleConfirmAssignment}
-                disabled={!selectedUser || isSubmitting}
-                className="flex-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {text[language].confirmAssignment}
-              </button>
-            </div>
-          </>
-        ) : (
-          /* Confirmation Dialog */
-          <div className="text-center">
-            <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle className="h-8 w-8 text-orange-500" />
-            </div>
-            
-            <h4 className="text-lg font-bold text-dark-500 mb-4">
-              {text[language].confirmAssignment}
-            </h4>
-            
-            <p className="text-gray-700 mb-6 leading-relaxed">
-              {text[language].confirmationMessage
-                .replace('{userName}', getUserDisplayName(selectedUser!))
-                .replace('{companyName}', company?.name || '')
-              }
-            </p>
-
-            <div className="flex space-x-3 rtl:space-x-reverse">
-              <button
-                onClick={() => setShowConfirmation(false)}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                disabled={isSubmitting}
-              >
-                {text[language].cancel}
-              </button>
-              <button
-                onClick={executeAssignment}
-                disabled={isSubmitting}
-                className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 rtl:space-x-reverse"
-              >
-                {isSubmitting ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    <span>{text[language].submitting}</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="h-4 w-4" />
-                    <span>{text[language].confirm}</span>
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
+interface Report {
+  id: string;
+  reason: string;
+  details: string | null;
+  status: string;
+  created_at: string;
+  review_id: number;
+  reporter_profile_id: string;
+  reviews?: {
+    title: string | null;
+    companies?: {
+      name: string | null;
+    } | null;
+  } | null;
+  profiles?: {
+    first_name: string | null;
+    last_name: string | null;
+  } | null;
+}
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageChange, onNavigate }) => {
   const { user, loading: authLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'companies' | 'users' | 'reports'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'companies' | 'reviews' | 'reports'>('overview');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [assignModalOpen, setAssignModalOpen] = useState(false);
-  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
-
-  // Stats state
-  const [stats, setStats] = useState({
+  
+  // Data states
+  const [stats, setStats] = useState<AdminStats>({
     totalUsers: 0,
     totalCompanies: 0,
     totalReviews: 0,
     pendingReports: 0
   });
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
+  
+  // Modal states
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showDebugInfo, setShowDebugInfo] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
+  const [isAssigning, setIsAssigning] = useState(false);
 
   const text = {
     ar: {
       adminDashboard: 'لوحة تحكم الأدمن',
       overview: 'نظرة عامة',
-      companies: 'الشركات',
       users: 'المستخدمين',
+      companies: 'الشركات',
+      reviews: 'التقييمات',
       reports: 'البلاغات',
       totalUsers: 'إجمالي المستخدمين',
       totalCompanies: 'إجمالي الشركات',
@@ -588,26 +150,41 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       accessDenied: 'غير مسموح بالوصول',
       notAuthorized: 'أنت غير مخول للوصول إلى هذه الصفحة',
       backToDashboard: 'العودة إلى لوحة التحكم',
-      companyName: 'اسم الشركة',
-      category: 'الفئة',
+      assignRepresentative: 'تعيين ممثل',
+      searchByEmail: 'البحث بالبريد الإلكتروني...',
+      selectUser: 'اختر مستخدم',
+      confirmAssignment: 'تأكيد التعيين',
+      cancel: 'إلغاء',
+      assign: 'تعيين',
+      assigning: 'جاري التعيين...',
+      assignmentSuccess: 'تم تعيين الممثل بنجاح',
+      assignmentError: 'حدث خطأ أثناء التعيين',
+      companyAlreadyClaimed: 'هذه الشركة مُدارة بالفعل',
+      userAlreadyRepresentative: 'هذا المستخدم يدير شركة أخرى بالفعل',
+      confirmAssignmentMessage: 'هل أنت متأكد من منح {userName} صلاحية إدارة {companyName}؟',
+      debugInfo: 'معلومات التشخيص',
+      domain: 'النطاق',
+      noDomain: 'لا يوجد نطاق',
       status: 'الحالة',
       claimed: 'مُدارة',
       unclaimed: 'غير مُدارة',
       actions: 'الإجراءات',
-      assignRepresentative: 'تعيين ممثل',
-      viewProfile: 'عرض الملف الشخصي',
-      editCompany: 'تعديل الشركة',
-      deleteCompany: 'حذف الشركة',
-      noCompanies: 'لا توجد شركات',
-      refreshData: 'تحديث البيانات',
-      domain: 'النطاق',
-      noDomain: 'لا يوجد نطاق'
+      name: 'الاسم',
+      email: 'البريد الإلكتروني',
+      admin: 'أدمن',
+      suspended: 'موقوف',
+      active: 'نشط',
+      noResults: 'لا توجد نتائج',
+      searchingUsers: 'جاري البحث عن المستخدمين...',
+      userNotFound: 'لم يتم العثور على مستخدمين',
+      domainMismatch: 'تحذير: لا يوجد نطاق محدد للشركة، البحث في جميع المستخدمين'
     },
     en: {
       adminDashboard: 'Admin Dashboard',
       overview: 'Overview',
-      companies: 'Companies',
       users: 'Users',
+      companies: 'Companies',
+      reviews: 'Reviews',
       reports: 'Reports',
       totalUsers: 'Total Users',
       totalCompanies: 'Total Companies',
@@ -617,26 +194,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       accessDenied: 'Access Denied',
       notAuthorized: 'You are not authorized to access this page',
       backToDashboard: 'Back to Dashboard',
-      companyName: 'Company Name',
-      category: 'Category',
+      assignRepresentative: 'Assign Representative',
+      searchByEmail: 'Search by email...',
+      selectUser: 'Select User',
+      confirmAssignment: 'Confirm Assignment',
+      cancel: 'Cancel',
+      assign: 'Assign',
+      assigning: 'Assigning...',
+      assignmentSuccess: 'Representative assigned successfully',
+      assignmentError: 'Error assigning representative',
+      companyAlreadyClaimed: 'This company is already managed',
+      userAlreadyRepresentative: 'This user is already managing another company',
+      confirmAssignmentMessage: 'Are you sure you want to grant {userName} representative access for {companyName}?',
+      debugInfo: 'Debug Info',
+      domain: 'Domain',
+      noDomain: 'No Domain',
       status: 'Status',
       claimed: 'Claimed',
       unclaimed: 'Unclaimed',
       actions: 'Actions',
-      assignRepresentative: 'Assign Representative',
-      viewProfile: 'View Profile',
-      editCompany: 'Edit Company',
-      deleteCompany: 'Delete Company',
-      noCompanies: 'No companies found',
-      refreshData: 'Refresh Data',
-      domain: 'Domain',
-      noDomain: 'No Domain'
+      name: 'Name',
+      email: 'Email',
+      admin: 'Admin',
+      suspended: 'Suspended',
+      active: 'Active',
+      noResults: 'No results found',
+      searchingUsers: 'Searching users...',
+      userNotFound: 'No users found',
+      domainMismatch: 'Warning: No domain set for company, searching all users'
     }
   };
 
   // Check admin access and fetch data
   useEffect(() => {
-    const checkAccessAndFetchData = async () => {
+    const checkAdminAccess = async () => {
       if (authLoading) return;
       
       if (!user) {
@@ -660,50 +251,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
           return;
         }
 
-        // Fetch dashboard data
+        // Fetch admin stats and data
         await Promise.all([
           fetchStats(),
-          fetchCompanies()
+          fetchCompanies(),
+          fetchUsers(),
+          fetchReviews(),
+          fetchReports()
         ]);
+
       } catch (error: any) {
-        console.error('Error loading admin dashboard:', error);
-        setError(error.message || 'An error occurred');
+        console.error('Error checking admin access:', error);
+        setError(error.message);
       } finally {
         setLoading(false);
       }
     };
 
-    checkAccessAndFetchData();
+    checkAdminAccess();
   }, [user, authLoading, onNavigate]);
 
   const fetchStats = async () => {
     try {
-      // Get total users count
-      const { count: usersCount } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true });
-
-      // Get total companies count
-      const { count: companiesCount } = await supabase
-        .from('companies')
-        .select('*', { count: 'exact', head: true });
-
-      // Get total reviews count
-      const { count: reviewsCount } = await supabase
-        .from('reviews')
-        .select('*', { count: 'exact', head: true });
-
-      // Get pending reports count
-      const { count: reportsCount } = await supabase
-        .from('reports')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending');
+      const [usersCount, companiesCount, reviewsCount, reportsCount] = await Promise.all([
+        supabase.from('profiles').select('*', { count: 'exact', head: true }),
+        supabase.from('companies').select('*', { count: 'exact', head: true }),
+        supabase.from('reviews').select('*', { count: 'exact', head: true }),
+        supabase.from('reports').select('*', { count: 'exact', head: true }).eq('status', 'pending')
+      ]);
 
       setStats({
-        totalUsers: usersCount || 0,
-        totalCompanies: companiesCount || 0,
-        totalReviews: reviewsCount || 0,
-        pendingReports: reportsCount || 0
+        totalUsers: usersCount.count || 0,
+        totalCompanies: companiesCount.count || 0,
+        totalReviews: reviewsCount.count || 0,
+        pendingReports: reportsCount.count || 0
       });
     } catch (error) {
       console.error('Error fetching stats:', error);
@@ -714,29 +295,260 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     try {
       const { data, error } = await supabase
         .from('companies')
-        .select(`
-          *,
-          categories(name)
-        `)
+        .select('*, categories(name)')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       setCompanies(data || []);
     } catch (error) {
       console.error('Error fetching companies:', error);
-      setCompanies([]);
     }
   };
 
-  const handleAssignRepresentative = (company: Company) => {
-    setSelectedCompany(company);
-    setAssignModalOpen(true);
+  const fetchUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('updated_at', { ascending: false });
+
+      if (error) throw error;
+      setUsers(data || []);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
   };
 
-  const handleAssignmentSuccess = () => {
-    // Refresh companies data
-    fetchCompanies();
-    fetchStats();
+  const fetchReviews = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('reviews')
+        .select(`
+          *,
+          profiles(first_name, last_name),
+          companies(name)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+      setReviews(data || []);
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+    }
+  };
+
+  const fetchReports = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('reports')
+        .select(`
+          *,
+          reviews(title, companies(name)),
+          profiles(first_name, last_name)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setReports(data || []);
+    } catch (error) {
+      console.error('Error fetching reports:', error);
+    }
+  };
+
+  // Search users by email in profiles table
+  const performSearch = async (query: string) => {
+    if (!selectedCompany || query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    const debug: string[] = [];
+    
+    try {
+      debug.push(`🔍 Searching for: "${query}"`);
+      debug.push(`🏢 Company: ${selectedCompany.name}`);
+      debug.push(`🌐 Company domain: ${selectedCompany.domain_name || 'Not set'}`);
+
+      // Search profiles table instead of auth.users
+      let profileQuery = supabase
+        .from('profiles')
+        .select('id, first_name, last_name, avatar_url, is_admin, is_suspended, updated_at');
+
+      // Get all profiles first
+      const { data: allProfiles, error: profileError } = await profileQuery;
+      
+      if (profileError) {
+        debug.push(`❌ Error fetching profiles: ${profileError.message}`);
+        throw profileError;
+      }
+
+      debug.push(`📊 Found ${allProfiles?.length || 0} total profiles`);
+
+      if (!allProfiles || allProfiles.length === 0) {
+        debug.push(`❌ No profiles found in database`);
+        setSearchResults([]);
+        setDebugInfo(debug);
+        return;
+      }
+
+      // Now we need to get email addresses from auth.users for these profiles
+      // Since we can't access auth.users directly, we'll search by name instead
+      const nameFilteredProfiles = allProfiles.filter(profile => {
+        const firstName = profile.first_name?.toLowerCase() || '';
+        const lastName = profile.last_name?.toLowerCase() || '';
+        const fullName = `${firstName} ${lastName}`.trim();
+        const searchTerm = query.toLowerCase();
+        
+        return firstName.includes(searchTerm) || 
+               lastName.includes(searchTerm) || 
+               fullName.includes(searchTerm);
+      });
+
+      debug.push(`📝 Filtered to ${nameFilteredProfiles.length} profiles matching "${query}"`);
+
+      // For now, we'll show all matching profiles since we can't filter by email domain
+      // In a production environment, you'd need to either:
+      // 1. Store email in profiles table
+      // 2. Use a server-side function with service role access
+      // 3. Use a different approach for domain validation
+
+      if (selectedCompany.domain_name) {
+        debug.push(`⚠️ Note: Cannot filter by domain "${selectedCompany.domain_name}" - email not available in profiles table`);
+      } else {
+        debug.push(`⚠️ ${text[language].domainMismatch}`);
+      }
+
+      debug.push(`✅ Final results: ${nameFilteredProfiles.length} profiles`);
+
+      // Check if we found the target user (mahmoud)
+      const targetUser = nameFilteredProfiles.find(profile => 
+        profile.first_name?.toLowerCase().includes('mahmoud') ||
+        profile.last_name?.toLowerCase().includes('mahmoud')
+      );
+      
+      if (targetUser) {
+        debug.push(`🎯 Found target user: ${targetUser.first_name} ${targetUser.last_name} (ID: ${targetUser.id})`);
+      } else {
+        debug.push(`❌ Target user "mahmoud" not found in results`);
+      }
+
+      setSearchResults(nameFilteredProfiles);
+      setDebugInfo(debug);
+
+    } catch (error: any) {
+      debug.push(`❌ Search error: ${error.message}`);
+      console.error('Error searching users:', error);
+      setSearchResults([]);
+      setDebugInfo(debug);
+      toast.error('Error searching users');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Handle search input change with debouncing
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchQuery.trim()) {
+        performSearch(searchQuery.trim());
+      } else {
+        setSearchResults([]);
+        setDebugInfo([]);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, selectedCompany]);
+
+  const handleAssignRepresentative = async () => {
+    if (!selectedCompany || !selectedUser) return;
+
+    setIsAssigning(true);
+
+    try {
+      // Check if company is already claimed
+      const { data: companyCheck, error: companyError } = await supabase
+        .from('companies')
+        .select('is_claimed')
+        .eq('id', selectedCompany.id)
+        .single();
+
+      if (companyError) throw companyError;
+
+      if (companyCheck.is_claimed) {
+        toast.error(text[language].companyAlreadyClaimed);
+        return;
+      }
+
+      // Check if user is already a representative
+      const { data: repCheck, error: repError } = await supabase
+        .from('company_representatives')
+        .select('company_id')
+        .eq('profile_id', selectedUser.id)
+        .limit(1);
+
+      if (repError) throw repError;
+
+      if (repCheck && repCheck.length > 0) {
+        toast.error(text[language].userAlreadyRepresentative);
+        return;
+      }
+
+      // Confirm assignment
+      const userName = `${selectedUser.first_name || ''} ${selectedUser.last_name || ''}`.trim();
+      const confirmMessage = text[language].confirmAssignmentMessage
+        .replace('{userName}', userName)
+        .replace('{companyName}', selectedCompany.name || '');
+
+      if (!confirm(confirmMessage)) {
+        return;
+      }
+
+      // Perform assignment
+      const { error: updateError } = await supabase
+        .from('companies')
+        .update({ is_claimed: true })
+        .eq('id', selectedCompany.id);
+
+      if (updateError) throw updateError;
+
+      const { error: insertError } = await supabase
+        .from('company_representatives')
+        .insert({
+          company_id: selectedCompany.id,
+          profile_id: selectedUser.id
+        });
+
+      if (insertError) throw insertError;
+
+      // Create notification for the user
+      await supabase
+        .from('notifications')
+        .insert({
+          recipient_profile_id: selectedUser.id,
+          type: 'representative_assigned',
+          message: `An administrator has granted you representative access for ${selectedCompany.name}`,
+          link_url: `/company/${selectedCompany.id}`
+        });
+
+      toast.success(text[language].assignmentSuccess);
+      setAssignModalOpen(false);
+      setSelectedCompany(null);
+      setSelectedUser(null);
+      setSearchQuery('');
+      setSearchResults([]);
+      
+      // Refresh companies data
+      fetchCompanies();
+
+    } catch (error: any) {
+      console.error('Error assigning representative:', error);
+      toast.error(text[language].assignmentError);
+    } finally {
+      setIsAssigning(false);
+    }
   };
 
   // Loading state
@@ -746,11 +558,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
         <Header language={language} onLanguageChange={onLanguageChange} onNavigate={onNavigate} />
         <div className="flex items-center justify-center min-h-[50vh]">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto mb-4"></div>
             <p className="text-gray-600">{text[language].loading}</p>
           </div>
         </div>
-        <Footer language={language} onNavigate={onNavigate} />
+        <Footer language={language} />
       </div>
     );
   }
@@ -777,7 +589,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
             </button>
           </div>
         </div>
-        <Footer language={language} onNavigate={onNavigate} />
+        <Footer language={language} />
       </div>
     );
   }
@@ -840,125 +652,107 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
   // Companies View
   const CompaniesView = () => (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-dark-500 mb-2">
-            {text[language].companies}
-          </h1>
-          <div className="w-16 h-1 bg-red-500 rounded-full"></div>
-        </div>
-        <button
-          onClick={fetchCompanies}
-          className="flex items-center space-x-2 rtl:space-x-reverse bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg transition-colors duration-200"
-        >
-          <Search className="h-4 w-4" />
-          <span>{text[language].refreshData}</span>
-        </button>
+      <div>
+        <h1 className="text-3xl font-bold text-dark-500 mb-2">
+          {text[language].companies}
+        </h1>
+        <div className="w-16 h-1 bg-red-500 rounded-full"></div>
       </div>
 
-      {/* Companies Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        {companies.length === 0 ? (
-          <div className="text-center py-12">
-            <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">{text[language].noCompanies}</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {text[language].companyName}
-                  </th>
-                  <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {text[language].domain}
-                  </th>
-                  <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {text[language].category}
-                  </th>
-                  <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {text[language].status}
-                  </th>
-                  <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    {text[language].actions}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {companies.map((company) => (
-                  <tr key={company.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                        <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                          {company.logo_url ? (
-                            <img 
-                              src={company.logo_url} 
-                              alt={company.name || 'Company'} 
-                              className="w-full h-full object-cover rounded-lg"
-                            />
-                          ) : (
-                            <Building2 className="h-5 w-5 text-gray-400" />
-                          )}
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-dark-500">
-                            {company.name || 'Unnamed Company'}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            ID: {company.id}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {company.domain_name ? (
-                        <span className="text-blue-600">@{company.domain_name}</span>
-                      ) : (
-                        <span className="text-orange-500">{text[language].noDomain}</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {company.categories?.name || '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        company.is_claimed 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {company.is_claimed ? text[language].claimed : text[language].unclaimed}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                        {/* Assign Representative Button - Show for all unclaimed companies */}
-                        {!company.is_claimed && (
-                          <button
-                            onClick={() => handleAssignRepresentative(company)}
-                            className="flex items-center space-x-1 rtl:space-x-reverse bg-primary-500 hover:bg-primary-600 text-white px-3 py-1 rounded text-xs transition-colors duration-200"
-                          >
-                            <UserPlus className="h-3 w-3" />
-                            <span>{text[language].assignRepresentative}</span>
-                          </button>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  ID
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].name}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].domain}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].status}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].actions}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {companies.map((company) => (
+                <tr key={company.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {company.id}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-3 rtl:space-x-reverse">
+                      <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-xs">
+                        {company.logo_url ? (
+                          <img 
+                            src={company.logo_url} 
+                            alt={company.name || 'Company'} 
+                            className="w-full h-full object-cover rounded-full"
+                          />
+                        ) : (
+                          '🏢'
                         )}
-                        
-                        {/* View Profile Button */}
-                        <button
-                          onClick={() => onNavigate('company', company.id)}
-                          className="flex items-center space-x-1 rtl:space-x-reverse text-blue-600 hover:text-blue-800 px-2 py-1 rounded text-xs transition-colors duration-200"
-                        >
-                          <Eye className="h-3 w-3" />
-                          <span>{text[language].viewProfile}</span>
-                        </button>
                       </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {company.name || 'Unnamed Company'}
+                        </div>
+                        {company.categories && (
+                          <div className="text-sm text-gray-500">
+                            {company.categories.name}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {company.domain_name ? (
+                      <span className="text-blue-600">{company.domain_name}</span>
+                    ) : (
+                      <span className="text-red-500 text-xs">{text[language].noDomain}</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      company.is_claimed 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {company.is_claimed ? text[language].claimed : text[language].unclaimed}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <button
+                      onClick={() => {
+                        setSelectedCompany(company);
+                        setAssignModalOpen(true);
+                        setSearchQuery('');
+                        setSearchResults([]);
+                        setDebugInfo([]);
+                      }}
+                      disabled={company.is_claimed}
+                      className={`inline-flex items-center space-x-2 rtl:space-x-reverse px-3 py-1 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                        company.is_claimed
+                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                          : 'bg-blue-500 hover:bg-blue-600 text-white'
+                      }`}
+                    >
+                      <UserPlus className="h-4 w-4" />
+                      <span>{text[language].assignRepresentative}</span>
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -996,30 +790,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                   <Building2 className="h-5 w-5" />
                   <span className="font-medium">{text[language].companies}</span>
                 </button>
-                
-                <button
-                  onClick={() => setActiveTab('users')}
-                  className={`w-full flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-lg text-right transition-all duration-200 ${
-                    activeTab === 'users'
-                      ? 'bg-red-50 text-red-600 border-r-4 border-red-500 rtl:border-l-4 rtl:border-r-0'
-                      : 'text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <Users className="h-5 w-5" />
-                  <span className="font-medium">{text[language].users}</span>
-                </button>
-                
-                <button
-                  onClick={() => setActiveTab('reports')}
-                  className={`w-full flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-lg text-right transition-all duration-200 ${
-                    activeTab === 'reports'
-                      ? 'bg-red-50 text-red-600 border-r-4 border-red-500 rtl:border-l-4 rtl:border-r-0'
-                      : 'text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <FileText className="h-5 w-5" />
-                  <span className="font-medium">{text[language].reports}</span>
-                </button>
               </nav>
             </div>
           </div>
@@ -1028,32 +798,168 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
           <div className="lg:col-span-3">
             {activeTab === 'overview' && <OverviewView />}
             {activeTab === 'companies' && <CompaniesView />}
-            {activeTab === 'users' && (
-              <div className="text-center py-12">
-                <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">Users management coming soon...</p>
-              </div>
-            )}
-            {activeTab === 'reports' && (
-              <div className="text-center py-12">
-                <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">Reports management coming soon...</p>
-              </div>
-            )}
           </div>
         </div>
       </div>
 
       {/* Assign Representative Modal */}
-      <AssignRepresentativeModal
-        isOpen={assignModalOpen}
-        onClose={() => setAssignModalOpen(false)}
-        company={selectedCompany}
-        language={language}
-        onSuccess={handleAssignmentSuccess}
-      />
+      {assignModalOpen && selectedCompany && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-dark-500">
+                {text[language].assignRepresentative}
+              </h3>
+              <button
+                onClick={() => {
+                  setAssignModalOpen(false);
+                  setSelectedCompany(null);
+                  setSelectedUser(null);
+                  setSearchQuery('');
+                  setSearchResults([]);
+                  setDebugInfo([]);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
 
-      <Footer language={language} onNavigate={onNavigate} />
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">
+                {selectedCompany.name}
+              </p>
+              <p className="text-xs text-gray-500">
+                {text[language].domain}: {selectedCompany.domain_name || text[language].noDomain}
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Search Input */}
+              <div>
+                <label className="block text-sm font-semibold text-dark-500 mb-2">
+                  {text[language].searchByEmail}
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 right-0 pr-3 rtl:left-0 rtl:right-auto rtl:pl-3 rtl:pr-0 flex items-center pointer-events-none">
+                    <Search className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={text[language].searchByEmail}
+                    className="w-full px-3 py-2 pr-10 rtl:pl-10 rtl:pr-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                    dir={language === 'ar' ? 'rtl' : 'ltr'}
+                  />
+                </div>
+              </div>
+
+              {/* Debug Info Toggle */}
+              <button
+                onClick={() => setShowDebugInfo(!showDebugInfo)}
+                className="flex items-center space-x-2 rtl:space-x-reverse text-sm text-blue-600 hover:text-blue-700"
+              >
+                <Info className="h-4 w-4" />
+                <span>{text[language].debugInfo}</span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${showDebugInfo ? 'rotate-180' : ''}`} />
+              </button>
+
+              {/* Debug Info Panel */}
+              {showDebugInfo && debugInfo.length > 0 && (
+                <div className="bg-gray-50 rounded-lg p-3 text-xs font-mono">
+                  {debugInfo.map((info, index) => (
+                    <div key={index} className="mb-1">
+                      {info}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Search Results */}
+              {isSearching && (
+                <div className="text-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-500 mx-auto mb-2"></div>
+                  <p className="text-sm text-gray-600">{text[language].searchingUsers}</p>
+                </div>
+              )}
+
+              {searchResults.length > 0 && (
+                <div className="border border-gray-200 rounded-lg max-h-40 overflow-y-auto">
+                  {searchResults.map((user) => (
+                    <button
+                      key={user.id}
+                      onClick={() => setSelectedUser(user)}
+                      className={`w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 ${
+                        selectedUser?.id === user.id ? 'bg-blue-50 text-blue-600' : ''
+                      }`}
+                    >
+                      <div className="font-medium">
+                        {user.first_name} {user.last_name}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        ID: {user.id}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {searchQuery.length >= 2 && !isSearching && searchResults.length === 0 && (
+                <div className="text-center py-4 text-gray-500 text-sm">
+                  {text[language].userNotFound}
+                </div>
+              )}
+
+              {/* Selected User */}
+              {selectedUser && (
+                <div className="bg-blue-50 rounded-lg p-3">
+                  <p className="text-sm font-medium text-blue-800">
+                    {text[language].selectUser}: {selectedUser.first_name} {selectedUser.last_name}
+                  </p>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex space-x-3 rtl:space-x-reverse pt-4">
+                <button
+                  onClick={() => {
+                    setAssignModalOpen(false);
+                    setSelectedCompany(null);
+                    setSelectedUser(null);
+                    setSearchQuery('');
+                    setSearchResults([]);
+                    setDebugInfo([]);
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                  disabled={isAssigning}
+                >
+                  {text[language].cancel}
+                </button>
+                <button
+                  onClick={handleAssignRepresentative}
+                  disabled={!selectedUser || isAssigning}
+                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 rtl:space-x-reverse"
+                >
+                  {isAssigning ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>{text[language].assigning}</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="h-4 w-4" />
+                      <span>{text[language].assign}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Footer language={language} />
     </div>
   );
 };
