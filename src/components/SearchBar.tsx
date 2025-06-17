@@ -226,48 +226,78 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
           <div className="w-px bg-gray-200"></div>
 
           {/* Category Dropdown - Middle */}
-<DropdownMenu>
-  <DropdownMenuTrigger asChild>
-    <Button
-      variant="ghost"
-      className="h-full px-6 py-4 text-gray-700 hover:text-primary-500 hover:bg-gray-50 transition-all duration-200 flex items-center space-x-2 rtl:space-x-reverse whitespace-nowrap min-w-0 focus:outline-none focus:bg-gray-50"
-    >
-      <span className="text-sm font-medium truncate max-w-32">
-        {getSelectedCategoryName()}
-      </span>
-      <ChevronDown className="h-4 w-4 transition-transform duration-200" />
-    </Button>
-  </DropdownMenuTrigger>
+          <div ref={categoryDropdownRef} className="relative">
+            <button
+              type="button"
+              onClick={handleCategoryDropdownToggle}
+              className="h-full px-6 py-4 text-gray-700 hover:text-primary-500 hover:bg-gray-50 transition-all duration-200 flex items-center space-x-2 rtl:space-x-reverse whitespace-nowrap min-w-0 focus:outline-none focus:bg-gray-50"
+            >
+              <span className="text-sm font-medium truncate max-w-32">
+                {getSelectedCategoryName()}
+              </span>
+              <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
 
-  <DropdownMenuContent className="w-[240px]" align="start">
-    <DropdownMenuLabel>{text[language].categories}</DropdownMenuLabel>
-    <DropdownMenuSeparator />
-    {/* You can add a search input here if you wish */}
-    <div className="max-h-60 overflow-y-auto">
-      <DropdownMenuRadioGroup
-        value={selectedCategoryId?.toString() ?? 'null'}
-        onValueChange={(value) => {
-          handleCategorySelect(value === 'null' ? null : parseInt(value), 
-            categories.find(c => c.id.toString() === value)?.name
-          );
-        }}
-      >
-        {/* All Categories Option */}
-        <DropdownMenuRadioItem value="null">
-          {text[language].allCategories}
-        </DropdownMenuRadioItem>
+            {/* Category Dropdown Menu */}
+            {isCategoryDropdownOpen && (
+              <div className="absolute top-full left-0 mt-1 w-64 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-60 overflow-y-auto">
+                <div className="p-3 border-b border-gray-100">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-2">{text[language].categories}</h3>
+                  <input
+                    type="text"
+                    value={categorySearchQuery}
+                    onChange={(e) => setCategorySearchQuery(e.target.value)}
+                    placeholder={text[language].searchCategories}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:border-primary-500"
+                  />
+                </div>
+                
+                <div className="py-1">
+                  {/* All Categories Option */}
+                  <button
+                    type="button"
+                    onClick={() => handleCategorySelect(null)}
+                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors duration-150 flex items-center space-x-2 rtl:space-x-reverse ${
+                      selectedCategoryId === null ? 'bg-primary-50 text-primary-600 font-medium' : 'text-gray-700'
+                    }`}
+                  >
+                    <div className={`w-2 h-2 rounded-full ${selectedCategoryId === null ? 'bg-primary-500' : 'border border-gray-300'}`}></div>
+                    <span>{text[language].allCategories}</span>
+                  </button>
 
-        {/* Render Categories from Database */}
-        {categories.map((category) => (
-          <DropdownMenuRadioItem key={category.id} value={category.id.toString()}>
-            {category.name || 'Unnamed Category'}
-          </DropdownMenuRadioItem>
-        ))}
-      </DropdownMenuRadioGroup>
-    </div>
-  </DropdownMenuContent>
-</DropdownMenu>
-          
+                  {/* Loading State */}
+                  {loadingCategories && (
+                    <div className="px-4 py-3 text-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-500 mx-auto mb-1"></div>
+                      <p className="text-xs text-gray-500">{text[language].loadingCategories}</p>
+                    </div>
+                  )}
+
+                  {/* Categories List */}
+                  {!loadingCategories && filteredCategories.map((category) => (
+                    <button
+                      key={category.id}
+                      type="button"
+                      onClick={() => handleCategorySelect(category.id, category.name)}
+                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors duration-150 flex items-center space-x-2 rtl:space-x-reverse ${
+                        selectedCategoryId === category.id ? 'bg-primary-50 text-primary-600 font-medium' : 'text-gray-700'
+                      }`}
+                    >
+                      <div className={`w-2 h-2 rounded-full ${selectedCategoryId === category.id ? 'bg-primary-500' : 'border border-gray-300'}`}></div>
+                      <span>{category.name || 'Unnamed Category'}</span>
+                    </button>
+                  ))}
+
+                  {/* No Categories Found */}
+                  {!loadingCategories && filteredCategories.length === 0 && categorySearchQuery.trim() !== '' && (
+                    <div className="px-4 py-3 text-center text-sm text-gray-500">
+                      {text[language].noResults}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Vertical Separator */}
           <div className="w-px bg-gray-200"></div>
