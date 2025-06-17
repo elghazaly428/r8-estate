@@ -235,40 +235,54 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
               <span className="text-sm font-medium truncate max-w-32">
                 {getSelectedCategoryName()}
               </span>
-              <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`h-4 w-4 transition-transform duration-200 flex-shrink-0 ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
 
-            {/* Category Dropdown Menu */}
+            {/* Category Dropdown Menu - Fixed positioning and z-index */}
             {isCategoryDropdownOpen && (
-              <div className="absolute top-full left-0 mt-1 w-64 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-60 overflow-y-auto">
-                <div className="p-3 border-b border-gray-100">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">{text[language].categories}</h3>
-                  <input
-                    type="text"
-                    value={categorySearchQuery}
-                    onChange={(e) => setCategorySearchQuery(e.target.value)}
-                    placeholder={text[language].searchCategories}
-                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:border-primary-500"
-                  />
+              <div 
+                className="absolute top-full right-0 rtl:left-0 rtl:right-auto mt-1 w-80 bg-white rounded-lg shadow-2xl border border-gray-200 max-h-80 overflow-hidden"
+                style={{ zIndex: 9999 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header with search */}
+                <div className="p-4 border-b border-gray-100 bg-gray-50">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">{text[language].categories}</h3>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={categorySearchQuery}
+                      onChange={(e) => setCategorySearchQuery(e.target.value)}
+                      placeholder={text[language].searchCategories}
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <Search className="absolute right-3 rtl:left-3 rtl:right-auto top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  </div>
                 </div>
                 
-                <div className="py-1">
+                {/* Categories List */}
+                <div className="max-h-60 overflow-y-auto">
                   {/* All Categories Option */}
                   <button
                     type="button"
-                    onClick={() => handleCategorySelect(null)}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors duration-150 flex items-center space-x-2 rtl:space-x-reverse ${
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleCategorySelect(null);
+                    }}
+                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-50 transition-colors duration-150 flex items-center space-x-3 rtl:space-x-reverse border-b border-gray-50 ${
                       selectedCategoryId === null ? 'bg-primary-50 text-primary-600 font-medium' : 'text-gray-700'
                     }`}
                   >
-                    <div className={`w-2 h-2 rounded-full ${selectedCategoryId === null ? 'bg-primary-500' : 'border border-gray-300'}`}></div>
-                    <span>{text[language].allCategories}</span>
+                    <div className={`w-3 h-3 rounded-full flex-shrink-0 ${selectedCategoryId === null ? 'bg-primary-500' : 'border-2 border-gray-300'}`}></div>
+                    <X className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                    <span className="truncate">{text[language].allCategories}</span>
                   </button>
 
                   {/* Loading State */}
                   {loadingCategories && (
-                    <div className="px-4 py-3 text-center">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-500 mx-auto mb-1"></div>
+                    <div className="px-4 py-6 text-center">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-500 mx-auto mb-2"></div>
                       <p className="text-xs text-gray-500">{text[language].loadingCategories}</p>
                     </div>
                   )}
@@ -278,20 +292,33 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
                     <button
                       key={category.id}
                       type="button"
-                      onClick={() => handleCategorySelect(category.id, category.name)}
-                      className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors duration-150 flex items-center space-x-2 rtl:space-x-reverse ${
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCategorySelect(category.id, category.name);
+                      }}
+                      className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-50 transition-colors duration-150 flex items-center space-x-3 rtl:space-x-reverse border-b border-gray-50 last:border-b-0 ${
                         selectedCategoryId === category.id ? 'bg-primary-50 text-primary-600 font-medium' : 'text-gray-700'
                       }`}
                     >
-                      <div className={`w-2 h-2 rounded-full ${selectedCategoryId === category.id ? 'bg-primary-500' : 'border border-gray-300'}`}></div>
-                      <span>{category.name || 'Unnamed Category'}</span>
+                      <div className={`w-3 h-3 rounded-full flex-shrink-0 ${selectedCategoryId === category.id ? 'bg-primary-500' : 'border-2 border-gray-300'}`}></div>
+                      <Tag className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                      <span className="truncate">{category.name || 'Unnamed Category'}</span>
                     </button>
                   ))}
 
                   {/* No Categories Found */}
                   {!loadingCategories && filteredCategories.length === 0 && categorySearchQuery.trim() !== '' && (
-                    <div className="px-4 py-3 text-center text-sm text-gray-500">
+                    <div className="px-4 py-6 text-center text-sm text-gray-500">
+                      <div className="text-2xl mb-2">🔍</div>
                       {text[language].noResults}
+                    </div>
+                  )}
+
+                  {/* No Categories Available */}
+                  {!loadingCategories && categories.length === 0 && (
+                    <div className="px-4 py-6 text-center text-sm text-gray-500">
+                      <div className="text-2xl mb-2">📂</div>
+                      No categories available
                     </div>
                   )}
                 </div>
