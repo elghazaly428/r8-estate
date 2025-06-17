@@ -61,11 +61,11 @@ interface UserProfile {
   id: string;
   first_name: string | null;
   last_name: string | null;
+  email: string | null; // Now available in profiles table
   avatar_url: string | null;
   is_admin: boolean | null;
   is_suspended: boolean | null;
   updated_at: string;
-  email?: string; // We'll get this from auth if available
 }
 
 interface Review {
@@ -177,7 +177,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       noResults: 'لا توجد نتائج',
       searchingUsers: 'جاري البحث عن المستخدمين...',
       userNotFound: 'لم يتم العثور على مستخدمين',
-      domainMismatch: 'تحذير: لا يوجد نطاق محدد للشركة، البحث في جميع المستخدمين'
+      domainMismatch: 'تحذير: لا يوجد نطاق محدد للشركة، البحث في جميع المستخدمين',
+      emailDomainMatch: 'تطابق نطاق البريد الإلكتروني',
+      emailDomainMismatch: 'عدم تطابق نطاق البريد الإلكتروني'
     },
     en: {
       adminDashboard: 'Admin Dashboard',
@@ -221,7 +223,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       noResults: 'No results found',
       searchingUsers: 'Searching users...',
       userNotFound: 'No users found',
-      domainMismatch: 'Warning: No domain set for company, searching all users'
+      domainMismatch: 'Warning: No domain set for company, searching all users',
+      emailDomainMatch: 'Email domain matches',
+      emailDomainMismatch: 'Email domain does not match'
     }
   };
 
@@ -367,74 +371,78 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     const debug: string[] = [];
     
     try {
-      debug.push(`🔍 Searching for: "${query}"`);
+      debug.push(`🔍 Searching for email: "${query}"`);
       debug.push(`🏢 Company: ${selectedCompany.name}`);
       debug.push(`🌐 Company domain: ${selectedCompany.domain_name || 'Not set'}`);
 
-      // Search profiles table instead of auth.users
-      let profileQuery = supabase
+      // Search profiles table by email
+      const { data: profileResults, error: profileError } = await supabase
         .from('profiles')
-        .select('id, first_name, last_name, avatar_url, is_admin, is_suspended, updated_at');
-
-      // Get all profiles first
-      const { data: allProfiles, error: profileError } = await profileQuery;
+        .select('id, first_name, last_name, email, avatar_url, is_admin, is_suspended, updated_at')
+        .ilike('email', `%${query}%`);
       
       if (profileError) {
-        debug.push(`❌ Error fetching profiles: ${profileError.message}`);
+        debug.push(`❌ Error searching profiles: ${profileError.message}`);
         throw profileError;
       }
 
-      debug.push(`📊 Found ${allProfiles?.length || 0} total profiles`);
+      debug.push(`📊 Found ${profileResults?.length || 0} profiles matching email pattern`);
 
-      if (!allProfiles || allProfiles.length === 0) {
-        debug.push(`❌ No profiles found in database`);
+      if (!profileResults || profileResults.length === 0) {
+        debug.push(`❌ No profiles found with email containing "${query}"`);
         setSearchResults([]);
         setDebugInfo(debug);
         return;
       }
 
-      // Now we need to get email addresses from auth.users for these profiles
-      // Since we can't access auth.users directly, we'll search by name instead
-      const nameFilteredProfiles = allProfiles.filter(profile => {
-        const firstName = profile.first_name?.toLowerCase() || '';
-        const lastName = profile.last_name?.toLowerCase() || '';
-        const fullName = `${firstName} ${lastName}`.trim();
-        const searchTerm = query.toLowerCase();
-        
-        return firstName.includes(searchTerm) || 
-               lastName.includes(searchTerm) || 
-               fullName.includes(searchTerm);
-      });
-
-      debug.push(`📝 Filtered to ${nameFilteredProfiles.length} profiles matching "${query}"`);
-
-      // For now, we'll show all matching profiles since we can't filter by email domain
-      // In a production environment, you'd need to either:
-      // 1. Store email in profiles table
-      // 2. Use a server-side function with service role access
-      // 3. Use a different approach for domain validation
-
+      // Filter by domain if company has domain_name set
+      let filteredResults = profileResults;
+      
       if (selectedCompany.domain_name) {
-        debug.push(`⚠️ Note: Cannot filter by domain "${selectedCompany.domain_name}" - email not available in profiles table`);
+        const companyDomain = selectedCompany.domain_name.toLowerCase();
+        debug.push(`🔍 Filtering by company domain: ${companyDomain}`);
+        
+        filteredResults = profileResults.filter(profile => {
+          if (!profile.email) return false;
+          
+          const emailDomain = profile.email.split('@')[1]?.toLowerCase();
+          const matches = emailDomain === companyDomain;
+          
+          debug.push(`📧 ${profile.email} -> domain: ${emailDomain} -> ${matches ? '✅ MATCH' : '❌ NO MATCH'}`);
+          
+          return matches;
+        });
+        
+        debug.push(`📝 After domain filtering: ${filteredResults.length} profiles`);
       } else {
         debug.push(`⚠️ ${text[language].domainMismatch}`);
       }
 
-      debug.push(`✅ Final results: ${nameFilteredProfiles.length} profiles`);
-
-      // Check if we found the target user (mahmoud)
-      const targetUser = nameFilteredProfiles.find(profile => 
-        profile.first_name?.toLowerCase().includes('mahmoud') ||
-        profile.last_name?.toLowerCase().includes('mahmoud')
+      // Check if we found the target user (mahmoud@palmhillsdevelopments.com)
+      const targetUser = filteredResults.find(profile => 
+        profile.email?.toLowerCase().includes('mahmoud@palmhillsdevelopments.com')
       );
       
       if (targetUser) {
-        debug.push(`🎯 Found target user: ${targetUser.first_name} ${targetUser.last_name} (ID: ${targetUser.id})`);
+        debug.push(`🎯 Found target user: ${targetUser.first_name} ${targetUser.last_name} (${targetUser.email})`);
       } else {
-        debug.push(`❌ Target user "mahmoud" not found in results`);
+        debug.push(`❌ Target user "mahmoud@palmhillsdevelopments.com" not found in results`);
+        
+        // Check if the user exists but doesn't match domain
+        const anyMahmoud = profileResults.find(profile => 
+          profile.email?.toLowerCase().includes('mahmoud@palmhillsdevelopments.com')
+        );
+        
+        if (anyMahmoud) {
+          debug.push(`⚠️ Found mahmoud in all results but filtered out due to domain mismatch`);
+          debug.push(`   User domain: ${anyMahmoud.email?.split('@')[1]}`);
+          debug.push(`   Company domain: ${selectedCompany.domain_name}`);
+        }
       }
 
-      setSearchResults(nameFilteredProfiles);
+      debug.push(`✅ Final results: ${filteredResults.length} profiles`);
+
+      setSearchResults(filteredResults);
       setDebugInfo(debug);
 
     } catch (error: any) {
@@ -549,6 +557,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     } finally {
       setIsAssigning(false);
     }
+  };
+
+  // Helper function to check if email domain matches company domain
+  const checkEmailDomainMatch = (email: string | null, companyDomain: string | null): boolean => {
+    if (!email || !companyDomain) return false;
+    const emailDomain = email.split('@')[1]?.toLowerCase();
+    return emailDomain === companyDomain.toLowerCase();
   };
 
   // Loading state
@@ -845,12 +860,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                     <Search className="h-4 w-4 text-gray-400" />
                   </div>
                   <input
-                    type="text"
+                    type="email"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder={text[language].searchByEmail}
                     className="w-full px-3 py-2 pr-10 rtl:pl-10 rtl:pr-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                    dir={language === 'ar' ? 'rtl' : 'ltr'}
+                    dir="ltr"
                   />
                 </div>
               </div>
@@ -886,22 +901,38 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
               {searchResults.length > 0 && (
                 <div className="border border-gray-200 rounded-lg max-h-40 overflow-y-auto">
-                  {searchResults.map((user) => (
-                    <button
-                      key={user.id}
-                      onClick={() => setSelectedUser(user)}
-                      className={`w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 ${
-                        selectedUser?.id === user.id ? 'bg-blue-50 text-blue-600' : ''
-                      }`}
-                    >
-                      <div className="font-medium">
-                        {user.first_name} {user.last_name}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        ID: {user.id}
-                      </div>
-                    </button>
-                  ))}
+                  {searchResults.map((user) => {
+                    const domainMatches = checkEmailDomainMatch(user.email, selectedCompany.domain_name);
+                    return (
+                      <button
+                        key={user.id}
+                        onClick={() => setSelectedUser(user)}
+                        className={`w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0 ${
+                          selectedUser?.id === user.id ? 'bg-blue-50 text-blue-600' : ''
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-medium">
+                              {user.first_name} {user.last_name}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {user.email}
+                            </div>
+                          </div>
+                          {selectedCompany.domain_name && (
+                            <div className={`text-xs px-2 py-1 rounded ${
+                              domainMatches 
+                                ? 'bg-green-100 text-green-700' 
+                                : 'bg-red-100 text-red-700'
+                            }`}>
+                              {domainMatches ? '✓' : '✗'}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
 
@@ -916,6 +947,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                 <div className="bg-blue-50 rounded-lg p-3">
                   <p className="text-sm font-medium text-blue-800">
                     {text[language].selectUser}: {selectedUser.first_name} {selectedUser.last_name}
+                  </p>
+                  <p className="text-xs text-blue-600">
+                    {selectedUser.email}
                   </p>
                 </div>
               )}

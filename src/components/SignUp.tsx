@@ -107,7 +107,7 @@ const SignUp: React.FC<SignUpProps> = ({ language, onLanguageChange, onNavigate,
 
       // Step 2: Check if signUp was successful and returned a valid user object
       if (authData.user) {
-        // Step 3: Insert into profiles table with user ID from signUp
+        // Step 3: Insert into profiles table with user ID from signUp AND email
         const { error: profileError } = await supabase
           .from('profiles')
           .insert([
@@ -115,6 +115,7 @@ const SignUp: React.FC<SignUpProps> = ({ language, onLanguageChange, onNavigate,
               id: authData.user.id,
               first_name: formData.firstName,
               last_name: formData.lastName,
+              email: formData.email, // Add email to profiles table
               updated_at: new Date().toISOString()
             }
           ]);
