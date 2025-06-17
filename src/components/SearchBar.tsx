@@ -237,10 +237,20 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
               <ChevronDown className={`h-4 w-4 transition-transform duration-200 flex-shrink-0 ${isCategoryDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
 
-            {/* Category Dropdown Menu */}
+            {/* Category Dropdown Menu - FIXED POSITIONING */}
             {isCategoryDropdownOpen && (
               <div 
-                className="absolute top-full left-0 right-0 mt-1 w-80 bg-white rounded-lg shadow-2xl border border-gray-200 max-h-80 overflow-hidden z-50"
+                className="fixed bg-white rounded-lg shadow-2xl border border-gray-200 max-h-80 overflow-hidden"
+                style={{
+                  zIndex: 9999,
+                  width: '320px',
+                  top: categoryDropdownRef.current ? 
+                    categoryDropdownRef.current.getBoundingClientRect().bottom + window.scrollY + 4 : 
+                    'auto',
+                  left: categoryDropdownRef.current ? 
+                    Math.max(16, categoryDropdownRef.current.getBoundingClientRect().left + window.scrollX - 160) : 
+                    'auto'
+                }}
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* Header with search */}
