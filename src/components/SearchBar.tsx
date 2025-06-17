@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Search, Building2, Tag, Star, ChevronDown, X } from 'lucide-react';
-import { searchCompaniesWithRatings, CompanySearchResult, Category, supabase } from '../lib/supabase';
+import { searchCompaniesWithRatings, CompanySearchResult, Category, getAllCategories } from '../lib/supabase';
 
 interface SearchBarProps {
   language: 'ar' | 'en';
@@ -18,6 +18,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
   const [isSearching, setIsSearching] = useState(false);
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
   const [categorySearchQuery, setCategorySearchQuery] = useState('');
+  const [loadingCategories, setLoadingCategories] = useState(true);
   const searchRef = useRef<HTMLDivElement>(null);
   const categoryDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -31,7 +32,8 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
       noResults: 'لا توجد نتائج',
       reviews: 'تقييم',
       allCategories: 'جميع الفئات',
-      searchCategories: 'البحث في الفئات...'
+      searchCategories: 'البحث في الفئات...',
+      loadingCategories: 'جاري تحميل الفئات...'
     },
     en: {
       placeholder: 'Search for a company...',
@@ -42,28 +44,30 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
       noResults: 'No results found',
       reviews: 'reviews',
       allCategories: 'All Categories',
-      searchCategories: 'Search categories...'
+      searchCategories: 'Search categories...',
+      loadingCategories: 'Loading categories...'
     }
   };
 
-  // Fetch categories on component mount
+  // Fetch categories on component mount using the existing getAllCategories function
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const { data, error } = await supabase
-          .from('categories')
-          .select('id, name')
-          .order('name', { ascending: true });
-
-        if (error) {
-          console.error('Error fetching categories:', error);
-          return;
-        }
-
-        setCategories(data || []);
-        setFilteredCategories(data || []);
+        setLoadingCategories(true);
+        console.log('Fetching categories from database...');
+        
+        // Use the existing getAllCategories function from supabase.ts
+        const categoriesData = await getAllCategories();
+        
+        console.log('Categories fetched:', categoriesData);
+        setCategories(categoriesData);
+        setFilteredCategories(categoriesData);
       } catch (error) {
         console.error('Error fetching categories:', error);
+        setCategories([]);
+        setFilteredCategories([]);
+      } finally {
+        setLoadingCategories(false);
       }
     };
 
@@ -153,6 +157,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
   };
 
   const handleCategorySelect = (categoryId: number | null) => {
+    console.log('Category selected:', categoryId);
     setSelectedCategoryId(categoryId);
     setIsCategoryDropdownOpen(false);
     setCategorySearchQuery('');
@@ -241,40 +246,57 @@ const SearchBar: React.FC<SearchBarProps> = ({ language, onSearch, onCompanySele
 
                 {/* Scrollable Category List */}
                 <div className="max-h-60 overflow-y-auto">
-                  {/* All Categories Option */}
-                  <button
-                    onClick={() => handleCategorySelect(null)}
-                    className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 ${
-                      !selectedCategoryId ? 'bg-primary-50 text-primary-600' : 'text-gray-700'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                      <X className="h-4 w-4" />
-                      <span className="font-medium">{text[language].allCategories}</span>
+                  {loadingCategories ? (
+                    /* Loading State */
+                    <div className="px-4 py-6 text-center">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-500 mx-auto mb-2"></div>
+                      <p className="text-gray-500 text-sm">{text[language].loadingCategories}</p>
                     </div>
-                  </button>
-                  
-                  {/* Category Options */}
-                  {filteredCategories.map((category) => (
-                    <button
-                      key={category.id}
-                      onClick={() => handleCategorySelect(category.id)}
-                      className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0 ${
-                        selectedCategoryId === category.id ? 'bg-primary-50 text-primary-600' : 'text-gray-700'
-                      }`}
-                    >
-                      <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                        <Building2 className="h-4 w-4 text-gray-400 flex-shrink-0" />
-                        <span className="truncate">{category.name || 'Unnamed Category'}</span>
-                      </div>
-                    </button>
-                  ))}
+                  ) : (
+                    <>
+                      {/* All Categories Option */}
+                      <button
+                        onClick={() => handleCategorySelect(null)}
+                        className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 ${
+                          !selectedCategoryId ? 'bg-primary-50 text-primary-600' : 'text-gray-700'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                          <X className="h-4 w-4" />
+                          <span className="font-medium">{text[language].allCategories}</span>
+                        </div>
+                      </button>
+                      
+                      {/* Render Categories from Database */}
+                      {filteredCategories.map((category) => (
+                        <button
+                          key={category.id}
+                          onClick={() => handleCategorySelect(category.id)}
+                          className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors duration-200 border-b border-gray-100 last:border-b-0 ${
+                            selectedCategoryId === category.id ? 'bg-primary-50 text-primary-600' : 'text-gray-700'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                            <Building2 className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                            <span className="truncate">{category.name || 'Unnamed Category'}</span>
+                          </div>
+                        </button>
+                      ))}
 
-                  {/* No Results in Category Search */}
-                  {filteredCategories.length === 0 && categorySearchQuery && (
-                    <div className="px-4 py-6 text-center text-gray-500 text-sm">
-                      {text[language].noResults}
-                    </div>
+                      {/* No Results in Category Search */}
+                      {!loadingCategories && filteredCategories.length === 0 && categorySearchQuery && (
+                        <div className="px-4 py-6 text-center text-gray-500 text-sm">
+                          {text[language].noResults}
+                        </div>
+                      )}
+
+                      {/* No Categories Available */}
+                      {!loadingCategories && categories.length === 0 && !categorySearchQuery && (
+                        <div className="px-4 py-6 text-center text-gray-500 text-sm">
+                          {language === 'ar' ? 'لا توجد فئات متاحة' : 'No categories available'}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
