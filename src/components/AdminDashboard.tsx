@@ -74,6 +74,7 @@ const AssignRepresentativeModal: React.FC<AssignRepresentativeModalProps> = ({
   const [isSearching, setIsSearching] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string>('');
 
   const text = {
     ar: {
@@ -94,7 +95,10 @@ const AssignRepresentativeModal: React.FC<AssignRepresentativeModalProps> = ({
       assignmentSuccessful: 'تم تعيين الممثل بنجاح',
       domainMismatch: 'يجب أن يكون البريد الإلكتروني من نفس نطاق الشركة',
       minCharacters: 'اكتب على الأقل 3 أحرف للبحث',
-      submitting: 'جاري التعيين...'
+      submitting: 'جاري التعيين...',
+      noDomainSet: 'لم يتم تعيين نطاق للشركة',
+      searchAllUsers: 'البحث في جميع المستخدمين (لا يوجد نطاق محدد)',
+      updateDomain: 'تحديث النطاق'
     },
     en: {
       assignRepresentative: 'Assign Representative',
@@ -114,7 +118,10 @@ const AssignRepresentativeModal: React.FC<AssignRepresentativeModalProps> = ({
       assignmentSuccessful: 'Representative assigned successfully',
       domainMismatch: 'Email must be from the same company domain',
       minCharacters: 'Type at least 3 characters to search',
-      submitting: 'Assigning...'
+      submitting: 'Assigning...',
+      noDomainSet: 'No domain set for this company',
+      searchAllUsers: 'Searching all users (no domain restriction)',
+      updateDomain: 'Update Domain'
     }
   };
 
@@ -125,6 +132,7 @@ const AssignRepresentativeModal: React.FC<AssignRepresentativeModalProps> = ({
       setSearchResults([]);
       setSelectedUser(null);
       setShowConfirmation(false);
+      setDebugInfo('');
     }
   }, [isOpen]);
 
@@ -133,45 +141,54 @@ const AssignRepresentativeModal: React.FC<AssignRepresentativeModalProps> = ({
     const performSearch = async () => {
       if (emailQuery.length < 3) {
         setSearchResults([]);
-        return;
-      }
-
-      if (!company?.domain_name) {
-        setSearchResults([]);
+        setDebugInfo('');
         return;
       }
 
       setIsSearching(true);
+      setDebugInfo(`Searching for: "${emailQuery}"`);
 
       try {
-        // Get users from auth.users table with email domain matching
+        // Get users from auth.users table
         const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
 
         if (authError) {
           console.error('Error fetching auth users:', authError);
           setSearchResults([]);
+          setDebugInfo(`Error: ${authError.message}`);
           return;
         }
 
-        // Filter users by email domain and search query
-        const filteredUsers = authUsers.users.filter(user => {
+        setDebugInfo(`Found ${authUsers.users.length} total users in auth`);
+
+        // Filter users by email search query
+        let filteredUsers = authUsers.users.filter(user => {
           if (!user.email) return false;
-          
-          // Check if email contains the search query
-          const emailMatches = user.email.toLowerCase().includes(emailQuery.toLowerCase());
-          
-          // Check if email domain matches company domain
-          const emailDomain = user.email.split('@')[1];
-          const domainMatches = emailDomain === company.domain_name;
-          
-          return emailMatches && domainMatches;
+          return user.email.toLowerCase().includes(emailQuery.toLowerCase());
         });
+
+        setDebugInfo(prev => prev + `\nFiltered to ${filteredUsers.length} users matching "${emailQuery}"`);
+
+        // If company has domain_name, apply domain filtering
+        if (company?.domain_name) {
+          const domainFilteredUsers = filteredUsers.filter(user => {
+            if (!user.email) return false;
+            const emailDomain = user.email.split('@')[1];
+            return emailDomain === company.domain_name;
+          });
+          
+          setDebugInfo(prev => prev + `\nDomain filter (${company.domain_name}): ${domainFilteredUsers.length} users`);
+          filteredUsers = domainFilteredUsers;
+        } else {
+          setDebugInfo(prev => prev + `\nNo domain filter applied (company.domain_name is null)`);
+        }
 
         // Get profile data for filtered users
         const userIds = filteredUsers.map(user => user.id);
         
         if (userIds.length === 0) {
           setSearchResults([]);
+          setDebugInfo(prev => prev + `\nNo users found after filtering`);
           return;
         }
 
@@ -183,6 +200,7 @@ const AssignRepresentativeModal: React.FC<AssignRepresentativeModalProps> = ({
         if (profileError) {
           console.error('Error fetching profiles:', profileError);
           setSearchResults([]);
+          setDebugInfo(prev => prev + `\nProfile fetch error: ${profileError.message}`);
           return;
         }
 
@@ -198,9 +216,20 @@ const AssignRepresentativeModal: React.FC<AssignRepresentativeModalProps> = ({
         });
 
         setSearchResults(combinedResults);
+        setDebugInfo(prev => prev + `\nFinal results: ${combinedResults.length} users`);
+        
+        // Log the specific user we're looking for
+        const targetUser = combinedResults.find(u => u.email === 'mahmoud@palmhillsdevelopments.com');
+        if (targetUser) {
+          setDebugInfo(prev => prev + `\n✅ Found target user: ${targetUser.email}`);
+        } else {
+          setDebugInfo(prev => prev + `\n❌ Target user mahmoud@palmhillsdevelopments.com not found`);
+        }
+        
       } catch (error) {
         console.error('Error in search:', error);
         setSearchResults([]);
+        setDebugInfo(`Search error: ${error}`);
       } finally {
         setIsSearching(false);
       }
@@ -323,7 +352,7 @@ const AssignRepresentativeModal: React.FC<AssignRepresentativeModalProps> = ({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white rounded-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-xl font-bold text-dark-500">
@@ -340,6 +369,21 @@ const AssignRepresentativeModal: React.FC<AssignRepresentativeModalProps> = ({
 
         {!showConfirmation ? (
           <>
+            {/* Company Domain Info */}
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+              <div className="text-sm">
+                <strong>Company:</strong> {company?.name}
+              </div>
+              <div className="text-sm">
+                <strong>Domain:</strong> {company?.domain_name || 'Not set'}
+              </div>
+              {!company?.domain_name && (
+                <div className="text-xs text-orange-600 mt-1">
+                  ⚠️ {text[language].noDomainSet} - {text[language].searchAllUsers}
+                </div>
+              )}
+            </div>
+
             {/* Search Section */}
             <div className="mb-6">
               <label className="block text-sm font-semibold text-dark-500 mb-2">
@@ -361,12 +405,30 @@ const AssignRepresentativeModal: React.FC<AssignRepresentativeModalProps> = ({
               </div>
               
               {/* Domain hint */}
-              {company?.domain_name && (
+              {company?.domain_name ? (
                 <p className="text-xs text-gray-500 mt-1">
                   {language === 'ar' ? 'يجب أن يكون من نطاق:' : 'Must be from domain:'} @{company.domain_name}
                 </p>
+              ) : (
+                <p className="text-xs text-orange-600 mt-1">
+                  {text[language].searchAllUsers}
+                </p>
               )}
             </div>
+
+            {/* Debug Info */}
+            {debugInfo && (
+              <div className="mb-4 p-3 bg-blue-50 rounded-lg">
+                <details>
+                  <summary className="text-sm font-medium text-blue-800 cursor-pointer">
+                    Debug Info (Click to expand)
+                  </summary>
+                  <pre className="text-xs text-blue-700 mt-2 whitespace-pre-wrap">
+                    {debugInfo}
+                  </pre>
+                </details>
+              </div>
+            )}
 
             {/* Search Results */}
             {isSearching && (
@@ -379,6 +441,9 @@ const AssignRepresentativeModal: React.FC<AssignRepresentativeModalProps> = ({
             {emailQuery.length >= 3 && !isSearching && searchResults.length === 0 && (
               <div className="text-center py-4">
                 <p className="text-gray-500 text-sm">{text[language].noResults}</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Try searching for: mahmoud@palmhillsdevelopments.com
+                </p>
               </div>
             )}
 
@@ -534,7 +599,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       editCompany: 'تعديل الشركة',
       deleteCompany: 'حذف الشركة',
       noCompanies: 'لا توجد شركات',
-      refreshData: 'تحديث البيانات'
+      refreshData: 'تحديث البيانات',
+      domain: 'النطاق',
+      noDomain: 'لا يوجد نطاق'
     },
     en: {
       adminDashboard: 'Admin Dashboard',
@@ -561,7 +628,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       editCompany: 'Edit Company',
       deleteCompany: 'Delete Company',
       noCompanies: 'No companies found',
-      refreshData: 'Refresh Data'
+      refreshData: 'Refresh Data',
+      domain: 'Domain',
+      noDomain: 'No Domain'
     }
   };
 
@@ -803,6 +872,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                     {text[language].companyName}
                   </th>
                   <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].domain}
+                  </th>
+                  <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     {text[language].category}
                   </th>
                   <th className="px-6 py-3 text-right rtl:text-right ltr:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -833,13 +905,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                           <div className="text-sm font-medium text-dark-500">
                             {company.name || 'Unnamed Company'}
                           </div>
-                          {company.domain_name && (
-                            <div className="text-sm text-gray-500">
-                              @{company.domain_name}
-                            </div>
-                          )}
+                          <div className="text-xs text-gray-500">
+                            ID: {company.id}
+                          </div>
                         </div>
                       </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {company.domain_name ? (
+                        <span className="text-blue-600">@{company.domain_name}</span>
+                      ) : (
+                        <span className="text-orange-500">{text[language].noDomain}</span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {company.categories?.name || '-'}
@@ -855,8 +932,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                        {/* Assign Representative Button - Only show for unclaimed companies */}
-                        {!company.is_claimed && company.domain_name && (
+                        {/* Assign Representative Button - Show for all unclaimed companies */}
+                        {!company.is_claimed && (
                           <button
                             onClick={() => handleAssignRepresentative(company)}
                             className="flex items-center space-x-1 rtl:space-x-reverse bg-primary-500 hover:bg-primary-600 text-white px-3 py-1 rounded text-xs transition-colors duration-200"
