@@ -645,15 +645,16 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
                     </div>
 
                     <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                      {/* Report Button */}
-                      <button
-                        onClick={() => setReportingReviewId(review.id)}
-                        className="flex items-center space-x-1 rtl:space-x-reverse text-gray-600 hover:text-red-500 transition-colors duration-200"
-                        disabled={!user}
-                      >
-                        <Flag className="h-4 w-4" />
-                        <span className="text-sm">{text[language].report}</span>
-                      </button>
+                      {/* Report Button - Only show for authenticated users */}
+                      {user && (
+                        <button
+                          onClick={() => setReportingReviewId(review.id)}
+                          className="flex items-center space-x-1 rtl:space-x-reverse text-gray-600 hover:text-red-500 transition-colors duration-200"
+                        >
+                          <Flag className="h-4 w-4" />
+                          <span className="text-sm">{text[language].report}</span>
+                        </button>
+                      )}
 
                       {/* Share Button */}
                       <button className="flex items-center space-x-1 rtl:space-x-reverse text-gray-600 hover:text-primary-500 transition-colors duration-200">
@@ -706,15 +707,16 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
                           <span className="text-xs">({review.company_reply!.not_helpful_count || 0})</span>
                         </button>
 
-                        {/* Report Reply Button */}
-                        <button
-                          onClick={() => setReportingReplyId(review.company_reply!.id)}
-                          className="flex items-center space-x-1 rtl:space-x-reverse text-gray-600 hover:text-red-500 transition-colors duration-200"
-                          disabled={!user}
-                        >
-                          <Flag className="h-3 w-3" />
-                          <span className="text-xs">{text[language].report}</span>
-                        </button>
+                        {/* Report Reply Button - Only show for authenticated users */}
+                        {user && (
+                          <button
+                            onClick={() => setReportingReplyId(review.company_reply!.id)}
+                            className="flex items-center space-x-1 rtl:space-x-reverse text-gray-600 hover:text-red-500 transition-colors duration-200"
+                          >
+                            <Flag className="h-3 w-3" />
+                            <span className="text-xs">{text[language].report}</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
