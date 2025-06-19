@@ -22,6 +22,7 @@ import {
   Info,
   Star,
   EyeOff,
+  Check,
   Flag
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -109,6 +110,33 @@ interface Report {
   } | null;
 }
 
+interface FlaggedContent {
+  id: number | string;
+  type: 'review' | 'reply';
+  content: string;
+  author: string;
+  company: string;
+  created_at: string;
+  report_count: number;
+  reports: Array<{
+    id: string;
+    reason: string;
+    reporter: string;
+    created_at: string;
+  }>;
+}
+
+interface ResolvedReport {
+  id: string;
+  content_type: 'review' | 'reply';
+  content_snippet: string;
+  author: string;
+  company: string;
+  reason: string;
+  resolved_at: string;
+  status: string;
+}
+
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageChange, onNavigate }) => {
   const { user, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'companies' | 'reviews' | 'reports'>('overview');
@@ -127,11 +155,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   
+  // Reports specific states
+  const [reportFilter, setReportFilter] = useState<'pending' | 'accepted' | 'declined'>('pending');
+  const [flaggedContent, setFlaggedContent] = useState<FlaggedContent[]>([]);
+  const [resolvedReports, setResolvedReports] = useState<ResolvedReport[]>([]);
+  const [processingAction, setProcessingAction] = useState<string | null>(null);
+  
   // Review filter state
   const [reviewStatusFilter, setReviewStatusFilter] = useState<string>('all');
-  
-  // Reports filter state
-  const [reportStatusFilter, setReportStatusFilter] = useState<string>('pending');
   
   // Modal states
   const [assignModalOpen, setAssignModalOpen] = useState(false);
@@ -222,10 +253,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       reason: 'السبب',
       contentAuthor: 'كاتب المحتوى',
       reportDate: 'تاريخ البلاغ',
-      noReports: 'لا توجد بلاغات',
+      dismissReport: 'رفض البلاغ',
+      upholdReport: 'قبول البلاغ',
+      confirmDismiss: 'هل أنت متأكد من رفض هذا البلاغ؟ سيتم إعادة نشر المحتوى.',
+      confirmUphold: 'هل أنت متأكد من قبول هذا البلاغ؟ سيتم إخفاء المحتوى.',
+      dismissSuccess: 'تم رفض البلاغ وإعادة نشر المحتوى',
+      upholdSuccess: 'تم قبول البلاغ وإخفاء المحتوى',
+      actionError: 'حدث خطأ أثناء معالجة البلاغ',
+      processing: 'جاري المعالجة...',
+      noFlaggedContent: 'لا يوجد محتوى مبلغ عنه',
+      noResolvedReports: 'لا توجد بلاغات محلولة',
       inappropriateContent: 'محتوى غير مناسب',
       spam: 'رسائل مزعجة',
-      fakeReview: 'تقييم مزيف'
+      fakeReview: 'تقييم مزيف',
+      other: 'أخرى',
+      reportCount: 'بلاغ'
     },
     en: {
       adminDashboard: 'Admin Dashboard',
@@ -306,10 +348,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       reason: 'Reason',
       contentAuthor: 'Content Author',
       reportDate: 'Report Date',
-      noReports: 'No reports found',
+      dismissReport: 'Dismiss Report',
+      upholdReport: 'Uphold Report',
+      confirmDismiss: 'Are you sure you want to dismiss this report? The content will be republished.',
+      confirmUphold: 'Are you sure you want to uphold this report? The content will be hidden.',
+      dismissSuccess: 'Report dismissed and content republished',
+      upholdSuccess: 'Report upheld and content hidden',
+      actionError: 'Error processing report',
+      processing: 'Processing...',
+      noFlaggedContent: 'No flagged content',
+      noResolvedReports: 'No resolved reports',
       inappropriateContent: 'Inappropriate Content',
       spam: 'Spam',
-      fakeReview: 'Fake Review'
+      fakeReview: 'Fake Review',
+      other: 'Other',
+      reportCount: 'reports'
     }
   };
 
@@ -358,6 +411,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
     checkAdminAccess();
   }, [user, authLoading, onNavigate]);
+
+  // Fetch reports data when filter changes
+  useEffect(() => {
+    if (!loading && user) {
+      if (reportFilter === 'pending') {
+        fetchFlaggedContent();
+      } else {
+        fetchResolvedReports();
+      }
+    }
+  }, [reportFilter, user, loading]);
 
   const fetchStats = async () => {
     try {
@@ -469,6 +533,296 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       setReports(data || []);
     } catch (error) {
       console.error('Error fetching reports:', error);
+    }
+  };
+
+  const fetchFlaggedContent = async () => {
+    try {
+      // Fetch flagged reviews
+      const { data: flaggedReviews, error: reviewsError } = await supabase
+        .from('reviews')
+        .select(`
+          id,
+          title,
+          body,
+          created_at,
+          profiles!reviews_profile_id_fkey(first_name, last_name),
+          companies(name)
+        `)
+        .eq('status', 'flagged_for_review');
+
+      if (reviewsError) throw reviewsError;
+
+      // Fetch flagged company replies
+      const { data: flaggedReplies, error: repliesError } = await supabase
+        .from('company_replies')
+        .select(`
+          id,
+          reply_body,
+          created_at,
+          profiles!company_replies_profile_id_fkey(first_name, last_name),
+          reviews!company_replies_review_id_fkey(companies(name))
+        `)
+        .eq('status', 'flagged_for_review');
+
+      if (repliesError) throw repliesError;
+
+      // Process flagged content
+      const flaggedContentList: FlaggedContent[] = [];
+
+      // Process reviews
+      for (const review of flaggedReviews || []) {
+        // Get reports for this review
+        const { data: reviewReports } = await supabase
+          .from('reports')
+          .select(`
+            id,
+            reason,
+            created_at,
+            profiles!reports_reporter_profile_id_fkey(first_name, last_name)
+          `)
+          .eq('review_id', review.id)
+          .eq('status', 'pending');
+
+        flaggedContentList.push({
+          id: review.id,
+          type: 'review',
+          content: review.title || review.body || 'No content',
+          author: review.profiles 
+            ? `${review.profiles.first_name || ''} ${review.profiles.last_name || ''}`.trim() || 'Anonymous'
+            : 'Anonymous',
+          company: review.companies?.name || 'Unknown Company',
+          created_at: review.created_at,
+          report_count: reviewReports?.length || 0,
+          reports: (reviewReports || []).map(report => ({
+            id: report.id,
+            reason: report.reason,
+            reporter: report.profiles 
+              ? `${report.profiles.first_name || ''} ${report.profiles.last_name || ''}`.trim() || 'Anonymous'
+              : 'Anonymous',
+            created_at: report.created_at
+          }))
+        });
+      }
+
+      // Process replies
+      for (const reply of flaggedReplies || []) {
+        // Get reports for this reply
+        const { data: replyReports } = await supabase
+          .from('reply_reports')
+          .select(`
+            id,
+            reason,
+            created_at,
+            profiles!reply_reports_reporter_profile_id_fkey(first_name, last_name)
+          `)
+          .eq('reply_id', reply.id)
+          .eq('status', 'pending');
+
+        flaggedContentList.push({
+          id: reply.id,
+          type: 'reply',
+          content: reply.reply_body || 'No content',
+          author: reply.profiles 
+            ? `${reply.profiles.first_name || ''} ${reply.profiles.last_name || ''}`.trim() || 'Anonymous'
+            : 'Anonymous',
+          company: reply.reviews?.companies?.name || 'Unknown Company',
+          created_at: reply.created_at,
+          report_count: replyReports?.length || 0,
+          reports: (replyReports || []).map(report => ({
+            id: report.id,
+            reason: report.reason,
+            reporter: report.profiles 
+              ? `${report.profiles.first_name || ''} ${report.profiles.last_name || ''}`.trim() || 'Anonymous'
+              : 'Anonymous',
+            created_at: report.created_at
+          }))
+        });
+      }
+
+      setFlaggedContent(flaggedContentList);
+    } catch (error) {
+      console.error('Error fetching flagged content:', error);
+      setFlaggedContent([]);
+    }
+  };
+
+  const fetchResolvedReports = async () => {
+    try {
+      const targetStatus = reportFilter === 'accepted' ? 'مقبول' : 'مرفوض';
+
+      // Fetch resolved review reports
+      const { data: reviewReports, error: reviewReportsError } = await supabase
+        .from('reports')
+        .select(`
+          id,
+          reason,
+          created_at,
+          status,
+          reviews(title, body, profiles(first_name, last_name), companies(name))
+        `)
+        .eq('status', targetStatus);
+
+      if (reviewReportsError) throw reviewReportsError;
+
+      // Fetch resolved reply reports
+      const { data: replyReports, error: replyReportsError } = await supabase
+        .from('reply_reports')
+        .select(`
+          id,
+          reason,
+          created_at,
+          status,
+          company_replies(reply_body, profiles(first_name, last_name), reviews(companies(name)))
+        `)
+        .eq('status', targetStatus);
+
+      if (replyReportsError) throw replyReportsError;
+
+      const resolvedList: ResolvedReport[] = [];
+
+      // Process review reports
+      for (const report of reviewReports || []) {
+        resolvedList.push({
+          id: report.id,
+          content_type: 'review',
+          content_snippet: report.reviews?.title || report.reviews?.body || 'No content',
+          author: report.reviews?.profiles 
+            ? `${report.reviews.profiles.first_name || ''} ${report.reviews.profiles.last_name || ''}`.trim() || 'Anonymous'
+            : 'Anonymous',
+          company: report.reviews?.companies?.name || 'Unknown Company',
+          reason: report.reason,
+          resolved_at: report.created_at,
+          status: report.status
+        });
+      }
+
+      // Process reply reports
+      for (const report of replyReports || []) {
+        resolvedList.push({
+          id: report.id,
+          content_type: 'reply',
+          content_snippet: report.company_replies?.reply_body || 'No content',
+          author: report.company_replies?.profiles 
+            ? `${report.company_replies.profiles.first_name || ''} ${report.company_replies.profiles.last_name || ''}`.trim() || 'Anonymous'
+            : 'Anonymous',
+          company: report.company_replies?.reviews?.companies?.name || 'Unknown Company',
+          reason: report.reason,
+          resolved_at: report.created_at,
+          status: report.status
+        });
+      }
+
+      setResolvedReports(resolvedList);
+    } catch (error) {
+      console.error('Error fetching resolved reports:', error);
+      setResolvedReports([]);
+    }
+  };
+
+  const handleDismissReport = async (contentId: number | string, contentType: 'review' | 'reply') => {
+    if (!confirm(text[language].confirmDismiss)) return;
+
+    setProcessingAction(`dismiss-${contentId}`);
+
+    try {
+      if (contentType === 'review') {
+        // Update review status back to published
+        const { error: reviewError } = await supabase
+          .from('reviews')
+          .update({ status: 'published' })
+          .eq('id', contentId);
+
+        if (reviewError) throw reviewError;
+
+        // Update all associated reports to declined
+        const { error: reportsError } = await supabase
+          .from('reports')
+          .update({ status: 'مرفوض' })
+          .eq('review_id', contentId);
+
+        if (reportsError) throw reportsError;
+      } else {
+        // Update reply status back to published
+        const { error: replyError } = await supabase
+          .from('company_replies')
+          .update({ status: 'published' })
+          .eq('id', contentId);
+
+        if (replyError) throw replyError;
+
+        // Update all associated reply reports to declined
+        const { error: reportsError } = await supabase
+          .from('reply_reports')
+          .update({ status: 'مرفوض' })
+          .eq('reply_id', contentId);
+
+        if (reportsError) throw reportsError;
+      }
+
+      toast.success(text[language].dismissSuccess);
+      
+      // Refresh flagged content
+      await fetchFlaggedContent();
+      await fetchStats();
+    } catch (error: any) {
+      console.error('Error dismissing report:', error);
+      toast.error(text[language].actionError);
+    } finally {
+      setProcessingAction(null);
+    }
+  };
+
+  const handleUpholdReport = async (contentId: number | string, contentType: 'review' | 'reply') => {
+    if (!confirm(text[language].confirmUphold)) return;
+
+    setProcessingAction(`uphold-${contentId}`);
+
+    try {
+      if (contentType === 'review') {
+        // Update review status to hidden
+        const { error: reviewError } = await supabase
+          .from('reviews')
+          .update({ status: 'hidden' })
+          .eq('id', contentId);
+
+        if (reviewError) throw reviewError;
+
+        // Update all associated reports to accepted
+        const { error: reportsError } = await supabase
+          .from('reports')
+          .update({ status: 'مقبول' })
+          .eq('review_id', contentId);
+
+        if (reportsError) throw reportsError;
+      } else {
+        // Update reply status to hidden
+        const { error: replyError } = await supabase
+          .from('company_replies')
+          .update({ status: 'hidden' })
+          .eq('id', contentId);
+
+        if (replyError) throw replyError;
+
+        // Update all associated reply reports to accepted
+        const { error: reportsError } = await supabase
+          .from('reply_reports')
+          .update({ status: 'مقبول' })
+          .eq('reply_id', contentId);
+
+        if (reportsError) throw reportsError;
+      }
+
+      toast.success(text[language].upholdSuccess);
+      
+      // Refresh flagged content
+      await fetchFlaggedContent();
+      await fetchStats();
+    } catch (error: any) {
+      console.error('Error upholding report:', error);
+      toast.error(text[language].actionError);
+    } finally {
+      setProcessingAction(null);
     }
   };
 
@@ -764,6 +1118,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       month: 'short',
       day: 'numeric'
     });
+  };
+
+  const getReasonText = (reason: string) => {
+    switch (reason) {
+      case 'inappropriate':
+        return text[language].inappropriateContent;
+      case 'spam':
+        return text[language].spam;
+      case 'fake':
+        return text[language].fakeReview;
+      case 'other':
+        return text[language].other;
+      default:
+        return reason;
+    }
   };
 
   // Loading state
@@ -1128,38 +1497,49 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
         <div className="w-16 h-1 bg-red-500 rounded-full"></div>
       </div>
 
-      {/* Status Filter Tabs */}
+      {/* Filter Tabs */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center space-x-1 rtl:space-x-reverse">
+        <div className="flex space-x-4 rtl:space-x-reverse">
           <button
-            onClick={() => setReportStatusFilter('pending')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
-              reportStatusFilter === 'pending'
-                ? 'bg-orange-500 text-white'
+            onClick={() => setReportFilter('pending')}
+            className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+              reportFilter === 'pending'
+                ? 'bg-orange-500 text-white shadow-md'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            {text[language].pending}
+            <div className="flex items-center space-x-2 rtl:space-x-reverse">
+              <Clock className="h-4 w-4" />
+              <span>{text[language].pending}</span>
+            </div>
           </button>
+          
           <button
-            onClick={() => setReportStatusFilter('accepted')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
-              reportStatusFilter === 'accepted'
-                ? 'bg-green-500 text-white'
+            onClick={() => setReportFilter('accepted')}
+            className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+              reportFilter === 'accepted'
+                ? 'bg-green-500 text-white shadow-md'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            {text[language].accepted}
+            <div className="flex items-center space-x-2 rtl:space-x-reverse">
+              <CheckCircle className="h-4 w-4" />
+              <span>{text[language].accepted}</span>
+            </div>
           </button>
+          
           <button
-            onClick={() => setReportStatusFilter('declined')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
-              reportStatusFilter === 'declined'
-                ? 'bg-red-500 text-white'
+            onClick={() => setReportFilter('declined')}
+            className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+              reportFilter === 'declined'
+                ? 'bg-red-500 text-white shadow-md'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            {text[language].declined}
+            <div className="flex items-center space-x-2 rtl:space-x-reverse">
+              <X className="h-4 w-4" />
+              <span>{text[language].declined}</span>
+            </div>
           </button>
         </div>
       </div>
@@ -1185,125 +1565,139 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                 <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {text[language].status}
                 </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].actions}
-                </th>
+                {reportFilter === 'pending' && (
+                  <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].actions}
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {/* Placeholder Data - Row 1 */}
-              <tr className="hover:bg-gray-50">
-                <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
-                  <div className="truncate">
-                    "تجربة سيئة جداً مع هذه الشركة..."
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    شركة العقارات المتميزة
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {text[language].inappropriateContent}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  أحمد محمد
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {formatDate('2024-01-15T10:30:00Z')}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">
-                    {text[language].pending}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                    <button className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors duration-200">
-                      <CheckCircle className="h-4 w-4" />
-                      <span>✅</span>
-                    </button>
-                    <button className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors duration-200">
-                      <X className="h-4 w-4" />
-                      <span>❌</span>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-
-              {/* Placeholder Data - Row 2 */}
-              <tr className="hover:bg-gray-50">
-                <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
-                  <div className="truncate">
-                    "هذا التقييم مزيف ومدفوع الأجر"
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    مجموعة الإسكان الحديث
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {text[language].fakeReview}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  فاطمة علي
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {formatDate('2024-01-14T14:20:00Z')}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">
-                    {text[language].pending}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                    <button className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors duration-200">
-                      <CheckCircle className="h-4 w-4" />
-                      <span>✅</span>
-                    </button>
-                    <button className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors duration-200">
-                      <X className="h-4 w-4" />
-                      <span>❌</span>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-
-              {/* Placeholder Data - Row 3 */}
-              <tr className="hover:bg-gray-50">
-                <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
-                  <div className="truncate">
-                    "رسائل دعائية متكررة في التقييمات"
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    شركة التطوير العقاري الذكي
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {text[language].spam}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  محمد حسن
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {formatDate('2024-01-13T09:15:00Z')}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">
-                    {text[language].pending}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                    <button className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors duration-200">
-                      <CheckCircle className="h-4 w-4" />
-                      <span>✅</span>
-                    </button>
-                    <button className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors duration-200">
-                      <X className="h-4 w-4" />
-                      <span>❌</span>
-                    </button>
-                  </div>
-                </td>
-              </tr>
+              {reportFilter === 'pending' ? (
+                flaggedContent.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                      {text[language].noFlaggedContent}
+                    </td>
+                  </tr>
+                ) : (
+                  flaggedContent.map((content) => (
+                    <tr key={`${content.type}-${content.id}`} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
+                        <div className="truncate font-medium">
+                          {content.content}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {content.company}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <div className="space-y-1">
+                          {content.reports.slice(0, 2).map((report, index) => (
+                            <div key={index} className="text-xs">
+                              {getReasonText(report.reason)}
+                            </div>
+                          ))}
+                          {content.reports.length > 2 && (
+                            <div className="text-xs text-gray-500">
+                              +{content.reports.length - 2} {text[language].reportCount}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {content.author}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {formatDate(content.created_at)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">
+                          {text[language].pending}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                          <button
+                            onClick={() => handleDismissReport(content.id, content.type)}
+                            disabled={processingAction === `dismiss-${content.id}`}
+                            className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors duration-200 disabled:opacity-50"
+                          >
+                            {processingAction === `dismiss-${content.id}` ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                <span>{text[language].processing}</span>
+                              </>
+                            ) : (
+                              <>
+                                <Check className="h-4 w-4" />
+                                <span>✅</span>
+                              </>
+                            )}
+                          </button>
+                          
+                          <button
+                            onClick={() => handleUpholdReport(content.id, content.type)}
+                            disabled={processingAction === `uphold-${content.id}`}
+                            className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors duration-200 disabled:opacity-50"
+                          >
+                            {processingAction === `uphold-${content.id}` ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                <span>{text[language].processing}</span>
+                              </>
+                            ) : (
+                              <>
+                                <X className="h-4 w-4" />
+                                <span>❌</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )
+              ) : (
+                resolvedReports.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                      {text[language].noResolvedReports}
+                    </td>
+                  </tr>
+                ) : (
+                  resolvedReports.map((report) => (
+                    <tr key={report.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
+                        <div className="truncate font-medium">
+                          {report.content_snippet}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {report.company}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {getReasonText(report.reason)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {report.author}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {formatDate(report.resolved_at)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                          report.status === 'مقبول' 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-red-100 text-red-800'
+                        }`}>
+                          {report.status === 'مقبول' ? text[language].accepted : text[language].declined}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )
+              )}
             </tbody>
           </table>
         </div>
@@ -1367,6 +1761,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                 >
                   <Flag className="h-5 w-5" />
                   <span className="font-medium">{text[language].reports}</span>
+                  {stats.pendingReports > 0 && (
+                    <span className="bg-red-500 text-white text-xs rounded-full px-2 py-1 ml-auto rtl:mr-auto rtl:ml-0">
+                      {stats.pendingReports}
+                    </span>
+                  )}
                 </button>
               </nav>
             </div>
