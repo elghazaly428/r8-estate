@@ -104,6 +104,7 @@ const AdminDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [language, setLanguage] = useState<'ar' | 'en'>('en');
 
   // Stats
   const [stats, setStats] = useState({
@@ -323,6 +324,15 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const handleLanguageChange = (lang: 'ar' | 'en') => {
+    setLanguage(lang);
+  };
+
+  const handleNavigation = (page: string) => {
+    // Handle navigation logic here
+    console.log('Navigate to:', page);
+  };
+
   const filteredUsers = users.filter(user => {
     const matchesSearch = searchTerm === '' || 
       user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -378,18 +388,26 @@ const AdminDashboard: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header />
+        <Header 
+          language={language} 
+          onLanguageChange={handleLanguageChange}
+          onNavigate={handleNavigation}
+        />
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
         </div>
-        <Footer />
+        <Footer language={language} onNavigate={handleNavigation} />
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
+      <Header 
+        language={language} 
+        onLanguageChange={handleLanguageChange}
+        onNavigate={handleNavigation}
+      />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
@@ -1040,7 +1058,7 @@ const AdminDashboard: React.FC = () => {
         )}
       </div>
 
-      <Footer />
+      <Footer language={language} onNavigate={handleNavigation} />
     </div>
   );
 };
