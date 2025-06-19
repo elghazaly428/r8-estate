@@ -24,7 +24,7 @@ interface CategoryGridProps {
 const CategoryGrid: React.FC<CategoryGridProps> = ({ language, onNavigate }) => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
 
   const text = {
     ar: {
@@ -106,46 +106,22 @@ const CategoryGrid: React.FC<CategoryGridProps> = ({ language, onNavigate }) => 
     fetchCategories();
   }, []);
 
-  // Responsive carousel settings - now showing 8 cards
-  const getItemsPerView = () => {
-    if (typeof window !== 'undefined') {
-      if (window.innerWidth >= 1536) return 8; // 2XL: 8 items
-      if (window.innerWidth >= 1280) return 6; // XL: 6 items
-      if (window.innerWidth >= 1024) return 4; // Desktop: 4 items
-      if (window.innerWidth >= 768) return 2;  // Tablet: 2 items
-    }
-    return 1; // Mobile: 1 item
-  };
+  // Calculate total pages (8 cards per page)
+  const cardsPerPage = 8;
+  const totalPages = Math.ceil(categories.length / cardsPerPage);
 
-  const [itemsToShow, setItemsToShow] = useState(getItemsPerView());
-
-  // Handle window resize for responsive behavior
-  useEffect(() => {
-    const handleResize = () => {
-      setItemsToShow(getItemsPerView());
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  // Calculate total slides needed
-  const totalSlides = Math.ceil(categories.length / itemsToShow);
-
-  // Navigation functions with looping - now moves one complete card at a time
+  // Navigation functions
   const goToNext = () => {
-    setCurrentIndex((prevIndex) => {
-      const nextIndex = prevIndex + 1;
-      // Loop back to beginning when reaching the end
-      return nextIndex >= totalSlides ? 0 : nextIndex;
+    setCurrentPage((prevPage) => {
+      const nextPage = prevPage + 1;
+      return nextPage >= totalPages ? 0 : nextPage; // Loop back to beginning
     });
   };
 
   const goToPrevious = () => {
-    setCurrentIndex((prevIndex) => {
-      const prevIndexCalc = prevIndex - 1;
-      // Loop to end when at beginning
-      return prevIndexCalc < 0 ? totalSlides - 1 : prevIndexCalc;
+    setCurrentPage((prevPage) => {
+      const prevPageCalc = prevPage - 1;
+      return prevPageCalc < 0 ? totalPages - 1 : prevPageCalc; // Loop to end
     });
   };
 
@@ -154,10 +130,10 @@ const CategoryGrid: React.FC<CategoryGridProps> = ({ language, onNavigate }) => 
     onNavigate('search', undefined, categoryId);
   };
 
-  // Get visible categories for current slide
+  // Get visible categories for current page (8 cards)
   const getVisibleCategories = () => {
-    const startIndex = currentIndex * itemsToShow;
-    return categories.slice(startIndex, startIndex + itemsToShow);
+    const startIndex = currentPage * cardsPerPage;
+    return categories.slice(startIndex, startIndex + cardsPerPage);
   };
 
   const ArrowIcon = language === 'ar' ? ArrowLeft : ArrowRight;
@@ -200,6 +176,8 @@ const CategoryGrid: React.FC<CategoryGridProps> = ({ language, onNavigate }) => 
     );
   }
 
+  const visibleCategories = getVisibleCategories();
+
   return (
     <section className="py-16 bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -209,78 +187,76 @@ const CategoryGrid: React.FC<CategoryGridProps> = ({ language, onNavigate }) => 
           </h2>
         </div>
 
-        {/* Carousel Container with External Navigation */}
+        {/* Grid Container with Navigation */}
         <div className="relative mb-12">
-          {/* Previous Button - Fixed position, no movement on hover */}
-          <button
-            onClick={goToPrevious}
-            className="absolute left-0 rtl:right-0 rtl:left-auto top-1/2 -translate-y-1/2 -translate-x-16 rtl:translate-x-16 z-20 w-14 h-14 bg-white rounded-full shadow-xl border-2 border-gray-200 flex items-center justify-center hover:bg-primary-50 hover:border-primary-500 hover:shadow-2xl transition-colors duration-300 group"
-            aria-label={language === 'ar' ? 'السابق' : 'Previous'}
-          >
-            <ChevronLeft className={`h-7 w-7 text-gray-600 group-hover:text-primary-500 transition-colors duration-300 ${language === 'ar' ? 'rotate-180' : ''}`} />
-          </button>
-
-          {/* Next Button - Fixed position, no movement on hover */}
-          <button
-            onClick={goToNext}
-            className="absolute right-0 rtl:left-0 rtl:right-auto top-1/2 -translate-y-1/2 translate-x-16 rtl:-translate-x-16 z-20 w-14 h-14 bg-white rounded-full shadow-xl border-2 border-gray-200 flex items-center justify-center hover:bg-primary-50 hover:border-primary-500 hover:shadow-2xl transition-colors duration-300 group"
-            aria-label={language === 'ar' ? 'التالي' : 'Next'}
-          >
-            <ChevronRight className={`h-7 w-7 text-gray-600 group-hover:text-primary-500 transition-colors duration-300 ${language === 'ar' ? 'rotate-180' : ''}`} />
-          </button>
-
-          {/* Carousel Content Container */}
-          <div className="overflow-hidden rounded-xl">
-            <div 
-              className="flex transition-transform duration-500 ease-in-out"
-              style={{
-                transform: `translateX(${language === 'ar' ? currentIndex * (100 / totalSlides) : -currentIndex * (100 / totalSlides)}%)`
-              }}
+          {/* Previous Button - Only show if there are multiple pages */}
+          {totalPages > 1 && (
+            <button
+              onClick={goToPrevious}
+              className="absolute left-0 rtl:right-0 rtl:left-auto top-1/2 -translate-y-1/2 -translate-x-16 rtl:translate-x-16 z-20 w-14 h-14 bg-white rounded-full shadow-xl border-2 border-gray-200 flex items-center justify-center hover:bg-primary-50 hover:border-primary-500 hover:shadow-2xl transition-colors duration-300 group"
+              aria-label={language === 'ar' ? 'السابق' : 'Previous'}
             >
-              {categories.map((category) => {
-                const IconComponent = getIconForCategory(category.icon_name, category.name);
-                return (
-                  <div
-                    key={category.id}
-                    className="flex-shrink-0 px-3"
-                    style={{ width: `${100 / itemsToShow}%` }}
-                  >
-                    {/* Category Card with Uniform Size */}
-                    <button
-                      onClick={() => handleCategoryClick(category.id)}
-                      className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 hover:border-primary-500 hover:shadow-lg transition-all duration-300 group w-full h-full min-h-[160px] flex flex-col items-center justify-center hover:scale-105"
-                    >
-                      {/* Icon Container */}
-                      <div className="w-16 h-16 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-6 group-hover:bg-primary-50 group-hover:text-primary-600 transition-all duration-300">
-                        <IconComponent className="h-8 w-8" />
-                      </div>
-                      
-                      {/* Category Name - Centered and Consistent Height */}
-                      <div className="flex-1 flex items-center justify-center">
-                        <h3 className="font-bold text-dark-500 text-center text-base leading-tight group-hover:text-primary-600 transition-colors duration-300 line-clamp-2">
-                          {category.name || 'Unnamed Category'}
-                        </h3>
-                      </div>
-                    </button>
+              <ChevronLeft className={`h-7 w-7 text-gray-600 group-hover:text-primary-500 transition-colors duration-300 ${language === 'ar' ? 'rotate-180' : ''}`} />
+            </button>
+          )}
+
+          {/* Next Button - Only show if there are multiple pages */}
+          {totalPages > 1 && (
+            <button
+              onClick={goToNext}
+              className="absolute right-0 rtl:left-0 rtl:right-auto top-1/2 -translate-y-1/2 translate-x-16 rtl:-translate-x-16 z-20 w-14 h-14 bg-white rounded-full shadow-xl border-2 border-gray-200 flex items-center justify-center hover:bg-primary-50 hover:border-primary-500 hover:shadow-2xl transition-colors duration-300 group"
+              aria-label={language === 'ar' ? 'التالي' : 'Next'}
+            >
+              <ChevronRight className={`h-7 w-7 text-gray-600 group-hover:text-primary-500 transition-colors duration-300 ${language === 'ar' ? 'rotate-180' : ''}`} />
+            </button>
+          )}
+
+          {/* 2x4 Grid Layout */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {visibleCategories.map((category) => {
+              const IconComponent = getIconForCategory(category.icon_name, category.name);
+              return (
+                <button
+                  key={category.id}
+                  onClick={() => handleCategoryClick(category.id)}
+                  className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:border-primary-500 hover:shadow-lg transition-all duration-300 group hover:scale-105 min-h-[160px] flex flex-col items-center justify-center"
+                >
+                  {/* Icon Container */}
+                  <div className="w-16 h-16 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4 group-hover:bg-primary-50 group-hover:text-primary-600 transition-all duration-300">
+                    <IconComponent className="h-8 w-8" />
                   </div>
-                );
-              })}
-            </div>
+                  
+                  {/* Category Name - Centered and Consistent Height */}
+                  <div className="flex-1 flex items-center justify-center">
+                    <h3 className="font-bold text-dark-500 text-center text-sm leading-tight group-hover:text-primary-600 transition-colors duration-300 line-clamp-2">
+                      {category.name || 'Unnamed Category'}
+                    </h3>
+                  </div>
+                </button>
+              );
+            })}
+
+            {/* Fill empty slots if less than 8 categories on current page */}
+            {visibleCategories.length < cardsPerPage && 
+              Array.from({ length: cardsPerPage - visibleCategories.length }).map((_, index) => (
+                <div key={`empty-${index}`} className="invisible min-h-[160px]"></div>
+              ))
+            }
           </div>
 
-          {/* Carousel Indicators */}
-          {totalSlides > 1 && (
+          {/* Page Indicators - Only show if there are multiple pages */}
+          {totalPages > 1 && (
             <div className="flex justify-center mt-8 space-x-2 rtl:space-x-reverse">
-              {Array.from({ length: totalSlides }).map((_, index) => (
+              {Array.from({ length: totalPages }).map((_, index) => (
                 <button
                   key={index}
-                  onClick={() => setCurrentIndex(index)}
+                  onClick={() => setCurrentPage(index)}
                   className={`h-2 rounded-full transition-all duration-300 hover:bg-primary-400 ${
-                    index === currentIndex 
+                    index === currentPage 
                       ? 'bg-primary-500 w-8' 
                       : 'bg-gray-300 w-2'
                   }`}
-                  aria-label={`${language === 'ar' ? 'الانتقال إلى الشريحة' : 'Go to slide'} ${index + 1}`}
+                  aria-label={`${language === 'ar' ? 'الانتقال إلى الصفحة' : 'Go to page'} ${index + 1}`}
                 />
               ))}
             </div>
