@@ -190,9 +190,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       hidden: 'مخفي',
       removed: 'محذوف',
       deleted: 'محذوف نهائياً',
-      reviewTitle: 'عنوان التقييم',
       author: 'الكاتب',
       company: 'الشركة',
+      reviewTitle: 'عنوان التقييم',
       rating: 'التقييم',
       dateCreated: 'تاريخ الإنشاء',
       hide: 'إخفاء',
@@ -262,9 +262,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       hidden: 'Hidden',
       removed: 'Removed',
       deleted: 'Deleted',
-      reviewTitle: 'Review Title',
       author: 'Author',
       company: 'Company',
+      reviewTitle: 'Review Title',
       rating: 'Rating',
       dateCreated: 'Date Created',
       hide: 'Hide',
@@ -980,13 +980,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].reviewTitle}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {text[language].author}
                 </th>
                 <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {text[language].company}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].reviewTitle}
                 </th>
                 <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {text[language].rating}
@@ -1012,11 +1012,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
               ) : (
                 reviews.map((review) => (
                   <tr key={review.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
-                      <div className="truncate">
-                        {review.title || 'No title'}
-                      </div>
-                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {review.is_anonymous 
                         ? text[language].anonymous
@@ -1027,6 +1022,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {review.companies?.name || 'Unknown Company'}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
+                      <div className="truncate">
+                        {review.title || 'No title'}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center space-x-1 rtl:space-x-reverse">
