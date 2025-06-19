@@ -18,7 +18,13 @@ import {
   User,
   Calendar,
   Search,
-  X
+  X,
+  Mail,
+  MapPin,
+  ExternalLink,
+  Clock,
+  FileText,
+  Upload
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import Header from './Header';
@@ -56,6 +62,47 @@ interface ReviewData {
   } | null;
 }
 
+interface UserData {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  is_admin: boolean | null;
+  is_suspended: boolean | null;
+  updated_at: string;
+}
+
+interface CompanyData {
+  id: number;
+  name: string | null;
+  logo_url: string | null;
+  website: string | null;
+  location: string | null;
+  is_claimed: boolean | null;
+  created_at: string;
+  categories: {
+    name: string | null;
+  } | null;
+}
+
+interface ReportData {
+  id: number;
+  reason: string | null;
+  details: string | null;
+  status: string | null;
+  created_at: string;
+  reviews: {
+    title: string | null;
+    companies: {
+      name: string | null;
+    } | null;
+  } | null;
+  profiles: {
+    first_name: string | null;
+    last_name: string | null;
+  } | null;
+}
+
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageChange, onNavigate }) => {
   const { user, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'companies' | 'reviews' | 'reports'>('overview');
@@ -74,11 +121,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
   const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'hidden' | 'deleted'>('all');
   const [loadingReviews, setLoadingReviews] = useState(false);
   
+  // Users state
+  const [users, setUsers] = useState<UserData[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  
+  // Companies state
+  const [companies, setCompanies] = useState<CompanyData[]>([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(false);
+  const [companySearchQuery, setCompanySearchQuery] = useState('');
+  
+  // Reports state
+  const [reports, setReports] = useState<ReportData[]>([]);
+  const [loadingReports, setLoadingReports] = useState(false);
+  const [reportStatusFilter, setReportStatusFilter] = useState<'all' | 'received' | 'reviewed' | 'resolved'>('all');
+  
   // Delete confirmation modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [reviewToDelete, setReviewToDelete] = useState<ReviewData | null>(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Bulk upload state
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const text = {
     ar: {
@@ -127,7 +194,44 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       reviewDeleted: 'تم حذف التقييم بنجاح',
       errorOccurred: 'حدث خطأ',
       deleting: 'جاري الحذف...',
-      noReviews: 'لا توجد تقييمات'
+      noReviews: 'لا توجد تقييمات',
+      // Users specific
+      searchUsers: 'البحث في المستخدمين...',
+      name: 'الاسم',
+      email: 'البريد الإلكتروني',
+      role: 'الدور',
+      admin: 'أدمن',
+      user: 'مستخدم',
+      suspended: 'موقوف',
+      active: 'نشط',
+      lastUpdated: 'آخر تحديث',
+      noUsers: 'لا توجد مستخدمين',
+      // Companies specific
+      searchCompanies: 'البحث في الشركات...',
+      companyName: 'اسم الشركة',
+      category: 'الفئة',
+      website: 'الموقع الإلكتروني',
+      location: 'الموقع',
+      claimed: 'مطالب بها',
+      unclaimed: 'غير مطالب بها',
+      yes: 'نعم',
+      no: 'لا',
+      noCompanies: 'لا توجد شركات',
+      bulkUpload: 'رفع مجمع',
+      uploadCSV: 'رفع ملف CSV',
+      selectFile: 'اختر ملف',
+      upload: 'رفع',
+      uploading: 'جاري الرفع...',
+      uploadSuccess: 'تم رفع الملف بنجاح',
+      uploadError: 'خطأ في رفع الملف',
+      // Reports specific
+      reporter: 'المبلغ',
+      reason: 'السبب',
+      reviewReported: 'التقييم المبلغ عنه',
+      received: 'مستلم',
+      reviewed: 'تمت المراجعة',
+      resolved: 'تم الحل',
+      noReports: 'لا توجد بلاغات'
     },
     en: {
       adminDashboard: 'Admin Dashboard',
@@ -175,7 +279,44 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       reviewDeleted: 'Review deleted successfully',
       errorOccurred: 'An error occurred',
       deleting: 'Deleting...',
-      noReviews: 'No reviews found'
+      noReviews: 'No reviews found',
+      // Users specific
+      searchUsers: 'Search users...',
+      name: 'Name',
+      email: 'Email',
+      role: 'Role',
+      admin: 'Admin',
+      user: 'User',
+      suspended: 'Suspended',
+      active: 'Active',
+      lastUpdated: 'Last Updated',
+      noUsers: 'No users found',
+      // Companies specific
+      searchCompanies: 'Search companies...',
+      companyName: 'Company Name',
+      category: 'Category',
+      website: 'Website',
+      location: 'Location',
+      claimed: 'Claimed',
+      unclaimed: 'Unclaimed',
+      yes: 'Yes',
+      no: 'No',
+      noCompanies: 'No companies found',
+      bulkUpload: 'Bulk Upload',
+      uploadCSV: 'Upload CSV File',
+      selectFile: 'Select File',
+      upload: 'Upload',
+      uploading: 'Uploading...',
+      uploadSuccess: 'File uploaded successfully',
+      uploadError: 'Error uploading file',
+      // Reports specific
+      reporter: 'Reporter',
+      reason: 'Reason',
+      reviewReported: 'Review Reported',
+      received: 'Received',
+      reviewed: 'Reviewed',
+      resolved: 'Resolved',
+      noReports: 'No reports found'
     }
   };
 
@@ -208,9 +349,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
         // Fetch admin stats
         await fetchAdminStats();
         
-        // Fetch reviews if on reviews tab
-        if (activeTab === 'reviews') {
-          await fetchReviews();
+        // Fetch data based on active tab
+        switch (activeTab) {
+          case 'reviews':
+            await fetchReviews();
+            break;
+          case 'users':
+            await fetchUsers();
+            break;
+          case 'companies':
+            await fetchCompanies();
+            break;
+          case 'reports':
+            await fetchReports();
+            break;
         }
       } catch (error: any) {
         console.error('Error checking admin access:', error);
@@ -223,10 +375,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     checkAdminAccess();
   }, [user, authLoading, onNavigate, activeTab]);
 
-  // Fetch reviews when tab changes to reviews
+  // Fetch data when tab changes
   useEffect(() => {
-    if (activeTab === 'reviews' && user) {
-      fetchReviews();
+    if (!user) return;
+    
+    switch (activeTab) {
+      case 'reviews':
+        fetchReviews();
+        break;
+      case 'users':
+        fetchUsers();
+        break;
+      case 'companies':
+        fetchCompanies();
+        break;
+      case 'reports':
+        fetchReports();
+        break;
     }
   }, [activeTab, user]);
 
@@ -305,6 +470,92 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     }
   };
 
+  const fetchUsers = async () => {
+    try {
+      setLoadingUsers(true);
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      setUsers(data || []);
+    } catch (error: any) {
+      console.error('Error fetching users:', error);
+      toast.error(text[language].errorOccurred);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const fetchCompanies = async () => {
+    try {
+      setLoadingCompanies(true);
+      
+      const { data, error } = await supabase
+        .from('companies')
+        .select(`
+          id,
+          name,
+          logo_url,
+          website,
+          location,
+          is_claimed,
+          created_at,
+          categories(name)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      setCompanies(data || []);
+    } catch (error: any) {
+      console.error('Error fetching companies:', error);
+      toast.error(text[language].errorOccurred);
+    } finally {
+      setLoadingCompanies(false);
+    }
+  };
+
+  const fetchReports = async () => {
+    try {
+      setLoadingReports(true);
+      
+      const { data, error } = await supabase
+        .from('reports')
+        .select(`
+          id,
+          reason,
+          details,
+          status,
+          created_at,
+          reviews!reports_review_id_fkey(
+            title,
+            companies!reviews_company_id_fkey(name)
+          ),
+          profiles!reports_reporter_profile_id_fkey(first_name, last_name)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      setReports(data || []);
+    } catch (error: any) {
+      console.error('Error fetching reports:', error);
+      toast.error(text[language].errorOccurred);
+    } finally {
+      setLoadingReports(false);
+    }
+  };
+
   const handleHideReview = async (reviewId: number) => {
     if (!confirm(text[language].confirmHide)) return;
 
@@ -378,6 +629,41 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       toast.error(text[language].errorOccurred);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleBulkUpload = async () => {
+    if (!uploadFile) return;
+
+    try {
+      setUploading(true);
+      
+      const formData = new FormData();
+      formData.append('file', uploadFile);
+
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/bulk-upload-companies`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast.success(text[language].uploadSuccess);
+        setShowBulkUpload(false);
+        setUploadFile(null);
+        fetchCompanies(); // Refresh companies list
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error: any) {
+      console.error('Error uploading file:', error);
+      toast.error(`${text[language].uploadError}: ${error.message}`);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -464,6 +750,426 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     
     return text[language].anonymous;
   };
+
+  const getUserName = (user: UserData) => {
+    const firstName = user.first_name || '';
+    const lastName = user.last_name || '';
+    const fullName = `${firstName} ${lastName}`.trim();
+    return fullName || 'Unknown User';
+  };
+
+  const getReporterName = (report: ReportData) => {
+    if (report.profiles) {
+      const firstName = report.profiles.first_name || '';
+      const lastName = report.profiles.last_name || '';
+      const fullName = `${firstName} ${lastName}`.trim();
+      return fullName || text[language].anonymous;
+    }
+    return text[language].anonymous;
+  };
+
+  // Filter functions
+  const filteredUsers = users.filter(user =>
+    getUserName(user).toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+    (user.email && user.email.toLowerCase().includes(userSearchQuery.toLowerCase()))
+  );
+
+  const filteredCompanies = companies.filter(company =>
+    (company.name && company.name.toLowerCase().includes(companySearchQuery.toLowerCase())) ||
+    (company.location && company.location.toLowerCase().includes(companySearchQuery.toLowerCase()))
+  );
+
+  const filteredReports = reportStatusFilter === 'all' 
+    ? reports 
+    : reports.filter(report => report.status === reportStatusFilter);
+
+  // Users View Component
+  const UsersView = () => (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-dark-500 mb-2">
+          {text[language].users}
+        </h1>
+        <div className="w-16 h-1 bg-red-500 rounded-full"></div>
+      </div>
+
+      {/* Search Section */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <div className="relative">
+          <div className="absolute inset-y-0 right-0 pr-3 rtl:left-0 rtl:right-auto rtl:pl-3 rtl:pr-0 flex items-center pointer-events-none">
+            <Search className="h-5 w-5 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            value={userSearchQuery}
+            onChange={(e) => setUserSearchQuery(e.target.value)}
+            placeholder={text[language].searchUsers}
+            className="w-full px-4 py-3 pr-10 rtl:pl-10 rtl:pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
+            dir={language === 'ar' ? 'rtl' : 'ltr'}
+          />
+        </div>
+      </div>
+
+      {/* Users Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        {loadingUsers ? (
+          <div className="p-8 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">{text[language].loading}</p>
+          </div>
+        ) : filteredUsers.length === 0 ? (
+          <div className="p-8 text-center">
+            <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500">{text[language].noUsers}</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].name}
+                  </th>
+                  <th className="px-6 py-3 text-left rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].email}
+                  </th>
+                  <th className="px-6 py-3 text-left rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].role}
+                  </th>
+                  <th className="px-6 py-3 text-left rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].status}
+                  </th>
+                  <th className="px-6 py-3 text-left rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].lastUpdated}
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredUsers.map((user) => (
+                  <tr key={user.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center mr-3 rtl:ml-3 rtl:mr-0">
+                          <User className="h-4 w-4 text-gray-500" />
+                        </div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {getUserName(user)}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center text-sm text-gray-900">
+                        <Mail className="h-4 w-4 mr-2 rtl:ml-2 rtl:mr-0 text-gray-400" />
+                        {user.email || 'No email'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        user.is_admin 
+                          ? 'bg-purple-100 text-purple-800' 
+                          : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {user.is_admin ? text[language].admin : text[language].user}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        user.is_suspended 
+                          ? 'bg-red-100 text-red-800' 
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {user.is_suspended ? text[language].suspended : text[language].active}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center text-sm text-gray-500">
+                        <Clock className="h-4 w-4 mr-1 rtl:ml-1 rtl:mr-0" />
+                        {formatDate(user.updated_at)}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // Companies View Component
+  const CompaniesView = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-dark-500 mb-2">
+            {text[language].companies}
+          </h1>
+          <div className="w-16 h-1 bg-red-500 rounded-full"></div>
+        </div>
+        <button
+          onClick={() => setShowBulkUpload(true)}
+          className="flex items-center space-x-2 rtl:space-x-reverse bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200"
+        >
+          <Upload className="h-4 w-4" />
+          <span>{text[language].bulkUpload}</span>
+        </button>
+      </div>
+
+      {/* Search Section */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <div className="relative">
+          <div className="absolute inset-y-0 right-0 pr-3 rtl:left-0 rtl:right-auto rtl:pl-3 rtl:pr-0 flex items-center pointer-events-none">
+            <Search className="h-5 w-5 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            value={companySearchQuery}
+            onChange={(e) => setCompanySearchQuery(e.target.value)}
+            placeholder={text[language].searchCompanies}
+            className="w-full px-4 py-3 pr-10 rtl:pl-10 rtl:pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
+            dir={language === 'ar' ? 'rtl' : 'ltr'}
+          />
+        </div>
+      </div>
+
+      {/* Companies Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        {loadingCompanies ? (
+          <div className="p-8 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">{text[language].loading}</p>
+          </div>
+        ) : filteredCompanies.length === 0 ? (
+          <div className="p-8 text-center">
+            <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500">{text[language].noCompanies}</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].companyName}
+                  </th>
+                  <th className="px-6 py-3 text-left rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].category}
+                  </th>
+                  <th className="px-6 py-3 text-left rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].website}
+                  </th>
+                  <th className="px-6 py-3 text-left rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].location}
+                  </th>
+                  <th className="px-6 py-3 text-left rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].claimed}
+                  </th>
+                  <th className="px-6 py-3 text-left rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].createdDate}
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredCompanies.map((company) => (
+                  <tr key={company.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center mr-3 rtl:ml-3 rtl:mr-0 text-sm">
+                          {company.logo_url ? (
+                            <img 
+                              src={company.logo_url} 
+                              alt="Logo" 
+                              className="w-full h-full object-cover rounded-lg"
+                            />
+                          ) : (
+                            '🏢'
+                          )}
+                        </div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {company.name || 'Unnamed Company'}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">
+                        {company.categories?.name || 'No Category'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {company.website ? (
+                        <a 
+                          href={company.website} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex items-center text-sm text-blue-600 hover:text-blue-800"
+                        >
+                          <ExternalLink className="h-3 w-3 mr-1 rtl:ml-1 rtl:mr-0" />
+                          {text[language].website}
+                        </a>
+                      ) : (
+                        <span className="text-sm text-gray-500">No website</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center text-sm text-gray-900">
+                        <MapPin className="h-4 w-4 mr-1 rtl:ml-1 rtl:mr-0 text-gray-400" />
+                        {company.location || 'No location'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        company.is_claimed 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {company.is_claimed ? text[language].yes : text[language].no}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center text-sm text-gray-500">
+                        <Calendar className="h-4 w-4 mr-1 rtl:ml-1 rtl:mr-0" />
+                        {formatDate(company.created_at)}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // Reports View Component
+  const ReportsView = () => (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-dark-500 mb-2">
+          {text[language].reports}
+        </h1>
+        <div className="w-16 h-1 bg-red-500 rounded-full"></div>
+      </div>
+
+      {/* Filter Section */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <div className="flex items-center space-x-4 rtl:space-x-reverse">
+          <Filter className="h-5 w-5 text-gray-500" />
+          <label className="text-sm font-medium text-gray-700">
+            {text[language].filterByStatus}:
+          </label>
+          <div className="relative">
+            <select
+              value={reportStatusFilter}
+              onChange={(e) => setReportStatusFilter(e.target.value as 'all' | 'received' | 'reviewed' | 'resolved')}
+              className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 rtl:pl-8 rtl:pr-4 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
+            >
+              <option value="all">{text[language].all}</option>
+              <option value="received">{text[language].received}</option>
+              <option value="reviewed">{text[language].reviewed}</option>
+              <option value="resolved">{text[language].resolved}</option>
+            </select>
+            <ChevronDown className="absolute right-2 rtl:left-2 rtl:right-auto top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+          </div>
+        </div>
+      </div>
+
+      {/* Reports Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        {loadingReports ? (
+          <div className="p-8 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">{text[language].loading}</p>
+          </div>
+        ) : filteredReports.length === 0 ? (
+          <div className="p-8 text-center">
+            <Shield className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500">{text[language].noReports}</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].reporter}
+                  </th>
+                  <th className="px-6 py-3 text-left rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].reason}
+                  </th>
+                  <th className="px-6 py-3 text-left rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].reviewReported}
+                  </th>
+                  <th className="px-6 py-3 text-left rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].status}
+                  </th>
+                  <th className="px-6 py-3 text-left rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    {text[language].createdDate}
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredReports.map((report) => (
+                  <tr key={report.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center mr-3 rtl:ml-3 rtl:mr-0">
+                          <User className="h-4 w-4 text-gray-500" />
+                        </div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {getReporterName(report)}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-900 max-w-xs">
+                        <div className="font-medium">{report.reason}</div>
+                        {report.details && (
+                          <div className="text-gray-500 text-xs mt-1 truncate">
+                            {report.details}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="text-sm text-gray-900">
+                        <div className="font-medium">
+                          {report.reviews?.title || 'No Title'}
+                        </div>
+                        <div className="text-gray-500 text-xs">
+                          {report.reviews?.companies?.name || 'Unknown Company'}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        report.status === 'received' 
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : report.status === 'reviewed'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {report.status === 'received' && text[language].received}
+                        {report.status === 'reviewed' && text[language].reviewed}
+                        {report.status === 'resolved' && text[language].resolved}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center text-sm text-gray-500">
+                        <Calendar className="h-4 w-4 mr-1 rtl:ml-1 rtl:mr-0" />
+                        {formatDate(report.created_at)}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   // Reviews View Component
   const ReviewsView = () => (
@@ -793,29 +1499,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
               </div>
             )}
             
+            {activeTab === 'users' && <UsersView />}
+            {activeTab === 'companies' && <CompaniesView />}
             {activeTab === 'reviews' && <ReviewsView />}
-            
-            {/* Placeholder for other tabs */}
-            {activeTab === 'users' && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
-                <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">Users management coming soon...</p>
-              </div>
-            )}
-            
-            {activeTab === 'companies' && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
-                <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">Companies management coming soon...</p>
-              </div>
-            )}
-            
-            {activeTab === 'reports' && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
-                <Shield className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500">Reports management coming soon...</p>
-              </div>
-            )}
+            {activeTab === 'reports' && <ReportsView />}
           </div>
         </div>
       </div>
@@ -874,6 +1561,64 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                   <>
                     <Trash2 className="h-4 w-4" />
                     <span>{text[language].confirm}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Upload Modal */}
+      {showBulkUpload && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-dark-500 flex items-center space-x-2 rtl:space-x-reverse">
+                <Upload className="h-5 w-5 text-blue-500" />
+                <span>{text[language].uploadCSV}</span>
+              </h3>
+              <button
+                onClick={() => setShowBulkUpload(false)}
+                className="text-gray-400 hover:text-gray-600"
+                disabled={uploading}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="mb-6">
+              <input
+                type="file"
+                accept=".csv"
+                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                disabled={uploading}
+              />
+            </div>
+
+            <div className="flex space-x-3 rtl:space-x-reverse">
+              <button
+                onClick={() => setShowBulkUpload(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                disabled={uploading}
+              >
+                {text[language].cancel}
+              </button>
+              <button
+                onClick={handleBulkUpload}
+                disabled={!uploadFile || uploading}
+                className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 rtl:space-x-reverse"
+              >
+                {uploading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>{text[language].uploading}</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4" />
+                    <span>{text[language].upload}</span>
                   </>
                 )}
               </button>
