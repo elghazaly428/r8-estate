@@ -21,7 +21,8 @@ import {
   ChevronDown,
   Info,
   Star,
-  EyeOff
+  EyeOff,
+  Flag
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import Header from './Header';
@@ -129,6 +130,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
   // Review filter state
   const [reviewStatusFilter, setReviewStatusFilter] = useState<string>('all');
   
+  // Reports filter state
+  const [reportStatusFilter, setReportStatusFilter] = useState<string>('pending');
+  
   // Modal states
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
@@ -209,7 +213,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       deleteError: 'حدث خطأ أثناء حذف التقييم',
       cannotDeleteWithReply: 'لا يمكن حذف التقييم لأن الشركة قد ردت عليه',
       anonymous: 'مجهول',
-      noReviews: 'لا توجد تقييمات'
+      noReviews: 'لا توجد تقييمات',
+      // Reports specific text
+      pending: 'في الانتظار',
+      accepted: 'مقبولة',
+      declined: 'مرفوضة',
+      reportedContent: 'المحتوى المبلغ عنه',
+      reason: 'السبب',
+      contentAuthor: 'كاتب المحتوى',
+      reportDate: 'تاريخ البلاغ',
+      noReports: 'لا توجد بلاغات',
+      inappropriateContent: 'محتوى غير مناسب',
+      spam: 'رسائل مزعجة',
+      fakeReview: 'تقييم مزيف'
     },
     en: {
       adminDashboard: 'Admin Dashboard',
@@ -281,7 +297,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       deleteError: 'Error deleting review',
       cannotDeleteWithReply: 'Cannot delete review because the company has replied to it',
       anonymous: 'Anonymous',
-      noReviews: 'No reviews found'
+      noReviews: 'No reviews found',
+      // Reports specific text
+      pending: 'Pending',
+      accepted: 'Accepted',
+      declined: 'Declined',
+      reportedContent: 'Reported Content',
+      reason: 'Reason',
+      contentAuthor: 'Content Author',
+      reportDate: 'Report Date',
+      noReports: 'No reports found',
+      inappropriateContent: 'Inappropriate Content',
+      spam: 'Spam',
+      fakeReview: 'Fake Review'
     }
   };
 
@@ -1090,6 +1118,199 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     </div>
   );
 
+  // Reports View
+  const ReportsView = () => (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-dark-500 mb-2">
+          {text[language].reports}
+        </h1>
+        <div className="w-16 h-1 bg-red-500 rounded-full"></div>
+      </div>
+
+      {/* Status Filter Tabs */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <div className="flex items-center space-x-1 rtl:space-x-reverse">
+          <button
+            onClick={() => setReportStatusFilter('pending')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+              reportStatusFilter === 'pending'
+                ? 'bg-orange-500 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            {text[language].pending}
+          </button>
+          <button
+            onClick={() => setReportStatusFilter('accepted')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+              reportStatusFilter === 'accepted'
+                ? 'bg-green-500 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            {text[language].accepted}
+          </button>
+          <button
+            onClick={() => setReportStatusFilter('declined')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+              reportStatusFilter === 'declined'
+                ? 'bg-red-500 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            {text[language].declined}
+          </button>
+        </div>
+      </div>
+
+      {/* Reports Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].reportedContent}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].reason}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].contentAuthor}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].reportDate}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].status}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].actions}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {/* Placeholder Data - Row 1 */}
+              <tr className="hover:bg-gray-50">
+                <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
+                  <div className="truncate">
+                    "تجربة سيئة جداً مع هذه الشركة..."
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    شركة العقارات المتميزة
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {text[language].inappropriateContent}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  أحمد محمد
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {formatDate('2024-01-15T10:30:00Z')}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">
+                    {text[language].pending}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                    <button className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors duration-200">
+                      <CheckCircle className="h-4 w-4" />
+                      <span>✅</span>
+                    </button>
+                    <button className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors duration-200">
+                      <X className="h-4 w-4" />
+                      <span>❌</span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+
+              {/* Placeholder Data - Row 2 */}
+              <tr className="hover:bg-gray-50">
+                <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
+                  <div className="truncate">
+                    "هذا التقييم مزيف ومدفوع الأجر"
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    مجموعة الإسكان الحديث
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {text[language].fakeReview}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  فاطمة علي
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {formatDate('2024-01-14T14:20:00Z')}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">
+                    {text[language].pending}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                    <button className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors duration-200">
+                      <CheckCircle className="h-4 w-4" />
+                      <span>✅</span>
+                    </button>
+                    <button className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors duration-200">
+                      <X className="h-4 w-4" />
+                      <span>❌</span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+
+              {/* Placeholder Data - Row 3 */}
+              <tr className="hover:bg-gray-50">
+                <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
+                  <div className="truncate">
+                    "رسائل دعائية متكررة في التقييمات"
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    شركة التطوير العقاري الذكي
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {text[language].spam}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  محمد حسن
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {formatDate('2024-01-13T09:15:00Z')}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 text-orange-800">
+                    {text[language].pending}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                  <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                    <button className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors duration-200">
+                      <CheckCircle className="h-4 w-4" />
+                      <span>✅</span>
+                    </button>
+                    <button className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors duration-200">
+                      <X className="h-4 w-4" />
+                      <span>❌</span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className={`min-h-screen bg-gray-50 ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <Header language={language} onLanguageChange={onLanguageChange} onNavigate={onNavigate} />
@@ -1135,6 +1356,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                   <FileText className="h-5 w-5" />
                   <span className="font-medium">{text[language].reviews}</span>
                 </button>
+
+                <button
+                  onClick={() => setActiveTab('reports')}
+                  className={`w-full flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-lg text-right transition-all duration-200 ${
+                    activeTab === 'reports'
+                      ? 'bg-red-50 text-red-600 border-r-4 border-red-500 rtl:border-l-4 rtl:border-r-0'
+                      : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Flag className="h-5 w-5" />
+                  <span className="font-medium">{text[language].reports}</span>
+                </button>
               </nav>
             </div>
           </div>
@@ -1144,6 +1377,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
             {activeTab === 'overview' && <OverviewView />}
             {activeTab === 'companies' && <CompaniesView />}
             {activeTab === 'reviews' && <ReviewsView />}
+            {activeTab === 'reports' && <ReportsView />}
           </div>
         </div>
       </div>
