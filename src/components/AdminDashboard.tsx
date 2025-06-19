@@ -17,7 +17,9 @@ import {
   Save,
   Trash2,
   Eye,
-  EyeOff
+  EyeOff,
+  Check,
+  AlertTriangle
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import Header from './Header';
@@ -70,11 +72,13 @@ interface ReviewData {
 
 interface ReportData {
   id: number;
+  review_id: number | null;
   reason: string | null;
   details: string | null;
   status: string | null;
   created_at: string;
   reviews: {
+    id: number;
     title: string | null;
     companies: {
       name: string | null;
@@ -177,7 +181,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       rating: 'التقييم',
       reason: 'السبب',
       reporter: 'المبلغ',
-      reportedContent: 'المحتوى المبلغ عنه'
+      reportedContent: 'المحتوى المبلغ عنه',
+      dismiss: 'رفض',
+      upholdAndHide: 'قبول وإخفاء',
+      confirmDismissReport: 'هل أنت متأكد من رفض هذا البلاغ؟',
+      confirmUpholdReport: 'هل أنت متأكد من قبول هذا البلاغ وإخفاء المحتوى؟',
+      reportDismissed: 'تم رفض البلاغ بنجاح',
+      reportUpheld: 'تم قبول البلاغ وإخفاء المحتوى بنجاح'
     },
     en: {
       adminDashboard: 'Admin Dashboard',
@@ -240,7 +250,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       rating: 'Rating',
       reason: 'Reason',
       reporter: 'Reporter',
-      reportedContent: 'Reported Content'
+      reportedContent: 'Reported Content',
+      dismiss: 'Dismiss',
+      upholdAndHide: 'Uphold & Hide',
+      confirmDismissReport: 'Are you sure you want to dismiss this report?',
+      confirmUpholdReport: 'Are you sure you want to uphold this report and hide the content?',
+      reportDismissed: 'Report dismissed successfully',
+      reportUpheld: 'Report upheld and content hidden successfully'
     }
   };
 
@@ -341,6 +357,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
           *,
           profiles!reports_reporter_profile_id_fkey(first_name, last_name),
           reviews!reports_review_id_fkey(
+            id,
             title,
             companies!reviews_company_id_fkey(name)
           )
@@ -466,6 +483,69 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     }
   };
 
+  const handleDismissReport = async (report: ReportData) => {
+    if (!confirm(text[language].confirmDismissReport)) return;
+
+    try {
+      // Update all reports for this content to 'declined'
+      const { error } = await supabase
+        .from('reports')
+        .update({ status: 'declined' })
+        .eq('review_id', report.review_id);
+
+      if (error) throw error;
+
+      // Update local state
+      setReports(prev => prev.map(r => 
+        r.review_id === report.review_id ? { ...r, status: 'declined' } : r
+      ));
+
+      toast.success(text[language].reportDismissed);
+    } catch (error: any) {
+      console.error('Error dismissing report:', error);
+      toast.error(text[language].errorOccurred);
+    }
+  };
+
+  const handleUpholdReport = async (report: ReportData) => {
+    if (!confirm(text[language].confirmUpholdReport)) return;
+
+    try {
+      // First, hide the original content
+      if (report.review_id) {
+        const { error: reviewError } = await supabase
+          .from('reviews')
+          .update({ status: 'hidden' })
+          .eq('id', report.review_id);
+
+        if (reviewError) throw reviewError;
+
+        // Update local reviews state
+        setReviews(prev => prev.map(review => 
+          review.id === report.review_id ? { ...review, status: 'hidden' } : review
+        ));
+      }
+
+      // Then, update all reports for this content to 'accepted'
+      const { error: reportError } = await supabase
+        .from('reports')
+        .update({ status: 'accepted' })
+        .eq('review_id', report.review_id);
+
+      if (reportError) throw reportError;
+
+      // Update local reports state
+      setReports(prev => prev.map(r => 
+        r.review_id === report.review_id ? { ...r, status: 'accepted' } : r
+      ));
+
+      toast.success(text[language].reportUpheld);
+    } catch (error: any) {
+      console.error('Error upholding report:', error);
+      toast.error(text[language].errorOccurred);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US');
   };
@@ -511,6 +591,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     } else if (type === 'report') {
       switch (status) {
         case 'pending':
+        case 'received':
           color = 'bg-yellow-100 text-yellow-800';
           text = language === 'ar' ? 'في الانتظار' : 'Pending';
           break;
@@ -521,6 +602,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
         case 'resolved':
           color = 'bg-green-100 text-green-800';
           text = language === 'ar' ? 'تم الحل' : 'Resolved';
+          break;
+        case 'accepted':
+          color = 'bg-red-100 text-red-800';
+          text = language === 'ar' ? 'مقبول' : 'Accepted';
+          break;
+        case 'declined':
+          color = 'bg-gray-100 text-gray-800';
+          text = language === 'ar' ? 'مرفوض' : 'Declined';
           break;
         default:
           color = 'bg-gray-100 text-gray-800';
@@ -591,7 +680,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       report.reason?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       report.details?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesFilter = reportFilter === 'all' || report.status === reportFilter;
+    let matchesFilter = false;
+    if (reportFilter === 'all') {
+      matchesFilter = true;
+    } else if (reportFilter === 'pending') {
+      matchesFilter = report.status === 'pending' || report.status === 'received';
+    } else {
+      matchesFilter = report.status === reportFilter;
+    }
 
     return matchesSearch && matchesFilter;
   });
@@ -977,6 +1073,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                       <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].reason}</th>
                       <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].status}</th>
                       <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].createdAt}</th>
+                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].actions}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -998,6 +1095,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                         </td>
                         <td className="py-4 px-4">{getStatusBadge(report.status, 'report')}</td>
                         <td className="py-4 px-4 text-gray-600">{formatDate(report.created_at)}</td>
+                        <td className="py-4 px-4">
+                          {/* Only show action buttons for pending reports */}
+                          {(report.status === 'pending' || report.status === 'received') && (
+                            <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                              {/* Dismiss Report Button (Green ✓) */}
+                              <button
+                                onClick={() => handleDismissReport(report)}
+                                className="flex items-center space-x-1 rtl:space-x-reverse bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
+                                title={text[language].dismiss}
+                              >
+                                <Check className="h-3 w-3" />
+                                <span>{text[language].dismiss}</span>
+                              </button>
+                              
+                              {/* Uphold & Hide Report Button (Red ✗) */}
+                              <button
+                                onClick={() => handleUpholdReport(report)}
+                                className="flex items-center space-x-1 rtl:space-x-reverse bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
+                                title={text[language].upholdAndHide}
+                              >
+                                <AlertTriangle className="h-3 w-3" />
+                                <span>{text[language].upholdAndHide}</span>
+                              </button>
+                            </div>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
