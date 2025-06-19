@@ -19,7 +19,10 @@ import {
   Upload,
   MoreHorizontal,
   ChevronDown,
-  Info
+  Info,
+  Save,
+  UserX,
+  UserCheck
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import Header from './Header';
@@ -61,7 +64,7 @@ interface UserProfile {
   id: string;
   first_name: string | null;
   last_name: string | null;
-  email: string | null; // Now available in profiles table
+  email: string | null;
   avatar_url: string | null;
   is_admin: boolean | null;
   is_suspended: boolean | null;
@@ -120,8 +123,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
   });
   const [companies, setCompanies] = useState<Company[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
+  
+  // User management states
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userStatusFilter, setUserStatusFilter] = useState<'all' | 'active' | 'suspended'>('all');
+  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+  const [editUserForm, setEditUserForm] = useState({
+    firstName: '',
+    lastName: ''
+  });
+  const [savingUser, setSavingUser] = useState(false);
+  const [suspendingUser, setSuspendingUser] = useState<string | null>(null);
   
   // Modal states
   const [assignModalOpen, setAssignModalOpen] = useState(false);
@@ -176,7 +191,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       userNotFound: 'لم يتم العثور على مستخدمين',
       domainMismatch: 'تحذير: لا يوجد نطاق محدد للشركة، البحث في جميع المستخدمين',
       emailDomainMatch: 'تطابق نطاق البريد الإلكتروني',
-      emailDomainMismatch: 'عدم تطابق نطاق البريد الإلكتروني'
+      emailDomainMismatch: 'عدم تطابق نطاق البريد الإلكتروني',
+      // Users view specific
+      searchByNameOrEmail: 'البحث بالاسم أو البريد الإلكتروني...',
+      allStatuses: 'جميع الحالات',
+      userId: 'معرف المستخدم',
+      fullName: 'الاسم الكامل',
+      signupDate: 'تاريخ التسجيل',
+      edit: 'تعديل',
+      suspendUser: 'إيقاف المستخدم',
+      activateUser: 'تفعيل المستخدم',
+      editUser: 'تعديل المستخدم',
+      firstName: 'الاسم الأول',
+      lastName: 'اسم العائلة',
+      saveChanges: 'حفظ التغييرات',
+      saving: 'جاري الحفظ...',
+      userUpdated: 'تم تحديث بيانات المستخدم بنجاح',
+      userUpdateError: 'حدث خطأ أثناء تحديث بيانات المستخدم',
+      userSuspended: 'تم إيقاف المستخدم بنجاح',
+      userActivated: 'تم تفعيل المستخدم بنجاح',
+      userSuspendError: 'حدث خطأ أثناء تغيير حالة المستخدم',
+      confirmSuspend: 'هل أنت متأكد من إيقاف هذا المستخدم؟',
+      confirmActivate: 'هل أنت متأكد من تفعيل هذا المستخدم؟',
+      suspending: 'جاري الإيقاف...',
+      activating: 'جاري التفعيل...',
+      noUsers: 'لا يوجد مستخدمين'
     },
     en: {
       adminDashboard: 'Admin Dashboard',
@@ -221,7 +260,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       userNotFound: 'No users found',
       domainMismatch: 'Warning: No domain set for company, searching all users',
       emailDomainMatch: 'Email domain matches',
-      emailDomainMismatch: 'Email domain does not match'
+      emailDomainMismatch: 'Email domain does not match',
+      // Users view specific
+      searchByNameOrEmail: 'Search by name or email...',
+      allStatuses: 'All Statuses',
+      userId: 'User ID',
+      fullName: 'Full Name',
+      signupDate: 'Sign-up Date',
+      edit: 'Edit',
+      suspendUser: 'Suspend User',
+      activateUser: 'Activate User',
+      editUser: 'Edit User',
+      firstName: 'First Name',
+      lastName: 'Last Name',
+      saveChanges: 'Save Changes',
+      saving: 'Saving...',
+      userUpdated: 'User updated successfully',
+      userUpdateError: 'Error updating user',
+      userSuspended: 'User suspended successfully',
+      userActivated: 'User activated successfully',
+      userSuspendError: 'Error changing user status',
+      confirmSuspend: 'Are you sure you want to suspend this user?',
+      confirmActivate: 'Are you sure you want to activate this user?',
+      suspending: 'Suspending...',
+      activating: 'Activating...',
+      noUsers: 'No users found'
     }
   };
 
@@ -270,6 +333,41 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
     checkAdminAccess();
   }, [user, authLoading, onNavigate]);
+
+  // Filter users based on search and status
+  useEffect(() => {
+    let filtered = users;
+
+    // Apply search filter
+    if (userSearchQuery.trim()) {
+      const query = userSearchQuery.toLowerCase();
+      filtered = filtered.filter(user => {
+        const firstName = user.first_name?.toLowerCase() || '';
+        const lastName = user.last_name?.toLowerCase() || '';
+        const email = user.email?.toLowerCase() || '';
+        const fullName = `${firstName} ${lastName}`.trim();
+        
+        return firstName.includes(query) || 
+               lastName.includes(query) || 
+               fullName.includes(query) || 
+               email.includes(query);
+      });
+    }
+
+    // Apply status filter
+    if (userStatusFilter !== 'all') {
+      filtered = filtered.filter(user => {
+        if (userStatusFilter === 'suspended') {
+          return user.is_suspended === true;
+        } else if (userStatusFilter === 'active') {
+          return user.is_suspended !== true;
+        }
+        return true;
+      });
+    }
+
+    setFilteredUsers(filtered);
+  }, [users, userSearchQuery, userStatusFilter]);
 
   const fetchStats = async () => {
     try {
@@ -519,6 +617,112 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     }
   };
 
+  // User management functions
+  const handleEditUser = (user: UserProfile) => {
+    setEditingUser(user);
+    setEditUserForm({
+      firstName: user.first_name || '',
+      lastName: user.last_name || ''
+    });
+  };
+
+  const handleSaveUser = async () => {
+    if (!editingUser) return;
+
+    setSavingUser(true);
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          first_name: editUserForm.firstName.trim(),
+          last_name: editUserForm.lastName.trim(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', editingUser.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setUsers(prev => prev.map(user => 
+        user.id === editingUser.id 
+          ? { 
+              ...user, 
+              first_name: editUserForm.firstName.trim(),
+              last_name: editUserForm.lastName.trim(),
+              updated_at: new Date().toISOString()
+            }
+          : user
+      ));
+
+      toast.success(text[language].userUpdated);
+      setEditingUser(null);
+      setEditUserForm({ firstName: '', lastName: '' });
+
+    } catch (error: any) {
+      console.error('Error updating user:', error);
+      toast.error(text[language].userUpdateError);
+    } finally {
+      setSavingUser(false);
+    }
+  };
+
+  const handleSuspendUser = async (userId: string, currentStatus: boolean | null) => {
+    const newStatus = !currentStatus;
+    const confirmMessage = newStatus ? text[language].confirmSuspend : text[language].confirmActivate;
+    
+    if (!confirm(confirmMessage)) return;
+
+    setSuspendingUser(userId);
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          is_suspended: newStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      // Update local state
+      setUsers(prev => prev.map(user => 
+        user.id === userId 
+          ? { 
+              ...user, 
+              is_suspended: newStatus,
+              updated_at: new Date().toISOString()
+            }
+          : user
+      ));
+
+      toast.success(newStatus ? text[language].userSuspended : text[language].userActivated);
+
+    } catch (error: any) {
+      console.error('Error changing user status:', error);
+      toast.error(text[language].userSuspendError);
+    } finally {
+      setSuspendingUser(null);
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const getUserFullName = (user: UserProfile) => {
+    const firstName = user.first_name || '';
+    const lastName = user.last_name || '';
+    const fullName = `${firstName} ${lastName}`.trim();
+    return fullName || user.email || 'Unknown User';
+  };
+
   // Helper function to check if email domain matches company domain
   const checkEmailDomainMatch = (email: string | null, companyDomain: string | null): boolean => {
     if (!email || !companyDomain) return false;
@@ -619,6 +823,178 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
           </div>
           <h3 className="text-2xl font-bold text-dark-500 mb-1">{stats.pendingReports}</h3>
           <p className="text-gray-600 text-sm">{text[language].pendingReports}</p>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Users View
+  const UsersView = () => (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-dark-500 mb-2">
+          {text[language].users}
+        </h1>
+        <div className="w-16 h-1 bg-red-500 rounded-full"></div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Search Bar */}
+          <div className="relative">
+            <div className="absolute inset-y-0 right-0 pr-3 rtl:left-0 rtl:right-auto rtl:pl-3 rtl:pr-0 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-gray-400" />
+            </div>
+            <input
+              type="text"
+              value={userSearchQuery}
+              onChange={(e) => setUserSearchQuery(e.target.value)}
+              placeholder={text[language].searchByNameOrEmail}
+              className="w-full px-4 py-2 pr-10 rtl:pl-10 rtl:pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
+              dir={language === 'ar' ? 'rtl' : 'ltr'}
+            />
+          </div>
+
+          {/* Status Filter */}
+          <div className="relative">
+            <select
+              value={userStatusFilter}
+              onChange={(e) => setUserStatusFilter(e.target.value as 'all' | 'active' | 'suspended')}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200 appearance-none bg-white"
+            >
+              <option value="all">{text[language].allStatuses}</option>
+              <option value="active">{text[language].active}</option>
+              <option value="suspended">{text[language].suspended}</option>
+            </select>
+            <ChevronDown className="absolute right-3 rtl:left-3 rtl:right-auto top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+          </div>
+        </div>
+      </div>
+
+      {/* Users Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].userId}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].fullName}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].email}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].signupDate}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].status}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].actions}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredUsers.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                    {text[language].noUsers}
+                  </td>
+                </tr>
+              ) : (
+                filteredUsers.map((user) => (
+                  <tr key={user.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
+                      {user.id.substring(0, 8)}...
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-3 rtl:space-x-reverse">
+                        <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-xs">
+                          {user.avatar_url ? (
+                            <img 
+                              src={user.avatar_url} 
+                              alt="Avatar" 
+                              className="w-full h-full object-cover rounded-full"
+                            />
+                          ) : (
+                            <Users className="h-4 w-4 text-gray-400" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {getUserFullName(user)}
+                          </div>
+                          {user.is_admin && (
+                            <div className="text-xs text-red-600 font-medium">
+                              {text[language].admin}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {user.email || 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatDate(user.updated_at)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        user.is_suspended 
+                          ? 'bg-red-100 text-red-800' 
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {user.is_suspended ? text[language].suspended : text[language].active}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                        <button
+                          onClick={() => handleEditUser(user)}
+                          className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded-lg text-sm font-medium bg-blue-500 hover:bg-blue-600 text-white transition-colors duration-200"
+                        >
+                          <Edit className="h-3 w-3" />
+                          <span>{text[language].edit}</span>
+                        </button>
+                        
+                        <button
+                          onClick={() => handleSuspendUser(user.id, user.is_suspended)}
+                          disabled={suspendingUser === user.id}
+                          className={`inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                            user.is_suspended
+                              ? 'bg-green-500 hover:bg-green-600 text-white'
+                              : 'bg-red-500 hover:bg-red-600 text-white'
+                          } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        >
+                          {suspendingUser === user.id ? (
+                            <>
+                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                              <span>{user.is_suspended ? text[language].activating : text[language].suspending}</span>
+                            </>
+                          ) : (
+                            <>
+                              {user.is_suspended ? (
+                                <UserCheck className="h-3 w-3" />
+                              ) : (
+                                <UserX className="h-3 w-3" />
+                              )}
+                              <span>
+                                {user.is_suspended ? text[language].activateUser : text[language].suspendUser}
+                              </span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -754,6 +1130,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                 </button>
                 
                 <button
+                  onClick={() => setActiveTab('users')}
+                  className={`w-full flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-lg text-right transition-all duration-200 ${
+                    activeTab === 'users'
+                      ? 'bg-red-50 text-red-600 border-r-4 border-red-500 rtl:border-l-4 rtl:border-r-0'
+                      : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Users className="h-5 w-5" />
+                  <span className="font-medium">{text[language].users}</span>
+                </button>
+                
+                <button
                   onClick={() => setActiveTab('companies')}
                   className={`w-full flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-lg text-right transition-all duration-200 ${
                     activeTab === 'companies'
@@ -771,10 +1159,93 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
           {/* Main Content Area */}
           <div className="lg:col-span-3">
             {activeTab === 'overview' && <OverviewView />}
+            {activeTab === 'users' && <UsersView />}
             {activeTab === 'companies' && <CompaniesView />}
           </div>
         </div>
       </div>
+
+      {/* Edit User Modal */}
+      {editingUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-dark-500">
+                {text[language].editUser}
+              </h3>
+              <button
+                onClick={() => {
+                  setEditingUser(null);
+                  setEditUserForm({ firstName: '', lastName: '' });
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-dark-500 mb-2">
+                  {text[language].firstName}
+                </label>
+                <input
+                  type="text"
+                  value={editUserForm.firstName}
+                  onChange={(e) => setEditUserForm(prev => ({ ...prev, firstName: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  dir={language === 'ar' ? 'rtl' : 'ltr'}
+                  disabled={savingUser}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-dark-500 mb-2">
+                  {text[language].lastName}
+                </label>
+                <input
+                  type="text"
+                  value={editUserForm.lastName}
+                  onChange={(e) => setEditUserForm(prev => ({ ...prev, lastName: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  dir={language === 'ar' ? 'rtl' : 'ltr'}
+                  disabled={savingUser}
+                />
+              </div>
+
+              <div className="flex space-x-3 rtl:space-x-reverse pt-4">
+                <button
+                  onClick={() => {
+                    setEditingUser(null);
+                    setEditUserForm({ firstName: '', lastName: '' });
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                  disabled={savingUser}
+                >
+                  {text[language].cancel}
+                </button>
+                <button
+                  onClick={handleSaveUser}
+                  disabled={savingUser}
+                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 rtl:space-x-reverse"
+                >
+                  {savingUser ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <span>{text[language].saving}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      <span>{text[language].saveChanges}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Assign Representative Modal */}
       {assignModalOpen && selectedCompany && (
