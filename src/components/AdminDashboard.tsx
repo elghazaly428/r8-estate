@@ -277,7 +277,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
       if (reviewError) throw reviewError;
 
-      // Fetch reply reports
+      // Fetch reply reports - Fixed the relationship query
       const { data: replyReports, error: replyError } = await supabase
         .from('reply_reports')
         .select(`
@@ -289,7 +289,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
           details,
           status,
           profiles!reply_reports_reporter_profile_id_fkey(first_name, last_name),
-          company_replies!reply_reports_reply_id_fkey(reply_body, reviews!company_replies_review_id_fkey(companies!reviews_company_id_fkey(name)))
+          company_replies!reply_reports_reply_id_fkey(reply_body, reviews(companies(name)))
         `);
 
       if (replyError) throw replyError;
