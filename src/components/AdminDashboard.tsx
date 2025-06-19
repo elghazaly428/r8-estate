@@ -491,24 +491,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
       if (error) throw error;
 
-      // Check for company replies for each review
+      // Check for company replies for each review using a more robust approach
       const reviewsWithReplyStatus = await Promise.all(
         (data || []).map(async (review) => {
-          const { data: replyData, error: replyError } = await supabase
-            .from('company_replies')
-            .select('id')
-            .eq('review_id', review.id)
-            .limit(1);
+          try {
+            // Use a simple count query to check if replies exist
+            const { count, error: replyError } = await supabase
+              .from('company_replies')
+              .select('*', { count: 'exact', head: true })
+              .eq('review_id', review.id);
 
-          if (replyError) {
-            console.error('Error checking company reply:', replyError);
+            if (replyError) {
+              console.warn('Error checking company reply for review', review.id, ':', replyError);
+              return { ...review, has_company_reply: false };
+            }
+
+            return {
+              ...review,
+              has_company_reply: (count || 0) > 0
+            };
+          } catch (error) {
+            console.warn('Error checking company reply for review', review.id, ':', error);
             return { ...review, has_company_reply: false };
           }
-
-          return {
-            ...review,
-            has_company_reply: replyData && replyData.length > 0
-          };
         })
       );
 
