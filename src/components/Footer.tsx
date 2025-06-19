@@ -65,7 +65,7 @@ const Footer: React.FC<FooterProps> = ({ language, onNavigate }) => {
           <div className="lg:col-span-1 text-center md:text-right rtl:md:text-right ltr:md:text-left">
             <div className="flex items-center justify-center md:justify-start mb-4">
               <img 
-                src="/Picture1.png" 
+                src="/R8ESTATE_logo2-removebg-preview.png" 
                 alt="R8 ESTATE" 
                 className="h-10 w-auto brightness-0 invert"
               />

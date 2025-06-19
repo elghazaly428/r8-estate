@@ -323,14 +323,10 @@ const Header: React.FC<HeaderProps> = ({ language, onLanguageChange, onNavigate 
             className="flex items-center space-x-2 rtl:space-x-reverse hover:opacity-80 transition-opacity duration-200"
           >
             <img 
-              src="/Picture1.png" 
+              src="/R8ESTATE_logo2-removebg-preview.png" 
               alt="R8 ESTATE" 
               className="h-10 w-auto"
             />
-            <div className="text-xl font-bold">
-              <span className="text-accent-500">R8</span>
-              <span className="text-primary-500">ESTATE</span>
-            </div>
           </button>
 
           {/* Desktop Navigation - Center */}
