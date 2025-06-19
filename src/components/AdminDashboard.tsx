@@ -538,52 +538,70 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
   const fetchFlaggedContent = async () => {
     try {
-      // Fetch flagged reviews
-      const { data: flaggedReviews, error: reviewsError } = await supabase
-        .from('reviews')
+      // Instead of looking for 'flagged_for_review' status, we'll look for reviews that have pending reports
+      // Get all pending reports and their associated reviews
+      const { data: pendingReports, error: reportsError } = await supabase
+        .from('reports')
         .select(`
           id,
-          title,
-          body,
+          reason,
           created_at,
-          profiles!reviews_profile_id_fkey(first_name, last_name),
-          companies(name)
+          review_id,
+          profiles!reports_reporter_profile_id_fkey(first_name, last_name),
+          reviews!reports_review_id_fkey(
+            id,
+            title,
+            body,
+            created_at,
+            profiles!reviews_profile_id_fkey(first_name, last_name),
+            companies(name)
+          )
         `)
-        .eq('status', 'flagged_for_review');
+        .eq('status', 'pending');
 
-      if (reviewsError) throw reviewsError;
+      if (reportsError) throw reportsError;
 
-      // Fetch flagged company replies
-      const { data: flaggedReplies, error: repliesError } = await supabase
-        .from('company_replies')
+      // Get all pending reply reports
+      const { data: pendingReplyReports, error: replyReportsError } = await supabase
+        .from('reply_reports')
         .select(`
           id,
-          reply_body,
+          reason,
           created_at,
-          profiles!company_replies_profile_id_fkey(first_name, last_name),
-          reviews!company_replies_review_id_fkey(companies(name))
+          reply_id,
+          profiles!reply_reports_reporter_profile_id_fkey(first_name, last_name),
+          company_replies!reply_reports_reply_id_fkey(
+            id,
+            reply_body,
+            created_at,
+            profiles!company_replies_profile_id_fkey(first_name, last_name),
+            reviews!company_replies_review_id_fkey(companies(name))
+          )
         `)
-        .eq('status', 'flagged_for_review');
+        .eq('status', 'pending');
 
-      if (repliesError) throw repliesError;
+      if (replyReportsError) throw replyReportsError;
 
       // Process flagged content
       const flaggedContentList: FlaggedContent[] = [];
 
-      // Process reviews
-      for (const review of flaggedReviews || []) {
-        // Get reports for this review
-        const { data: reviewReports } = await supabase
-          .from('reports')
-          .select(`
-            id,
-            reason,
-            created_at,
-            profiles!reports_reporter_profile_id_fkey(first_name, last_name)
-          `)
-          .eq('review_id', review.id)
-          .eq('status', 'pending');
+      // Group reports by review_id to get unique flagged reviews
+      const reviewReportsMap = new Map<number, any[]>();
+      for (const report of pendingReports || []) {
+        if (report.reviews) {
+          const reviewId = report.reviews.id;
+          if (!reviewReportsMap.has(reviewId)) {
+            reviewReportsMap.set(reviewId, []);
+          }
+          reviewReportsMap.get(reviewId)!.push(report);
+        }
+      }
 
+      // Process unique flagged reviews
+      for (const [reviewId, reports] of reviewReportsMap.entries()) {
+        const firstReport = reports[0];
+        const review = firstReport.reviews;
+        
         flaggedContentList.push({
           id: review.id,
           type: 'review',
@@ -593,8 +611,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
             : 'Anonymous',
           company: review.companies?.name || 'Unknown Company',
           created_at: review.created_at,
-          report_count: reviewReports?.length || 0,
-          reports: (reviewReports || []).map(report => ({
+          report_count: reports.length,
+          reports: reports.map(report => ({
             id: report.id,
             reason: report.reason,
             reporter: report.profiles 
@@ -605,20 +623,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
         });
       }
 
-      // Process replies
-      for (const reply of flaggedReplies || []) {
-        // Get reports for this reply
-        const { data: replyReports } = await supabase
-          .from('reply_reports')
-          .select(`
-            id,
-            reason,
-            created_at,
-            profiles!reply_reports_reporter_profile_id_fkey(first_name, last_name)
-          `)
-          .eq('reply_id', reply.id)
-          .eq('status', 'pending');
+      // Group reply reports by reply_id to get unique flagged replies
+      const replyReportsMap = new Map<string, any[]>();
+      for (const report of pendingReplyReports || []) {
+        if (report.company_replies) {
+          const replyId = report.company_replies.id;
+          if (!replyReportsMap.has(replyId)) {
+            replyReportsMap.set(replyId, []);
+          }
+          replyReportsMap.get(replyId)!.push(report);
+        }
+      }
 
+      // Process unique flagged replies
+      for (const [replyId, reports] of replyReportsMap.entries()) {
+        const firstReport = reports[0];
+        const reply = firstReport.company_replies;
+        
         flaggedContentList.push({
           id: reply.id,
           type: 'reply',
@@ -628,8 +649,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
             : 'Anonymous',
           company: reply.reviews?.companies?.name || 'Unknown Company',
           created_at: reply.created_at,
-          report_count: replyReports?.length || 0,
-          reports: (replyReports || []).map(report => ({
+          report_count: reports.length,
+          reports: reports.map(report => ({
             id: report.id,
             reason: report.reason,
             reporter: report.profiles 
