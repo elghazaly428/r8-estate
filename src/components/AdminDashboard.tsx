@@ -20,9 +20,8 @@ import {
   MoreHorizontal,
   ChevronDown,
   Info,
-  Save,
-  UserX,
-  UserCheck
+  User,
+  Save
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import Header from './Header';
@@ -127,47 +126,78 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   
-  // User management states
+  // Modal states
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [editUserModalOpen, setEditUserModalOpen] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [isSavingUser, setIsSavingUser] = useState(false);
+  
+  // User filters
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userStatusFilter, setUserStatusFilter] = useState<'all' | 'active' | 'suspended'>('all');
-  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+  
+  // Edit user form
   const [editUserForm, setEditUserForm] = useState({
     firstName: '',
     lastName: ''
   });
-  const [savingUser, setSavingUser] = useState(false);
-  const [suspendingUser, setSuspendingUser] = useState<string | null>(null);
-  
-  // Modal states
-  const [assignModalOpen, setAssignModalOpen] = useState(false);
-  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
-  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
-  const [isSearching, setIsSearching] = useState(false);
-  const [isAssigning, setIsAssigning] = useState(false);
 
   const text = {
     ar: {
-      adminDashboard: 'لوحة تحكم الأدمن',
+      // Navigation
       overview: 'نظرة عامة',
       users: 'المستخدمين',
       companies: 'الشركات',
       reviews: 'التقييمات',
       reports: 'البلاغات',
+      viewPublicProfile: 'عرض الملف الشخصي العام',
+      
+      // Overview
       totalUsers: 'إجمالي المستخدمين',
       totalCompanies: 'إجمالي الشركات',
       totalReviews: 'إجمالي التقييمات',
       pendingReports: 'البلاغات المعلقة',
-      loading: 'جاري التحميل...',
-      accessDenied: 'غير مسموح بالوصول',
-      notAuthorized: 'أنت غير مخول للوصول إلى هذه الصفحة',
-      backToDashboard: 'العودة إلى لوحة التحكم',
+      
+      // Users
+      searchUsers: 'البحث بالاسم أو البريد الإلكتروني...',
+      statusFilter: 'تصفية الحالة',
+      allUsers: 'جميع المستخدمين',
+      activeUsers: 'المستخدمين النشطين',
+      suspendedUsers: 'المستخدمين الموقوفين',
+      fullName: 'الاسم الكامل',
+      email: 'البريد الإلكتروني',
+      signupDate: 'تاريخ التسجيل',
+      status: 'الحالة',
+      actions: 'الإجراءات',
+      active: 'نشط',
+      suspended: 'موقوف',
+      admin: 'أدمن',
+      edit: 'تعديل',
+      suspend: 'إيقاف',
+      activate: 'تفعيل',
+      editUser: 'تعديل المستخدم',
+      firstName: 'الاسم الأول',
+      lastName: 'اسم العائلة',
+      saveChanges: 'حفظ التغييرات',
+      cancel: 'إلغاء',
+      confirmSuspend: 'هل أنت متأكد من إيقاف هذا المستخدم؟',
+      confirmActivate: 'هل أنت متأكد من تفعيل هذا المستخدم؟',
+      userSuspended: 'تم إيقاف المستخدم بنجاح',
+      userActivated: 'تم تفعيل المستخدم بنجاح',
+      userUpdated: 'تم تحديث بيانات المستخدم بنجاح',
+      errorOccurred: 'حدث خطأ',
+      saving: 'جاري الحفظ...',
+      
+      // Companies
       assignRepresentative: 'تعيين ممثل',
       searchByEmail: 'البحث بالبريد الإلكتروني...',
       selectUser: 'اختر مستخدم',
       confirmAssignment: 'تأكيد التعيين',
-      cancel: 'إلغاء',
       assign: 'تعيين',
       assigning: 'جاري التعيين...',
       assignmentSuccess: 'تم تعيين الممثل بنجاح! تم إرسال إشعار للمستخدم.',
@@ -177,66 +207,72 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       confirmAssignmentMessage: 'هل أنت متأكد من منح {userName} صلاحية إدارة {companyName}؟',
       domain: 'النطاق',
       noDomain: 'لا يوجد نطاق',
-      status: 'الحالة',
       claimed: 'مُدارة',
       unclaimed: 'غير مُدارة',
-      actions: 'الإجراءات',
       name: 'الاسم',
-      email: 'البريد الإلكتروني',
-      admin: 'أدمن',
-      suspended: 'موقوف',
-      active: 'نشط',
+      
+      // Messages
+      loading: 'جاري التحميل...',
+      accessDenied: 'غير مسموح بالوصول',
+      notAuthorized: 'أنت غير مخول للوصول إلى هذه الصفحة',
+      backToDashboard: 'العودة إلى لوحة التحكم',
       noResults: 'لا توجد نتائج',
       searchingUsers: 'جاري البحث عن المستخدمين...',
       userNotFound: 'لم يتم العثور على مستخدمين',
       domainMismatch: 'تحذير: لا يوجد نطاق محدد للشركة، البحث في جميع المستخدمين',
       emailDomainMatch: 'تطابق نطاق البريد الإلكتروني',
-      emailDomainMismatch: 'عدم تطابق نطاق البريد الإلكتروني',
-      // Users view specific
-      searchByNameOrEmail: 'البحث بالاسم أو البريد الإلكتروني...',
-      allStatuses: 'جميع الحالات',
-      userId: 'معرف المستخدم',
-      fullName: 'الاسم الكامل',
-      signupDate: 'تاريخ التسجيل',
-      edit: 'تعديل',
-      suspendUser: 'إيقاف المستخدم',
-      activateUser: 'تفعيل المستخدم',
-      editUser: 'تعديل المستخدم',
-      firstName: 'الاسم الأول',
-      lastName: 'اسم العائلة',
-      saveChanges: 'حفظ التغييرات',
-      saving: 'جاري الحفظ...',
-      userUpdated: 'تم تحديث بيانات المستخدم بنجاح',
-      userUpdateError: 'حدث خطأ أثناء تحديث بيانات المستخدم',
-      userSuspended: 'تم إيقاف المستخدم بنجاح',
-      userActivated: 'تم تفعيل المستخدم بنجاح',
-      userSuspendError: 'حدث خطأ أثناء تغيير حالة المستخدم',
-      confirmSuspend: 'هل أنت متأكد من إيقاف هذا المستخدم؟',
-      confirmActivate: 'هل أنت متأكد من تفعيل هذا المستخدم؟',
-      suspending: 'جاري الإيقاف...',
-      activating: 'جاري التفعيل...',
-      noUsers: 'لا يوجد مستخدمين'
+      emailDomainMismatch: 'عدم تطابق نطاق البريد الإلكتروني'
     },
     en: {
-      adminDashboard: 'Admin Dashboard',
+      // Navigation
       overview: 'Overview',
       users: 'Users',
       companies: 'Companies',
       reviews: 'Reviews',
       reports: 'Reports',
+      viewPublicProfile: 'View Public Profile',
+      
+      // Overview
       totalUsers: 'Total Users',
       totalCompanies: 'Total Companies',
       totalReviews: 'Total Reviews',
       pendingReports: 'Pending Reports',
-      loading: 'Loading...',
-      accessDenied: 'Access Denied',
-      notAuthorized: 'You are not authorized to access this page',
-      backToDashboard: 'Back to Dashboard',
+      
+      // Users
+      searchUsers: 'Search by name or email...',
+      statusFilter: 'Status Filter',
+      allUsers: 'All Users',
+      activeUsers: 'Active Users',
+      suspendedUsers: 'Suspended Users',
+      fullName: 'Full Name',
+      email: 'Email',
+      signupDate: 'Signup Date',
+      status: 'Status',
+      actions: 'Actions',
+      active: 'Active',
+      suspended: 'Suspended',
+      admin: 'Admin',
+      edit: 'Edit',
+      suspend: 'Suspend',
+      activate: 'Activate',
+      editUser: 'Edit User',
+      firstName: 'First Name',
+      lastName: 'Last Name',
+      saveChanges: 'Save Changes',
+      cancel: 'Cancel',
+      confirmSuspend: 'Are you sure you want to suspend this user?',
+      confirmActivate: 'Are you sure you want to activate this user?',
+      userSuspended: 'User suspended successfully',
+      userActivated: 'User activated successfully',
+      userUpdated: 'User updated successfully',
+      errorOccurred: 'An error occurred',
+      saving: 'Saving...',
+      
+      // Companies
       assignRepresentative: 'Assign Representative',
       searchByEmail: 'Search by email...',
       selectUser: 'Select User',
       confirmAssignment: 'Confirm Assignment',
-      cancel: 'Cancel',
       assign: 'Assign',
       assigning: 'Assigning...',
       assignmentSuccess: 'Representative assigned successfully! User has been notified.',
@@ -246,45 +282,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       confirmAssignmentMessage: 'Are you sure you want to grant {userName} representative access for {companyName}?',
       domain: 'Domain',
       noDomain: 'No Domain',
-      status: 'Status',
       claimed: 'Claimed',
       unclaimed: 'Unclaimed',
-      actions: 'Actions',
       name: 'Name',
-      email: 'Email',
-      admin: 'Admin',
-      suspended: 'Suspended',
-      active: 'Active',
+      
+      // Messages
+      loading: 'Loading...',
+      accessDenied: 'Access Denied',
+      notAuthorized: 'You are not authorized to access this page',
+      backToDashboard: 'Back to Dashboard',
       noResults: 'No results found',
       searchingUsers: 'Searching users...',
       userNotFound: 'No users found',
       domainMismatch: 'Warning: No domain set for company, searching all users',
       emailDomainMatch: 'Email domain matches',
-      emailDomainMismatch: 'Email domain does not match',
-      // Users view specific
-      searchByNameOrEmail: 'Search by name or email...',
-      allStatuses: 'All Statuses',
-      userId: 'User ID',
-      fullName: 'Full Name',
-      signupDate: 'Sign-up Date',
-      edit: 'Edit',
-      suspendUser: 'Suspend User',
-      activateUser: 'Activate User',
-      editUser: 'Edit User',
-      firstName: 'First Name',
-      lastName: 'Last Name',
-      saveChanges: 'Save Changes',
-      saving: 'Saving...',
-      userUpdated: 'User updated successfully',
-      userUpdateError: 'Error updating user',
-      userSuspended: 'User suspended successfully',
-      userActivated: 'User activated successfully',
-      userSuspendError: 'Error changing user status',
-      confirmSuspend: 'Are you sure you want to suspend this user?',
-      confirmActivate: 'Are you sure you want to activate this user?',
-      suspending: 'Suspending...',
-      activating: 'Activating...',
-      noUsers: 'No users found'
+      emailDomainMismatch: 'Email domain does not match'
     }
   };
 
@@ -617,19 +629,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     }
   };
 
-  // User management functions
   const handleEditUser = (user: UserProfile) => {
-    setEditingUser(user);
+    setSelectedUser(user);
     setEditUserForm({
       firstName: user.first_name || '',
       lastName: user.last_name || ''
     });
+    setEditUserModalOpen(true);
   };
 
   const handleSaveUser = async () => {
-    if (!editingUser) return;
+    if (!selectedUser) return;
 
-    setSavingUser(true);
+    setIsSavingUser(true);
 
     try {
       const { error } = await supabase
@@ -639,13 +651,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
           last_name: editUserForm.lastName.trim(),
           updated_at: new Date().toISOString()
         })
-        .eq('id', editingUser.id);
+        .eq('id', selectedUser.id);
 
       if (error) throw error;
 
       // Update local state
       setUsers(prev => prev.map(user => 
-        user.id === editingUser.id 
+        user.id === selectedUser.id 
           ? { 
               ...user, 
               first_name: editUserForm.firstName.trim(),
@@ -656,54 +668,44 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       ));
 
       toast.success(text[language].userUpdated);
-      setEditingUser(null);
-      setEditUserForm({ firstName: '', lastName: '' });
-
+      setEditUserModalOpen(false);
+      setSelectedUser(null);
     } catch (error: any) {
       console.error('Error updating user:', error);
-      toast.error(text[language].userUpdateError);
+      toast.error(text[language].errorOccurred);
     } finally {
-      setSavingUser(false);
+      setIsSavingUser(false);
     }
   };
 
-  const handleSuspendUser = async (userId: string, currentStatus: boolean | null) => {
-    const newStatus = !currentStatus;
+  const handleToggleUserStatus = async (user: UserProfile) => {
+    const newStatus = !user.is_suspended;
     const confirmMessage = newStatus ? text[language].confirmSuspend : text[language].confirmActivate;
     
     if (!confirm(confirmMessage)) return;
 
-    setSuspendingUser(userId);
-
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({
+        .update({ 
           is_suspended: newStatus,
           updated_at: new Date().toISOString()
         })
-        .eq('id', userId);
+        .eq('id', user.id);
 
       if (error) throw error;
 
       // Update local state
-      setUsers(prev => prev.map(user => 
-        user.id === userId 
-          ? { 
-              ...user, 
-              is_suspended: newStatus,
-              updated_at: new Date().toISOString()
-            }
-          : user
+      setUsers(prev => prev.map(u => 
+        u.id === user.id 
+          ? { ...u, is_suspended: newStatus, updated_at: new Date().toISOString() }
+          : u
       ));
 
       toast.success(newStatus ? text[language].userSuspended : text[language].userActivated);
-
     } catch (error: any) {
-      console.error('Error changing user status:', error);
-      toast.error(text[language].userSuspendError);
-    } finally {
-      setSuspendingUser(null);
+      console.error('Error updating user status:', error);
+      toast.error(text[language].errorOccurred);
     }
   };
 
@@ -714,13 +716,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       month: 'short',
       day: 'numeric'
     });
-  };
-
-  const getUserFullName = (user: UserProfile) => {
-    const firstName = user.first_name || '';
-    const lastName = user.last_name || '';
-    const fullName = `${firstName} ${lastName}`.trim();
-    return fullName || user.email || 'Unknown User';
   };
 
   // Helper function to check if email domain matches company domain
@@ -841,7 +836,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       {/* Filters */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Search Bar */}
+          {/* Search Input */}
           <div className="relative">
             <div className="absolute inset-y-0 right-0 pr-3 rtl:left-0 rtl:right-auto rtl:pl-3 rtl:pr-0 flex items-center pointer-events-none">
               <Search className="h-4 w-4 text-gray-400" />
@@ -850,8 +845,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
               type="text"
               value={userSearchQuery}
               onChange={(e) => setUserSearchQuery(e.target.value)}
-              placeholder={text[language].searchByNameOrEmail}
-              className="w-full px-4 py-2 pr-10 rtl:pl-10 rtl:pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
+              placeholder={text[language].searchUsers}
+              className="w-full px-4 py-2 pr-10 rtl:pl-10 rtl:pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
               dir={language === 'ar' ? 'rtl' : 'ltr'}
             />
           </div>
@@ -861,13 +856,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
             <select
               value={userStatusFilter}
               onChange={(e) => setUserStatusFilter(e.target.value as 'all' | 'active' | 'suspended')}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200 appearance-none bg-white"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 appearance-none bg-white"
             >
-              <option value="all">{text[language].allStatuses}</option>
-              <option value="active">{text[language].active}</option>
-              <option value="suspended">{text[language].suspended}</option>
+              <option value="all">{text[language].allUsers}</option>
+              <option value="active">{text[language].activeUsers}</option>
+              <option value="suspended">{text[language].suspendedUsers}</option>
             </select>
-            <ChevronDown className="absolute right-3 rtl:left-3 rtl:right-auto top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+            <ChevronDown className="absolute right-2 rtl:left-2 rtl:right-auto top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
           </div>
         </div>
       </div>
@@ -878,9 +873,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].userId}
-                </th>
                 <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {text[language].fullName}
                 </th>
@@ -899,100 +891,81 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredUsers.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                    {text[language].noUsers}
+              {filteredUsers.map((user) => (
+                <tr key={user.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-3 rtl:space-x-reverse">
+                      <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                        {user.avatar_url ? (
+                          <img 
+                            src={user.avatar_url} 
+                            alt="Avatar" 
+                            className="w-full h-full object-cover rounded-full"
+                          />
+                        ) : (
+                          <User className="h-4 w-4 text-gray-400" />
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900 flex items-center space-x-2 rtl:space-x-reverse">
+                          <span>{`${user.first_name || ''} ${user.last_name || ''}`.trim() || 'No Name'}</span>
+                          {user.is_admin && (
+                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                              {text[language].admin}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {user.email || 'No Email'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {formatDate(user.updated_at)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                      user.is_suspended 
+                        ? 'bg-red-100 text-red-800' 
+                        : 'bg-green-100 text-green-800'
+                    }`}>
+                      {user.is_suspended ? text[language].suspended : text[language].active}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                      <button
+                        onClick={() => handleEditUser(user)}
+                        className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded-lg text-sm font-medium bg-blue-500 hover:bg-blue-600 text-white transition-colors duration-200"
+                      >
+                        <Edit className="h-3 w-3" />
+                        <span>{text[language].edit}</span>
+                      </button>
+                      <button
+                        onClick={() => handleToggleUserStatus(user)}
+                        className={`inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                          user.is_suspended
+                            ? 'bg-green-500 hover:bg-green-600 text-white'
+                            : 'bg-red-500 hover:bg-red-600 text-white'
+                        }`}
+                      >
+                        {user.is_suspended ? (
+                          <>
+                            <CheckCircle className="h-3 w-3" />
+                            <span>{text[language].activate}</span>
+                          </>
+                        ) : (
+                          <>
+                            <X className="h-3 w-3" />
+                            <span>{text[language].suspend}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </td>
                 </tr>
-              ) : (
-                filteredUsers.map((user) => (
-                  <tr key={user.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
-                      {user.id.substring(0, 8)}...
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                        <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-xs">
-                          {user.avatar_url ? (
-                            <img 
-                              src={user.avatar_url} 
-                              alt="Avatar" 
-                              className="w-full h-full object-cover rounded-full"
-                            />
-                          ) : (
-                            <Users className="h-4 w-4 text-gray-400" />
-                          )}
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {getUserFullName(user)}
-                          </div>
-                          {user.is_admin && (
-                            <div className="text-xs text-red-600 font-medium">
-                              {text[language].admin}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {user.email || 'N/A'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {formatDate(user.updated_at)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        user.is_suspended 
-                          ? 'bg-red-100 text-red-800' 
-                          : 'bg-green-100 text-green-800'
-                      }`}>
-                        {user.is_suspended ? text[language].suspended : text[language].active}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                        <button
-                          onClick={() => handleEditUser(user)}
-                          className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded-lg text-sm font-medium bg-blue-500 hover:bg-blue-600 text-white transition-colors duration-200"
-                        >
-                          <Edit className="h-3 w-3" />
-                          <span>{text[language].edit}</span>
-                        </button>
-                        
-                        <button
-                          onClick={() => handleSuspendUser(user.id, user.is_suspended)}
-                          disabled={suspendingUser === user.id}
-                          className={`inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded-lg text-sm font-medium transition-colors duration-200 ${
-                            user.is_suspended
-                              ? 'bg-green-500 hover:bg-green-600 text-white'
-                              : 'bg-red-500 hover:bg-red-600 text-white'
-                          } disabled:opacity-50 disabled:cursor-not-allowed`}
-                        >
-                          {suspendingUser === user.id ? (
-                            <>
-                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                              <span>{user.is_suspended ? text[language].activating : text[language].suspending}</span>
-                            </>
-                          ) : (
-                            <>
-                              {user.is_suspended ? (
-                                <UserCheck className="h-3 w-3" />
-                              ) : (
-                                <UserX className="h-3 w-3" />
-                              )}
-                              <span>
-                                {user.is_suspended ? text[language].activateUser : text[language].suspendUser}
-                              </span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
+              ))}
             </tbody>
           </table>
         </div>
@@ -1016,9 +989,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  ID
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {text[language].name}
                 </th>
                 <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -1035,9 +1005,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
             <tbody className="bg-white divide-y divide-gray-200">
               {companies.map((company) => (
                 <tr key={company.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {company.id}
-                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-3 rtl:space-x-reverse">
                       <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-xs">
@@ -1166,7 +1133,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       </div>
 
       {/* Edit User Modal */}
-      {editingUser && (
+      {editUserModalOpen && selectedUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl max-w-md w-full p-6">
             <div className="flex items-center justify-between mb-4">
@@ -1175,8 +1142,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
               </h3>
               <button
                 onClick={() => {
-                  setEditingUser(null);
-                  setEditUserForm({ firstName: '', lastName: '' });
+                  setEditUserModalOpen(false);
+                  setSelectedUser(null);
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -1195,7 +1162,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                   onChange={(e) => setEditUserForm(prev => ({ ...prev, firstName: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
                   dir={language === 'ar' ? 'rtl' : 'ltr'}
-                  disabled={savingUser}
+                  disabled={isSavingUser}
                 />
               </div>
 
@@ -1209,27 +1176,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                   onChange={(e) => setEditUserForm(prev => ({ ...prev, lastName: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
                   dir={language === 'ar' ? 'rtl' : 'ltr'}
-                  disabled={savingUser}
+                  disabled={isSavingUser}
                 />
               </div>
 
               <div className="flex space-x-3 rtl:space-x-reverse pt-4">
                 <button
                   onClick={() => {
-                    setEditingUser(null);
-                    setEditUserForm({ firstName: '', lastName: '' });
+                    setEditUserModalOpen(false);
+                    setSelectedUser(null);
                   }}
                   className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                  disabled={savingUser}
+                  disabled={isSavingUser}
                 >
                   {text[language].cancel}
                 </button>
                 <button
                   onClick={handleSaveUser}
-                  disabled={savingUser}
+                  disabled={isSavingUser}
                   className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 rtl:space-x-reverse"
                 >
-                  {savingUser ? (
+                  {isSavingUser ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                       <span>{text[language].saving}</span>
