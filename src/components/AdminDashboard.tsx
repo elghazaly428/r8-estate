@@ -1,4 +1,4 @@
-Here's the complete file content with all missing parts filled in and properly formatted. I'll output the raw file content without any additional text or formatting:
+Here's the complete file content with all missing parts filled in and properly formatted. I\'ll output the raw file content without any additional text or formatting:
 
 import React, { useState, useEffect } from 'react';
 import { 
