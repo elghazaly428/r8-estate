@@ -41,7 +41,7 @@ const CategoryGrid: React.FC<CategoryGridProps> = ({ language, onNavigate }) => 
     }
   };
 
-  // Icon mapping for categories based on icon_name column
+  // Icon mapping for categories based on icon_name column (fallback for categories without icon_url)
   const getIconForCategory = (iconName: string | null, categoryName: string | null): React.ComponentType<any> => {
     // Primary: Use icon_name from database if available
     if (iconName) {
@@ -250,7 +250,15 @@ const CategoryGrid: React.FC<CategoryGridProps> = ({ language, onNavigate }) => 
                     >
                       {/* Icon Container */}
                       <div className="w-16 h-16 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-6 group-hover:bg-primary-50 group-hover:text-primary-600 transition-all duration-300">
-                        <IconComponent className="h-8 w-8" />
+                        {category.icon_url ? (
+                          <img 
+                            src={category.icon_url} 
+                            alt={category.name || 'Category Icon'} 
+                            className="w-8 h-8 object-cover rounded"
+                          />
+                        ) : (
+                          <IconComponent className="h-8 w-8" />
+                        )}
                       </div>
                       
                       {/* Category Name - Centered and Consistent Height */}
