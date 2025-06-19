@@ -4,23 +4,19 @@ import {
   Building2, 
   MessageSquare, 
   Flag, 
-  BarChart3, 
   Shield, 
   Search, 
   Filter,
   ChevronDown,
   Edit,
-  UserX,
-  UserCheck,
-  User,
-  X,
-  Save,
   Trash2,
   Eye,
-  EyeOff,
-  Check,
+  Star,
+  Calendar,
+  User,
+  CheckCircle,
   AlertTriangle,
-  Plus,
+  XCircle,
   Tag
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -35,34 +31,21 @@ interface AdminDashboardProps {
   onNavigate: (page: string) => void;
 }
 
+interface AdminStats {
+  totalUsers: number;
+  totalCompanies: number;
+  totalReviews: number;
+  pendingReports: number;
+}
+
 interface UserProfile {
   id: string;
   first_name: string | null;
   last_name: string | null;
   email: string | null;
-  avatar_url: string | null;
   is_admin: boolean | null;
   is_suspended: boolean | null;
   updated_at: string;
-}
-
-interface Company {
-  id: number;
-  name: string | null;
-  logo_url: string | null;
-  website: string | null;
-  location: string | null;
-  is_claimed: boolean | null;
-  created_at: string;
-}
-
-interface Category {
-  id: number;
-  name: string | null;
-  description: string | null;
-  icon_name: string | null;
-  created_at: string;
-  company_count?: number;
 }
 
 interface ReviewData {
@@ -71,252 +54,188 @@ interface ReviewData {
   body: string | null;
   overall_rating: number | null;
   status: string | null;
+  verification_tag: string | null;
   created_at: string;
+  is_anonymous: boolean | null;
   profiles: {
     first_name: string | null;
     last_name: string | null;
+    email: string | null;
   } | null;
   companies: {
     name: string | null;
   } | null;
 }
 
-interface ReportData {
+interface CompanyData {
   id: number;
-  review_id: number | null;
-  reason: string | null;
+  name: string | null;
+  website: string | null;
+  is_claimed: boolean | null;
+  created_at: string;
+  review_count: number;
+  avg_rating: number;
+}
+
+interface ReportData {
+  id: string;
+  reason: string;
   details: string | null;
-  status: string | null;
+  status: string;
   created_at: string;
   reviews: {
-    id: number;
     title: string | null;
-    companies: {
-      name: string | null;
-    } | null;
+    body: string | null;
   } | null;
   profiles: {
     first_name: string | null;
     last_name: string | null;
+    email: string | null;
   } | null;
 }
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageChange, onNavigate }) => {
   const { user, loading: authLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<'users' | 'companies' | 'categories' | 'reviews' | 'reports'>('users');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'companies' | 'reviews' | 'reports'>('overview');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   
   // Data states
+  const [stats, setStats] = useState<AdminStats>({
+    totalUsers: 0,
+    totalCompanies: 0,
+    totalReviews: 0,
+    pendingReports: 0
+  });
   const [users, setUsers] = useState<UserProfile[]>([]);
-  const [companies, setCompanies] = useState<Company[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [reviews, setReviews] = useState<ReviewData[]>([]);
+  const [companies, setCompanies] = useState<CompanyData[]>([]);
   const [reports, setReports] = useState<ReportData[]>([]);
   
   // Filter states
-  const [userFilter, setUserFilter] = useState<'all' | 'admin' | 'suspended' | 'regular'>('all');
-  const [companyFilter, setCompanyFilter] = useState<'all' | 'claimed' | 'unclaimed'>('all');
-  const [reviewFilter, setReviewFilter] = useState<'all' | 'published' | 'hidden' | 'deleted'>('all');
-  const [reportFilter, setReportFilter] = useState<'all' | 'pending' | 'reviewed' | 'resolved'>('all');
-  
-  // Search states
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  // Modal states
-  const [showEditUserModal, setShowEditUserModal] = useState(false);
-  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
-  const [editUserForm, setEditUserForm] = useState({
-    firstName: '',
-    lastName: ''
-  });
-
-  // Category modal states
-  const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [categoryForm, setCategoryForm] = useState({
-    name: '',
-    description: '',
-    icon_name: ''
-  });
-
-  // Delete confirmation modal states
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
-  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [reviewStatusFilter, setReviewStatusFilter] = useState<string>('all');
+  const [companyFilter, setCompanyFilter] = useState<string>('all');
 
   const text = {
     ar: {
       adminDashboard: 'لوحة تحكم الأدمن',
+      overview: 'نظرة عامة',
       users: 'المستخدمين',
       companies: 'الشركات',
-      categories: 'الفئات',
       reviews: 'التقييمات',
       reports: 'البلاغات',
-      search: 'البحث...',
-      filter: 'تصفية',
-      all: 'الكل',
-      admin: 'أدمن',
-      suspended: 'موقوف',
-      regular: 'عادي',
-      claimed: 'مطالب بها',
-      unclaimed: 'غير مطالب بها',
-      published: 'منشور',
-      hidden: 'مخفي',
-      deleted: 'محذوف',
-      pending: 'في الانتظار',
-      reviewed: 'تمت المراجعة',
-      resolved: 'تم الحل',
+      totalUsers: 'إجمالي المستخدمين',
+      totalCompanies: 'إجمالي الشركات',
+      totalReviews: 'إجمالي التقييمات',
+      pendingReports: 'البلاغات المعلقة',
+      searchUsers: 'البحث في المستخدمين...',
       name: 'الاسم',
       email: 'البريد الإلكتروني',
+      role: 'الدور',
       status: 'الحالة',
-      createdAt: 'تاريخ الإنشاء',
       actions: 'الإجراءات',
-      edit: 'تعديل',
+      admin: 'أدمن',
+      user: 'مستخدم',
+      active: 'نشط',
+      suspended: 'موقوف',
       suspend: 'إيقاف',
-      unsuspend: 'إلغاء الإيقاف',
-      delete: 'حذف',
-      hide: 'إخفاء',
-      unhide: 'إظهار',
-      view: 'عرض',
+      activate: 'تفعيل',
+      makeAdmin: 'جعل أدمن',
+      removeAdmin: 'إزالة أدمن',
       loading: 'جاري التحميل...',
-      noData: 'لا توجد بيانات',
       accessDenied: 'غير مسموح بالوصول',
       notAuthorized: 'أنت غير مخول للوصول إلى هذه الصفحة',
       backToDashboard: 'العودة إلى لوحة التحكم',
-      editUser: 'تعديل المستخدم',
-      firstName: 'الاسم الأول',
-      lastName: 'اسم العائلة',
-      saveChanges: 'حفظ التغييرات',
-      cancel: 'إلغاء',
-      confirmSuspend: 'هل أنت متأكد من إيقاف هذا المستخدم؟',
-      confirmUnsuspend: 'هل أنت متأكد من إلغاء إيقاف هذا المستخدم؟',
-      confirmHide: 'هل أنت متأكد من إخفاء هذا التقييم؟',
-      confirmUnhide: 'هل أنت متأكد من إظهار هذا التقييم؟',
-      confirmDelete: 'هل أنت متأكد من حذف هذا العنصر؟',
-      typeDeleteToConfirm: 'اكتب "DELETE" للتأكيد',
-      userUpdated: 'تم تحديث المستخدم بنجاح',
-      userSuspended: 'تم إيقاف المستخدم بنجاح',
-      userUnsuspended: 'تم إلغاء إيقاف المستخدم بنجاح',
-      reviewHidden: 'تم إخفاء التقييم بنجاح',
-      reviewUnhidden: 'تم إظهار التقييم بنجاح',
-      reviewDeleted: 'تم حذف التقييم بنجاح',
-      errorOccurred: 'حدث خطأ',
-      author: 'الكاتب',
+      reviewer: 'المراجع',
       company: 'الشركة',
-      reviewTitle: 'عنوان التقييم',
       rating: 'التقييم',
+      createdAt: 'تاريخ الإنشاء',
+      published: 'منشور',
+      pending: 'في الانتظار',
+      flagged: 'مبلغ عنه',
+      removed: 'محذوف',
+      allStatuses: 'جميع الحالات',
+      allCompanies: 'جميع الشركات',
+      claimed: 'مطالب بها',
+      unclaimed: 'غير مطالب بها',
       reason: 'السبب',
+      details: 'التفاصيل',
       reporter: 'المبلغ',
-      reportedContent: 'المحتوى المبلغ عنه',
-      dismiss: 'رفض',
-      upholdAndHide: 'قبول وإخفاء',
-      confirmDismissReport: 'هل أنت متأكد من رفض هذا البلاغ؟',
-      confirmUpholdReport: 'هل أنت متأكد من قبول هذا البلاغ وإخفاء المحتوى؟',
-      reportDismissed: 'تم رفض البلاغ بنجاح',
-      reportUpheld: 'تم قبول البلاغ وإخفاء المحتوى بنجاح',
-      // Category-specific translations
-      addNewCategory: 'إضافة فئة جديدة',
-      editCategory: 'تعديل الفئة',
-      categoryName: 'اسم الفئة',
-      categoryDescription: 'وصف الفئة',
-      iconName: 'اسم الأيقونة',
-      companyCount: 'عدد الشركات',
-      searchForCategory: 'البحث عن فئة...',
-      categoryAdded: 'تم إضافة الفئة بنجاح',
-      categoryUpdated: 'تم تحديث الفئة بنجاح',
-      categoryDeleted: 'تم حذف الفئة بنجاح',
-      cannotDeleteCategoryInUse: 'لا يمكن حذف فئة قيد الاستخدام',
-      confirmDeleteCategory: 'هل أنت متأكد من حذف هذه الفئة؟ هذا الإجراء لا يمكن التراجع عنه.',
-      description: 'الوصف'
+      reportStatus: 'حالة البلاغ',
+      pending: 'معلق',
+      reviewed: 'تمت المراجعة',
+      resolved: 'محلول',
+      anonymous: 'مجهول',
+      verificationTag: 'وسم التحقق',
+      setTag: 'تعيين وسم',
+      none: 'لا شيء',
+      verifiedTrue: 'تم التحقق - صحيح',
+      verifiedNotTrue: 'تم التحقق - غير صحيح',
+      notVerified: 'لم يتم التحقق',
+      tagUpdated: 'تم تحديث الوسم'
     },
     en: {
       adminDashboard: 'Admin Dashboard',
+      overview: 'Overview',
       users: 'Users',
       companies: 'Companies',
-      categories: 'Categories',
       reviews: 'Reviews',
       reports: 'Reports',
-      search: 'Search...',
-      filter: 'Filter',
-      all: 'All',
-      admin: 'Admin',
-      suspended: 'Suspended',
-      regular: 'Regular',
-      claimed: 'Claimed',
-      unclaimed: 'Unclaimed',
-      published: 'Published',
-      hidden: 'Hidden',
-      deleted: 'Deleted',
-      pending: 'Pending',
-      reviewed: 'Reviewed',
-      resolved: 'Resolved',
+      totalUsers: 'Total Users',
+      totalCompanies: 'Total Companies',
+      totalReviews: 'Total Reviews',
+      pendingReports: 'Pending Reports',
+      searchUsers: 'Search users...',
       name: 'Name',
       email: 'Email',
+      role: 'Role',
       status: 'Status',
-      createdAt: 'Created At',
       actions: 'Actions',
-      edit: 'Edit',
+      admin: 'Admin',
+      user: 'User',
+      active: 'Active',
+      suspended: 'Suspended',
       suspend: 'Suspend',
-      unsuspend: 'Unsuspend',
-      delete: 'Delete',
-      hide: 'Hide',
-      unhide: 'Unhide',
-      view: 'View',
+      activate: 'Activate',
+      makeAdmin: 'Make Admin',
+      removeAdmin: 'Remove Admin',
       loading: 'Loading...',
-      noData: 'No data available',
       accessDenied: 'Access Denied',
       notAuthorized: 'You are not authorized to access this page',
       backToDashboard: 'Back to Dashboard',
-      editUser: 'Edit User',
-      firstName: 'First Name',
-      lastName: 'Last Name',
-      saveChanges: 'Save Changes',
-      cancel: 'Cancel',
-      confirmSuspend: 'Are you sure you want to suspend this user?',
-      confirmUnsuspend: 'Are you sure you want to unsuspend this user?',
-      confirmHide: 'Are you sure you want to hide this review?',
-      confirmUnhide: 'Are you sure you want to unhide this review?',
-      confirmDelete: 'Are you sure you want to delete this item?',
-      typeDeleteToConfirm: 'Type "DELETE" to confirm',
-      userUpdated: 'User updated successfully',
-      userSuspended: 'User suspended successfully',
-      userUnsuspended: 'User unsuspended successfully',
-      reviewHidden: 'Review hidden successfully',
-      reviewUnhidden: 'Review unhidden successfully',
-      reviewDeleted: 'Review deleted successfully',
-      errorOccurred: 'An error occurred',
-      author: 'Author',
+      reviewer: 'Reviewer',
       company: 'Company',
-      reviewTitle: 'Review Title',
       rating: 'Rating',
+      createdAt: 'Created At',
+      published: 'Published',
+      pending: 'Pending',
+      flagged: 'Flagged',
+      removed: 'Removed',
+      allStatuses: 'All Statuses',
+      allCompanies: 'All Companies',
+      claimed: 'Claimed',
+      unclaimed: 'Unclaimed',
       reason: 'Reason',
+      details: 'Details',
       reporter: 'Reporter',
-      reportedContent: 'Reported Content',
-      dismiss: 'Dismiss',
-      upholdAndHide: 'Uphold & Hide',
-      confirmDismissReport: 'Are you sure you want to dismiss this report?',
-      confirmUpholdReport: 'Are you sure you want to uphold this report and hide the content?',
-      reportDismissed: 'Report dismissed successfully',
-      reportUpheld: 'Report upheld and content hidden successfully',
-      // Category-specific translations
-      addNewCategory: 'Add New Category',
-      editCategory: 'Edit Category',
-      categoryName: 'Category Name',
-      categoryDescription: 'Category Description',
-      iconName: 'Icon Name',
-      companyCount: 'Company Count',
-      searchForCategory: 'Search for a category...',
-      categoryAdded: 'Category added successfully',
-      categoryUpdated: 'Category updated successfully',
-      categoryDeleted: 'Category deleted successfully',
-      cannotDeleteCategoryInUse: 'Cannot delete a category that is currently in use',
-      confirmDeleteCategory: 'Are you sure you want to delete this category? This action cannot be undone.',
-      description: 'Description'
+      reportStatus: 'Report Status',
+      pending: 'Pending',
+      reviewed: 'Reviewed',
+      resolved: 'Resolved',
+      anonymous: 'Anonymous',
+      verificationTag: 'Verification Tag',
+      setTag: 'Set Tag',
+      none: 'None',
+      verifiedTrue: 'Verified True',
+      verifiedNotTrue: 'Verified not True',
+      notVerified: 'Not Verified',
+      tagUpdated: 'Tag updated'
     }
   };
 
-  // Check admin access
+  // Check admin access and fetch data
   useEffect(() => {
     const checkAdminAccess = async () => {
       if (authLoading) return;
@@ -328,7 +247,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
       try {
         setLoading(true);
-        
+        setError(null);
+
         // Check if user is admin
         const { data: profileData, error: profileError } = await supabase
           .from('profiles')
@@ -336,19 +256,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
           .eq('id', user.id)
           .single();
 
-        if (profileError || !profileData?.is_admin) {
+        if (profileError) {
+          throw profileError;
+        }
+
+        if (!profileData?.is_admin) {
           setError('Access denied');
           return;
         }
 
-        // Fetch all data
-        await Promise.all([
-          fetchUsers(),
-          fetchCompanies(),
-          fetchCategories(),
-          fetchReviews(),
-          fetchReports()
-        ]);
+        setIsAdmin(true);
+        await fetchAllData();
       } catch (error: any) {
         console.error('Error checking admin access:', error);
         setError(error.message);
@@ -360,552 +278,221 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     checkAdminAccess();
   }, [user, authLoading, onNavigate]);
 
-  const fetchUsers = async () => {
+  const fetchAllData = async () => {
     try {
-      const { data, error } = await supabase
+      // Fetch stats
+      const [usersCount, companiesCount, reviewsCount, reportsCount] = await Promise.all([
+        supabase.from('profiles').select('*', { count: 'exact', head: true }),
+        supabase.from('companies').select('*', { count: 'exact', head: true }),
+        supabase.from('reviews').select('*', { count: 'exact', head: true }),
+        supabase.from('reports').select('*', { count: 'exact', head: true }).eq('status', 'pending')
+      ]);
+
+      setStats({
+        totalUsers: usersCount.count || 0,
+        totalCompanies: companiesCount.count || 0,
+        totalReviews: reviewsCount.count || 0,
+        pendingReports: reportsCount.count || 0
+      });
+
+      // Fetch users
+      const { data: usersData } = await supabase
         .from('profiles')
         .select('*')
         .order('updated_at', { ascending: false });
 
-      if (error) throw error;
-      setUsers(data || []);
-    } catch (error: any) {
-      console.error('Error fetching users:', error);
-    }
-  };
+      setUsers(usersData || []);
 
-  const fetchCompanies = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('companies')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setCompanies(data || []);
-    } catch (error: any) {
-      console.error('Error fetching companies:', error);
-    }
-  };
-
-  const fetchCategories = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('name', { ascending: true });
-
-      if (error) throw error;
-
-      // Get company count for each category
-      const categoriesWithCount = await Promise.all(
-        (data || []).map(async (category) => {
-          const { count, error: countError } = await supabase
-            .from('companies')
-            .select('*', { count: 'exact', head: true })
-            .eq('category_id', category.id);
-
-          if (countError) {
-            console.error('Error fetching company count for category:', countError);
-            return { ...category, company_count: 0 };
-          }
-
-          return { ...category, company_count: count || 0 };
-        })
-      );
-
-      setCategories(categoriesWithCount);
-    } catch (error: any) {
-      console.error('Error fetching categories:', error);
-    }
-  };
-
-  const fetchReviews = async () => {
-    try {
-      const { data, error } = await supabase
+      // Fetch reviews with verification_tag
+      const { data: reviewsData } = await supabase
         .from('reviews')
         .select(`
-          *,
-          profiles!reviews_profile_id_fkey(first_name, last_name),
+          id,
+          title,
+          body,
+          overall_rating,
+          status,
+          verification_tag,
+          created_at,
+          is_anonymous,
+          profiles!reviews_profile_id_fkey(first_name, last_name, email),
           companies!reviews_company_id_fkey(name)
         `)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setReviews(data || []);
-    } catch (error: any) {
-      console.error('Error fetching reviews:', error);
-    }
-  };
+      setReviews(reviewsData || []);
 
-  const fetchReports = async () => {
-    try {
-      const { data, error } = await supabase
+      // Fetch companies with review stats
+      const { data: companiesData } = await supabase.rpc('filter_companies');
+      setCompanies(companiesData || []);
+
+      // Fetch reports
+      const { data: reportsData } = await supabase
         .from('reports')
         .select(`
-          *,
-          profiles!reports_reporter_profile_id_fkey(first_name, last_name),
-          reviews!reports_review_id_fkey(
-            id,
-            title,
-            companies!reviews_company_id_fkey(name)
-          )
+          id,
+          reason,
+          details,
+          status,
+          created_at,
+          reviews!reports_review_id_fkey(title, body),
+          profiles!reports_reporter_profile_id_fkey(first_name, last_name, email)
         `)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setReports(data || []);
+      setReports(reportsData || []);
     } catch (error: any) {
-      console.error('Error fetching reports:', error);
+      console.error('Error fetching admin data:', error);
     }
   };
 
-  const handleEditUser = (user: UserProfile) => {
-    setEditingUser(user);
-    setEditUserForm({
-      firstName: user.first_name || '',
-      lastName: user.last_name || ''
-    });
-    setShowEditUserModal(true);
-  };
-
-  const handleSaveUser = async () => {
-    if (!editingUser) return;
-
+  const handleUserAction = async (userId: string, action: 'suspend' | 'activate' | 'makeAdmin' | 'removeAdmin') => {
     try {
+      let updateData: any = {};
+      
+      switch (action) {
+        case 'suspend':
+          updateData = { is_suspended: true };
+          break;
+        case 'activate':
+          updateData = { is_suspended: false };
+          break;
+        case 'makeAdmin':
+          updateData = { is_admin: true };
+          break;
+        case 'removeAdmin':
+          updateData = { is_admin: false };
+          break;
+      }
+
       const { error } = await supabase
         .from('profiles')
-        .update({
-          first_name: editUserForm.firstName.trim(),
-          last_name: editUserForm.lastName.trim(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', editingUser.id);
-
-      if (error) throw error;
-
-      // Update local state
-      setUsers(prev => prev.map(user => 
-        user.id === editingUser.id 
-          ? { ...user, first_name: editUserForm.firstName.trim(), last_name: editUserForm.lastName.trim() }
-          : user
-      ));
-
-      setShowEditUserModal(false);
-      setEditingUser(null);
-      toast.success(text[language].userUpdated);
-    } catch (error: any) {
-      console.error('Error updating user:', error);
-      toast.error(text[language].errorOccurred);
-    }
-  };
-
-  const handleSuspendUser = async (userId: string, suspend: boolean) => {
-    const confirmMessage = suspend ? text[language].confirmSuspend : text[language].confirmUnsuspend;
-    
-    if (!confirm(confirmMessage)) return;
-
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ is_suspended: suspend })
+        .update(updateData)
         .eq('id', userId);
 
       if (error) throw error;
 
       // Update local state
       setUsers(prev => prev.map(user => 
-        user.id === userId ? { ...user, is_suspended: suspend } : user
+        user.id === userId ? { ...user, ...updateData } : user
       ));
 
-      toast.success(suspend ? text[language].userSuspended : text[language].userUnsuspended);
+      toast.success('User updated successfully');
     } catch (error: any) {
-      console.error('Error updating user suspension:', error);
-      toast.error(text[language].errorOccurred);
+      console.error('Error updating user:', error);
+      toast.error('Error updating user');
     }
   };
 
-  // Category management functions
-  const handleAddCategory = () => {
-    setEditingCategory(null);
-    setCategoryForm({
-      name: '',
-      description: '',
-      icon_name: ''
-    });
-    setShowCategoryModal(true);
-  };
-
-  const handleEditCategory = (category: Category) => {
-    setEditingCategory(category);
-    setCategoryForm({
-      name: category.name || '',
-      description: category.description || '',
-      icon_name: category.icon_name || ''
-    });
-    setShowCategoryModal(true);
-  };
-
-  const handleSaveCategory = async () => {
-    if (!categoryForm.name.trim()) {
-      toast.error(text[language].errorOccurred);
-      return;
-    }
-
-    try {
-      if (editingCategory) {
-        // Update existing category
-        const { error } = await supabase
-          .from('categories')
-          .update({
-            name: categoryForm.name.trim(),
-            description: categoryForm.description.trim() || null,
-            icon_name: categoryForm.icon_name.trim() || null
-          })
-          .eq('id', editingCategory.id);
-
-        if (error) throw error;
-
-        // Update local state
-        setCategories(prev => prev.map(cat => 
-          cat.id === editingCategory.id 
-            ? { 
-                ...cat, 
-                name: categoryForm.name.trim(),
-                description: categoryForm.description.trim() || null,
-                icon_name: categoryForm.icon_name.trim() || null
-              }
-            : cat
-        ));
-
-        toast.success(text[language].categoryUpdated);
-      } else {
-        // Add new category
-        const { data, error } = await supabase
-          .from('categories')
-          .insert([{
-            name: categoryForm.name.trim(),
-            description: categoryForm.description.trim() || null,
-            icon_name: categoryForm.icon_name.trim() || null
-          }])
-          .select()
-          .single();
-
-        if (error) throw error;
-
-        // Add to local state with company_count = 0
-        setCategories(prev => [...prev, { ...data, company_count: 0 }]);
-
-        toast.success(text[language].categoryAdded);
-      }
-
-      setShowCategoryModal(false);
-      setEditingCategory(null);
-    } catch (error: any) {
-      console.error('Error saving category:', error);
-      toast.error(text[language].errorOccurred);
-    }
-  };
-
-  const handleDeleteCategory = (category: Category) => {
-    if ((category.company_count || 0) > 0) {
-      toast.error(text[language].cannotDeleteCategoryInUse);
-      return;
-    }
-
-    setDeletingCategory(category);
-    setDeleteConfirmText('');
-    setShowDeleteModal(true);
-  };
-
-  const handleConfirmDeleteCategory = async () => {
-    if (!deletingCategory || deleteConfirmText !== 'DELETE') return;
-
-    try {
-      const { error } = await supabase
-        .from('categories')
-        .delete()
-        .eq('id', deletingCategory.id);
-
-      if (error) throw error;
-
-      // Remove from local state
-      setCategories(prev => prev.filter(cat => cat.id !== deletingCategory.id));
-
-      setShowDeleteModal(false);
-      setDeletingCategory(null);
-      setDeleteConfirmText('');
-      toast.success(text[language].categoryDeleted);
-    } catch (error: any) {
-      console.error('Error deleting category:', error);
-      toast.error(text[language].errorOccurred);
-    }
-  };
-
-  const handleReviewAction = async (reviewId: number, action: 'hide' | 'unhide' | 'delete') => {
-    let confirmMessage = '';
-    let newStatus = '';
-    let successMessage = '';
-
-    switch (action) {
-      case 'hide':
-        confirmMessage = text[language].confirmHide;
-        newStatus = 'hidden';
-        successMessage = text[language].reviewHidden;
-        break;
-      case 'unhide':
-        confirmMessage = text[language].confirmUnhide;
-        newStatus = 'published';
-        successMessage = text[language].reviewUnhidden;
-        break;
-      case 'delete':
-        confirmMessage = text[language].confirmDelete;
-        const deleteConfirm = prompt(text[language].typeDeleteToConfirm);
-        if (deleteConfirm !== 'DELETE') return;
-        newStatus = 'deleted';
-        successMessage = text[language].reviewDeleted;
-        break;
-    }
-
-    if (action !== 'delete' && !confirm(confirmMessage)) return;
-
+  const handleVerificationTagUpdate = async (reviewId: number, tag: string | null) => {
     try {
       const { error } = await supabase
         .from('reviews')
-        .update({ status: newStatus })
+        .update({ verification_tag: tag })
         .eq('id', reviewId);
 
       if (error) throw error;
 
       // Update local state
       setReviews(prev => prev.map(review => 
-        review.id === reviewId ? { ...review, status: newStatus } : review
+        review.id === reviewId ? { ...review, verification_tag: tag } : review
       ));
 
-      toast.success(successMessage);
+      toast.success(text[language].tagUpdated);
     } catch (error: any) {
-      console.error('Error updating review:', error);
-      toast.error(text[language].errorOccurred);
+      console.error('Error updating verification tag:', error);
+      toast.error('Error updating tag');
     }
-  };
-
-  const handleDismissReport = async (report: ReportData) => {
-    if (!confirm(text[language].confirmDismissReport)) return;
-
-    try {
-      // Update all reports for this content to 'declined'
-      const { error } = await supabase
-        .from('reports')
-        .update({ status: 'declined' })
-        .eq('review_id', report.review_id);
-
-      if (error) throw error;
-
-      // Update local state
-      setReports(prev => prev.map(r => 
-        r.review_id === report.review_id ? { ...r, status: 'declined' } : r
-      ));
-
-      toast.success(text[language].reportDismissed);
-    } catch (error: any) {
-      console.error('Error dismissing report:', error);
-      toast.error(text[language].errorOccurred);
-    }
-  };
-
-  const handleUpholdReport = async (report: ReportData) => {
-    if (!confirm(text[language].confirmUpholdReport)) return;
-
-    try {
-      // First, hide the original content
-      if (report.review_id) {
-        const { error: reviewError } = await supabase
-          .from('reviews')
-          .update({ status: 'hidden' })
-          .eq('id', report.review_id);
-
-        if (reviewError) throw reviewError;
-
-        // Update local reviews state
-        setReviews(prev => prev.map(review => 
-          review.id === report.review_id ? { ...review, status: 'hidden' } : review
-        ));
-      }
-
-      // Then, update all reports for this content to 'accepted'
-      const { error: reportError } = await supabase
-        .from('reports')
-        .update({ status: 'accepted' })
-        .eq('review_id', report.review_id);
-
-      if (reportError) throw reportError;
-
-      // Update local reports state
-      setReports(prev => prev.map(r => 
-        r.review_id === report.review_id ? { ...r, status: 'accepted' } : r
-      ));
-
-      toast.success(text[language].reportUpheld);
-    } catch (error: any) {
-      console.error('Error upholding report:', error);
-      toast.error(text[language].errorOccurred);
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US');
-  };
-
-  const getStatusBadge = (status: string | boolean | null, type: 'user' | 'company' | 'review' | 'report') => {
-    let color = 'bg-gray-100 text-gray-800';
-    let text = '';
-
-    if (type === 'user') {
-      if (status === true) {
-        color = 'bg-red-100 text-red-800';
-        text = language === 'ar' ? 'موقوف' : 'Suspended';
-      } else {
-        color = 'bg-green-100 text-green-800';
-        text = language === 'ar' ? 'نشط' : 'Active';
-      }
-    } else if (type === 'company') {
-      if (status === true) {
-        color = 'bg-blue-100 text-blue-800';
-        text = language === 'ar' ? 'مطالب بها' : 'Claimed';
-      } else {
-        color = 'bg-gray-100 text-gray-800';
-        text = language === 'ar' ? 'غير مطالب بها' : 'Unclaimed';
-      }
-    } else if (type === 'review') {
-      switch (status) {
-        case 'published':
-          color = 'bg-green-100 text-green-800';
-          text = language === 'ar' ? 'منشور' : 'Published';
-          break;
-        case 'hidden':
-          color = 'bg-yellow-100 text-yellow-800';
-          text = language === 'ar' ? 'مخفي' : 'Hidden';
-          break;
-        case 'deleted':
-          color = 'bg-red-100 text-red-800';
-          text = language === 'ar' ? 'محذوف' : 'Deleted';
-          break;
-        default:
-          color = 'bg-gray-100 text-gray-800';
-          text = language === 'ar' ? 'غير معروف' : 'Unknown';
-      }
-    } else if (type === 'report') {
-      switch (status) {
-        case 'pending':
-        case 'received':
-          color = 'bg-yellow-100 text-yellow-800';
-          text = language === 'ar' ? 'في الانتظار' : 'Pending';
-          break;
-        case 'reviewed':
-          color = 'bg-blue-100 text-blue-800';
-          text = language === 'ar' ? 'تمت المراجعة' : 'Reviewed';
-          break;
-        case 'resolved':
-          color = 'bg-green-100 text-green-800';
-          text = language === 'ar' ? 'تم الحل' : 'Resolved';
-          break;
-        case 'accepted':
-          color = 'bg-red-100 text-red-800';
-          text = language === 'ar' ? 'مقبول' : 'Accepted';
-          break;
-        case 'declined':
-          color = 'bg-gray-100 text-gray-800';
-          text = language === 'ar' ? 'مرفوض' : 'Declined';
-          break;
-        default:
-          color = 'bg-gray-100 text-gray-800';
-          text = language === 'ar' ? 'غير معروف' : 'Unknown';
-      }
-    }
-
-    return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${color}`}>
-        {text}
-      </span>
-    );
   };
 
   const renderStars = (rating: number | null) => {
-    if (!rating) return '-';
     const stars = [];
-    for (let i = 1; i <= 5; i++) {
+    const ratingValue = rating || 0;
+    for (let i = 0; i < 5; i++) {
       stars.push(
-        <span key={i} className={i <= rating ? 'text-yellow-500' : 'text-gray-300'}>
-          ★
-        </span>
+        <Star
+          key={i}
+          className={`h-4 w-4 ${
+            i < ratingValue ? 'fill-current text-highlight-500' : 'text-gray-300'
+          }`}
+        />
       );
     }
-    return <div className="flex">{stars}</div>;
+    return stars;
   };
 
-  // Filter functions
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const getStatusColor = (status: string | null) => {
+    switch (status) {
+      case 'published':
+        return 'bg-green-100 text-green-800';
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'flagged_for_review':
+        return 'bg-red-100 text-red-800';
+      case 'removed':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getVerificationTagColor = (tag: string | null) => {
+    switch (tag) {
+      case 'Verified True':
+        return 'bg-green-100 text-green-800';
+      case 'Verified not True':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'Not Verified':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getVerificationTagText = (tag: string | null) => {
+    switch (tag) {
+      case 'Verified True':
+        return text[language].verifiedTrue;
+      case 'Verified not True':
+        return text[language].verifiedNotTrue;
+      case 'Not Verified':
+        return text[language].notVerified;
+      default:
+        return text[language].setTag;
+    }
+  };
+
   const filteredUsers = users.filter(user => {
-    const matchesSearch = !searchQuery || 
-      user.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email?.toLowerCase().includes(searchQuery.toLowerCase());
-
-    const matchesFilter = userFilter === 'all' ||
-      (userFilter === 'admin' && user.is_admin) ||
-      (userFilter === 'suspended' && user.is_suspended) ||
-      (userFilter === 'regular' && !user.is_admin && !user.is_suspended);
-
-    return matchesSearch && matchesFilter;
-  });
-
-  const filteredCompanies = companies.filter(company => {
-    const matchesSearch = !searchQuery || 
-      company.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      company.website?.toLowerCase().includes(searchQuery.toLowerCase());
-
-    const matchesFilter = companyFilter === 'all' ||
-      (companyFilter === 'claimed' && company.is_claimed) ||
-      (companyFilter === 'unclaimed' && !company.is_claimed);
-
-    return matchesSearch && matchesFilter;
-  });
-
-  const filteredCategories = categories.filter(category => {
-    const matchesSearch = !searchQuery || 
-      category.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      category.description?.toLowerCase().includes(searchQuery.toLowerCase());
-
-    return matchesSearch;
+    const searchTerm = userSearchQuery.toLowerCase();
+    const fullName = `${user.first_name || ''} ${user.last_name || ''}`.toLowerCase();
+    const email = user.email?.toLowerCase() || '';
+    
+    return fullName.includes(searchTerm) || email.includes(searchTerm);
   });
 
   const filteredReviews = reviews.filter(review => {
-    const matchesSearch = !searchQuery || 
-      review.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      review.body?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      review.companies?.name?.toLowerCase().includes(searchQuery.toLowerCase());
-
-    const matchesFilter = reviewFilter === 'all' || review.status === reviewFilter;
-
-    return matchesSearch && matchesFilter;
-  });
-
-  const filteredReports = reports.filter(report => {
-    const matchesSearch = !searchQuery || 
-      report.reason?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      report.details?.toLowerCase().includes(searchQuery.toLowerCase());
-
-    let matchesFilter = false;
-    if (reportFilter === 'all') {
-      matchesFilter = true;
-    } else if (reportFilter === 'pending') {
-      matchesFilter = report.status === 'pending' || report.status === 'received';
-    } else {
-      matchesFilter = report.status === reportFilter;
+    if (reviewStatusFilter !== 'all' && review.status !== reviewStatusFilter) {
+      return false;
     }
-
-    return matchesSearch && matchesFilter;
+    return true;
   });
 
+  const filteredCompanies = companies.filter(company => {
+    if (companyFilter === 'claimed') return company.is_claimed;
+    if (companyFilter === 'unclaimed') return !company.is_claimed;
+    return true;
+  });
+
+  // Loading state
   if (authLoading || loading) {
     return (
       <div className={`min-h-screen bg-gray-50 ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
@@ -921,7 +508,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     );
   }
 
-  if (error) {
+  // Error state
+  if (error || !isAdmin) {
     return (
       <div className={`min-h-screen bg-gray-50 ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
         <Header language={language} onLanguageChange={onLanguageChange} onNavigate={onNavigate} />
@@ -954,692 +542,474 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Page Header */}
         <div className="mb-8">
-          <div className="flex items-center space-x-3 rtl:space-x-reverse mb-4">
+          <h1 className="text-3xl font-bold text-dark-500 mb-2 flex items-center space-x-2 rtl:space-x-reverse">
             <Shield className="h-8 w-8 text-red-500" />
-            <h1 className="text-3xl font-bold text-dark-500">
-              {text[language].adminDashboard}
-            </h1>
-          </div>
+            <span>{text[language].adminDashboard}</span>
+          </h1>
           <div className="w-16 h-1 bg-red-500 rounded-full"></div>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-8">
-          <div className="flex flex-wrap border-b border-gray-200">
-            {[
-              { key: 'users', label: text[language].users, icon: Users },
-              { key: 'companies', label: text[language].companies, icon: Building2 },
-              { key: 'categories', label: text[language].categories, icon: Tag },
-              { key: 'reviews', label: text[language].reviews, icon: MessageSquare },
-              { key: 'reports', label: text[language].reports, icon: Flag }
-            ].map(({ key, label, icon: Icon }) => (
-              <button
-                key={key}
-                onClick={() => setActiveTab(key as any)}
-                className={`flex items-center space-x-2 rtl:space-x-reverse px-6 py-4 font-medium transition-colors duration-200 ${
-                  activeTab === key
-                    ? 'text-red-600 border-b-2 border-red-500 bg-red-50'
-                    : 'text-gray-600 hover:text-red-500 hover:bg-gray-50'
-                }`}
-              >
-                <Icon className="h-5 w-5" />
-                <span>{label}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Search and Filter Bar */}
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0 md:space-x-4 rtl:md:space-x-reverse">
-              {/* Search Input */}
-              <div className="relative flex-1 max-w-md">
-                <div className="absolute inset-y-0 right-0 pr-3 rtl:left-0 rtl:right-auto rtl:pl-3 rtl:pr-0 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={
-                    activeTab === 'categories' 
-                      ? text[language].searchForCategory 
-                      : text[language].search
-                  }
-                  className="w-full px-4 py-2 pr-10 rtl:pl-10 rtl:pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
-                  dir={language === 'ar' ? 'rtl' : 'ltr'}
-                />
-              </div>
-
-              {/* Add New Category Button - Only show on categories tab */}
-              {activeTab === 'categories' && (
-                <button
-                  onClick={handleAddCategory}
-                  className="flex items-center space-x-2 rtl:space-x-reverse bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200"
-                >
-                  <Plus className="h-4 w-4" />
-                  <span>{text[language].addNewCategory}</span>
-                </button>
-              )}
-
-              {/* Filter Dropdown - Hide on categories tab */}
-              {activeTab !== 'categories' && (
-                <div className="relative">
-                  <select
-                    value={
-                      activeTab === 'users' ? userFilter :
-                      activeTab === 'companies' ? companyFilter :
-                      activeTab === 'reviews' ? reviewFilter :
-                      reportFilter
-                    }
-                    onChange={(e) => {
-                      if (activeTab === 'users') setUserFilter(e.target.value as any);
-                      else if (activeTab === 'companies') setCompanyFilter(e.target.value as any);
-                      else if (activeTab === 'reviews') setReviewFilter(e.target.value as any);
-                      else setReportFilter(e.target.value as any);
-                    }}
-                    className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 rtl:pl-8 rtl:pr-4 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
-                  >
-                    <option value="all">{text[language].all}</option>
-                    {activeTab === 'users' && (
-                      <>
-                        <option value="admin">{text[language].admin}</option>
-                        <option value="suspended">{text[language].suspended}</option>
-                        <option value="regular">{text[language].regular}</option>
-                      </>
-                    )}
-                    {activeTab === 'companies' && (
-                      <>
-                        <option value="claimed">{text[language].claimed}</option>
-                        <option value="unclaimed">{text[language].unclaimed}</option>
-                      </>
-                    )}
-                    {activeTab === 'reviews' && (
-                      <>
-                        <option value="published">{text[language].published}</option>
-                        <option value="hidden">{text[language].hidden}</option>
-                        <option value="deleted">{text[language].deleted}</option>
-                      </>
-                    )}
-                    {activeTab === 'reports' && (
-                      <>
-                        <option value="pending">{text[language].pending}</option>
-                        <option value="reviewed">{text[language].reviewed}</option>
-                        <option value="resolved">{text[language].resolved}</option>
-                      </>
-                    )}
-                  </select>
-                  <ChevronDown className="absolute right-2 rtl:left-2 rtl:right-auto top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                </div>
-              )}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          {/* Navigation Sidebar */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sticky top-24">
+              <nav className="space-y-2">
+                {[
+                  { id: 'overview', label: text[language].overview, icon: Shield },
+                  { id: 'users', label: text[language].users, icon: Users },
+                  { id: 'companies', label: text[language].companies, icon: Building2 },
+                  { id: 'reviews', label: text[language].reviews, icon: MessageSquare },
+                  { id: 'reports', label: text[language].reports, icon: Flag }
+                ].map((tab) => {
+                  const IconComponent = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id as any)}
+                      className={`w-full flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-lg text-right transition-all duration-200 ${
+                        activeTab === tab.id
+                          ? 'bg-red-50 text-red-600 border-r-4 border-red-500 rtl:border-l-4 rtl:border-r-0'
+                          : 'text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      <IconComponent className="h-5 w-5" />
+                      <span className="font-medium">{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
             </div>
           </div>
 
-          {/* Content Area */}
-          <div className="p-6">
+          {/* Main Content Area */}
+          <div className="lg:col-span-3">
+            {/* Overview Tab */}
+            {activeTab === 'overview' && (
+              <div className="space-y-6">
+                <h2 className="text-2xl font-bold text-dark-500">{text[language].overview}</h2>
+                
+                {/* Stats Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
+                        <Users className="h-6 w-6 text-blue-600" />
+                      </div>
+                    </div>
+                    <h3 className="text-2xl font-bold text-dark-500 mb-1">{stats.totalUsers}</h3>
+                    <p className="text-gray-600 text-sm">{text[language].totalUsers}</p>
+                  </div>
+
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center">
+                        <Building2 className="h-6 w-6 text-green-600" />
+                      </div>
+                    </div>
+                    <h3 className="text-2xl font-bold text-dark-500 mb-1">{stats.totalCompanies}</h3>
+                    <p className="text-gray-600 text-sm">{text[language].totalCompanies}</p>
+                  </div>
+
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="w-12 h-12 bg-yellow-50 rounded-lg flex items-center justify-center">
+                        <MessageSquare className="h-6 w-6 text-yellow-600" />
+                      </div>
+                    </div>
+                    <h3 className="text-2xl font-bold text-dark-500 mb-1">{stats.totalReviews}</h3>
+                    <p className="text-gray-600 text-sm">{text[language].totalReviews}</p>
+                  </div>
+
+                  <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="w-12 h-12 bg-red-50 rounded-lg flex items-center justify-center">
+                        <Flag className="h-6 w-6 text-red-600" />
+                      </div>
+                    </div>
+                    <h3 className="text-2xl font-bold text-dark-500 mb-1">{stats.pendingReports}</h3>
+                    <p className="text-gray-600 text-sm">{text[language].pendingReports}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Users Tab */}
             {activeTab === 'users' && (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].name}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].email}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].status}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].createdAt}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].actions}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredUsers.map((user) => (
-                      <tr key={user.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-4 px-4">
-                          <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                            {/* User Avatar */}
-                            <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center flex-shrink-0">
-                              {user.avatar_url ? (
-                                <img 
-                                  src={user.avatar_url} 
-                                  alt="User Avatar" 
-                                  className="w-full h-full object-cover"
-                                  onError={(e) => {
-                                    // Fallback to default icon if image fails to load
-                                    const target = e.target as HTMLImageElement;
-                                    target.style.display = 'none';
-                                    target.nextElementSibling?.classList.remove('hidden');
-                                  }}
-                                />
-                              ) : null}
-                              <User className={`h-5 w-5 text-gray-400 ${user.avatar_url ? 'hidden' : ''}`} />
-                            </div>
-                            <div>
-                              <div className="font-medium text-gray-900">
-                                {user.first_name || user.last_name 
-                                  ? `${user.first_name || ''} ${user.last_name || ''}`.trim()
-                                  : 'No Name'
-                                }
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-dark-500">{text[language].users}</h2>
+                  <div className="relative">
+                    <Search className="absolute right-3 rtl:left-3 rtl:right-auto top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder={text[language].searchUsers}
+                      value={userSearchQuery}
+                      onChange={(e) => setUserSearchQuery(e.target.value)}
+                      className="pl-10 rtl:pr-10 rtl:pl-4 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      dir={language === 'ar' ? 'rtl' : 'ltr'}
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].name}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].email}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].role}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].status}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].actions}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredUsers.map((user) => (
+                          <tr key={user.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center space-x-3 rtl:space-x-reverse">
+                                <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
+                                  <User className="h-4 w-4 text-primary-500" />
+                                </div>
+                                <span className="text-sm font-medium text-gray-900">
+                                  {`${user.first_name || ''} ${user.last_name || ''}`.trim() || 'No Name'}
+                                </span>
                               </div>
-                              {user.is_admin && (
-                                <div className="text-xs text-red-600 font-medium">Admin</div>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-4 px-4 text-gray-600">{user.email || '-'}</td>
-                        <td className="py-4 px-4">{getStatusBadge(user.is_suspended, 'user')}</td>
-                        <td className="py-4 px-4 text-gray-600">{formatDate(user.updated_at)}</td>
-                        <td className="py-4 px-4">
-                          <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                            <button
-                              onClick={() => handleEditUser(user)}
-                              className="flex items-center space-x-1 rtl:space-x-reverse bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
-                            >
-                              <Edit className="h-3 w-3" />
-                              <span>{text[language].edit}</span>
-                            </button>
-                            <button
-                              onClick={() => handleSuspendUser(user.id, !user.is_suspended)}
-                              className={`flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded text-sm transition-colors duration-200 ${
-                                user.is_suspended
-                                  ? 'bg-green-500 hover:bg-green-600 text-white'
-                                  : 'bg-orange-500 hover:bg-orange-600 text-white'
-                              }`}
-                            >
-                              {user.is_suspended ? (
-                                <>
-                                  <UserCheck className="h-3 w-3" />
-                                  <span>{text[language].unsuspend}</span>
-                                </>
-                              ) : (
-                                <>
-                                  <UserX className="h-3 w-3" />
-                                  <span>{text[language].suspend}</span>
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {filteredUsers.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    {text[language].noData}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {user.email || 'No Email'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                user.is_admin ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+                              }`}>
+                                {user.is_admin ? text[language].admin : text[language].user}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                user.is_suspended ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                              }`}>
+                                {user.is_suspended ? text[language].suspended : text[language].active}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2 rtl:space-x-reverse">
+                              <button
+                                onClick={() => handleUserAction(user.id, user.is_suspended ? 'activate' : 'suspend')}
+                                className={`px-3 py-1 rounded text-xs font-medium ${
+                                  user.is_suspended 
+                                    ? 'bg-green-100 text-green-800 hover:bg-green-200' 
+                                    : 'bg-red-100 text-red-800 hover:bg-red-200'
+                                }`}
+                              >
+                                {user.is_suspended ? text[language].activate : text[language].suspend}
+                              </button>
+                              <button
+                                onClick={() => handleUserAction(user.id, user.is_admin ? 'removeAdmin' : 'makeAdmin')}
+                                className={`px-3 py-1 rounded text-xs font-medium ${
+                                  user.is_admin 
+                                    ? 'bg-gray-100 text-gray-800 hover:bg-gray-200' 
+                                    : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                                }`}
+                              >
+                                {user.is_admin ? text[language].removeAdmin : text[language].makeAdmin}
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                )}
-              </div>
-            )}
-
-            {/* Companies Tab */}
-            {activeTab === 'companies' && (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].name}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">Website</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">Location</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].status}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].createdAt}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredCompanies.map((company) => (
-                      <tr key={company.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-4 px-4">
-                          <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                            <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center text-sm">
-                              {company.logo_url ? (
-                                <img 
-                                  src={company.logo_url} 
-                                  alt="Company Logo" 
-                                  className="w-full h-full object-cover rounded-lg"
-                                />
-                              ) : (
-                                '🏢'
-                              )}
-                            </div>
-                            <span className="font-medium text-gray-900">{company.name || 'No Name'}</span>
-                          </div>
-                        </td>
-                        <td className="py-4 px-4 text-gray-600">{company.website || '-'}</td>
-                        <td className="py-4 px-4 text-gray-600">{company.location || '-'}</td>
-                        <td className="py-4 px-4">{getStatusBadge(company.is_claimed, 'company')}</td>
-                        <td className="py-4 px-4 text-gray-600">{formatDate(company.created_at)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {filteredCompanies.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    {text[language].noData}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Categories Tab */}
-            {activeTab === 'categories' && (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].categoryName}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].description}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].companyCount}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].actions}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredCategories.map((category) => (
-                      <tr key={category.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-4 px-4">
-                          <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600">
-                              <Building2 className="h-5 w-5" />
-                            </div>
-                            <span className="font-medium text-gray-900">{category.name || 'No Name'}</span>
-                          </div>
-                        </td>
-                        <td className="py-4 px-4 text-gray-600">
-                          <div className="max-w-xs truncate" title={category.description || ''}>
-                            {category.description || '-'}
-                          </div>
-                        </td>
-                        <td className="py-4 px-4">
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            {category.company_count || 0}
-                          </span>
-                        </td>
-                        <td className="py-4 px-4">
-                          <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                            <button
-                              onClick={() => handleEditCategory(category)}
-                              className="flex items-center space-x-1 rtl:space-x-reverse bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
-                            >
-                              <Edit className="h-3 w-3" />
-                              <span>{text[language].edit}</span>
-                            </button>
-                            <button
-                              onClick={() => handleDeleteCategory(category)}
-                              disabled={(category.company_count || 0) > 0}
-                              className={`flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded text-sm transition-colors duration-200 ${
-                                (category.company_count || 0) > 0
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                  : 'bg-red-500 hover:bg-red-600 text-white'
-                              }`}
-                              title={(category.company_count || 0) > 0 ? text[language].cannotDeleteCategoryInUse : ''}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                              <span>{text[language].delete}</span>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {filteredCategories.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    {text[language].noData}
-                  </div>
-                )}
+                </div>
               </div>
             )}
 
             {/* Reviews Tab */}
             {activeTab === 'reviews' && (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].author}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].company}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].reviewTitle}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].rating}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].status}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].createdAt}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].actions}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredReviews.map((review) => (
-                      <tr key={review.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-4 px-4 text-gray-600">
-                          {review.profiles 
-                            ? `${review.profiles.first_name || ''} ${review.profiles.last_name || ''}`.trim() || 'Anonymous'
-                            : 'Anonymous'
-                          }
-                        </td>
-                        <td className="py-4 px-4 text-gray-600">{review.companies?.name || '-'}</td>
-                        <td className="py-4 px-4">
-                          <div className="max-w-xs truncate" title={review.title || review.body || ''}>
-                            {review.title || review.body || '-'}
-                          </div>
-                        </td>
-                        <td className="py-4 px-4">{renderStars(review.overall_rating)}</td>
-                        <td className="py-4 px-4">{getStatusBadge(review.status, 'review')}</td>
-                        <td className="py-4 px-4 text-gray-600">{formatDate(review.created_at)}</td>
-                        <td className="py-4 px-4">
-                          <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                            {review.status === 'published' && (
-                              <button
-                                onClick={() => handleReviewAction(review.id, 'hide')}
-                                className="flex items-center space-x-1 rtl:space-x-reverse bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
-                              >
-                                <EyeOff className="h-3 w-3" />
-                                <span>{text[language].hide}</span>
-                              </button>
-                            )}
-                            {review.status === 'hidden' && (
-                              <button
-                                onClick={() => handleReviewAction(review.id, 'unhide')}
-                                className="flex items-center space-x-1 rtl:space-x-reverse bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
-                              >
-                                <Eye className="h-3 w-3" />
-                                <span>{text[language].unhide}</span>
-                              </button>
-                            )}
-                            {review.status !== 'deleted' && (
-                              <button
-                                onClick={() => handleReviewAction(review.id, 'delete')}
-                                className="flex items-center space-x-1 rtl:space-x-reverse bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                                <span>{text[language].delete}</span>
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {filteredReviews.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    {text[language].noData}
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-dark-500">{text[language].reviews}</h2>
+                  <select
+                    value={reviewStatusFilter}
+                    onChange={(e) => setReviewStatusFilter(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  >
+                    <option value="all">{text[language].allStatuses}</option>
+                    <option value="published">{text[language].published}</option>
+                    <option value="pending">{text[language].pending}</option>
+                    <option value="flagged_for_review">{text[language].flagged}</option>
+                    <option value="removed">{text[language].removed}</option>
+                  </select>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].reviewer}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].company}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].rating}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].status}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].verificationTag}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].createdAt}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredReviews.map((review) => (
+                          <tr key={review.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900">
+                                {review.is_anonymous 
+                                  ? text[language].anonymous
+                                  : review.profiles 
+                                    ? `${review.profiles.first_name || ''} ${review.profiles.last_name || ''}`.trim() || text[language].anonymous
+                                    : text[language].anonymous
+                                }
+                              </div>
+                              {review.title && (
+                                <div className="text-sm text-gray-500 truncate max-w-xs">
+                                  {review.title}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {review.companies?.name || 'Unknown Company'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center space-x-1 rtl:space-x-reverse">
+                                {renderStars(review.overall_rating)}
+                                <span className="text-sm text-gray-600 ml-2 rtl:mr-2">
+                                  ({review.overall_rating || 0})
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(review.status)}`}>
+                                {review.status === 'published' && text[language].published}
+                                {review.status === 'pending' && text[language].pending}
+                                {review.status === 'flagged_for_review' && text[language].flagged}
+                                {review.status === 'removed' && text[language].removed}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="relative">
+                                <select
+                                  value={review.verification_tag || ''}
+                                  onChange={(e) => handleVerificationTagUpdate(review.id, e.target.value || null)}
+                                  className={`appearance-none px-3 py-1 text-xs font-semibold rounded-full border-0 focus:ring-2 focus:ring-primary-500 ${getVerificationTagColor(review.verification_tag)}`}
+                                >
+                                  <option value="">{text[language].setTag}</option>
+                                  <option value="Verified True">{text[language].verifiedTrue}</option>
+                                  <option value="Verified not True">{text[language].verifiedNotTrue}</option>
+                                  <option value="Not Verified">{text[language].notVerified}</option>
+                                </select>
+                                <ChevronDown className="absolute right-1 rtl:left-1 rtl:right-auto top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-400 pointer-events-none" />
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {formatDate(review.created_at)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                )}
+                </div>
+              </div>
+            )}
+
+            {/* Companies Tab */}
+            {activeTab === 'companies' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-2xl font-bold text-dark-500">{text[language].companies}</h2>
+                  <select
+                    value={companyFilter}
+                    onChange={(e) => setCompanyFilter(e.target.value)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  >
+                    <option value="all">{text[language].allCompanies}</option>
+                    <option value="claimed">{text[language].claimed}</option>
+                    <option value="unclaimed">{text[language].unclaimed}</option>
+                  </select>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].name}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Website
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].status}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].reviews}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].rating}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].createdAt}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {filteredCompanies.map((company) => (
+                          <tr key={company.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center space-x-3 rtl:space-x-reverse">
+                                <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-sm">
+                                  🏢
+                                </div>
+                                <span className="text-sm font-medium text-gray-900">
+                                  {company.name || 'Unnamed Company'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {company.website ? (
+                                <a href={company.website} target="_blank" rel="noopener noreferrer" className="text-primary-500 hover:text-primary-600">
+                                  {company.website}
+                                </a>
+                              ) : (
+                                'No Website'
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                company.is_claimed ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                              }`}>
+                                {company.is_claimed ? text[language].claimed : text[language].unclaimed}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {company.review_count}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center space-x-1 rtl:space-x-reverse">
+                                {renderStars(Math.round(company.avg_rating))}
+                                <span className="text-sm text-gray-600 ml-2 rtl:mr-2">
+                                  ({company.avg_rating.toFixed(1)})
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {formatDate(company.created_at)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             )}
 
             {/* Reports Tab */}
             {activeTab === 'reports' && (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].reporter}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].reportedContent}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].reason}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].status}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].createdAt}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].actions}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredReports.map((report) => (
-                      <tr key={report.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-4 px-4 text-gray-600">
-                          {report.profiles 
-                            ? `${report.profiles.first_name || ''} ${report.profiles.last_name || ''}`.trim() || 'Anonymous'
-                            : 'Anonymous'
-                          }
-                        </td>
-                        <td className="py-4 px-4 text-gray-600">
-                          {report.reviews?.title || report.reviews?.companies?.name || '-'}
-                        </td>
-                        <td className="py-4 px-4">
-                          <div className="max-w-xs truncate" title={report.reason || ''}>
-                            {report.reason || '-'}
-                          </div>
-                        </td>
-                        <td className="py-4 px-4">{getStatusBadge(report.status, 'report')}</td>
-                        <td className="py-4 px-4 text-gray-600">{formatDate(report.created_at)}</td>
-                        <td className="py-4 px-4">
-                          {/* Only show action buttons for pending reports */}
-                          {(report.status === 'pending' || report.status === 'received') && (
-                            <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                              {/* Dismiss Report Button (Green ✓) */}
-                              <button
-                                onClick={() => handleDismissReport(report)}
-                                className="flex items-center space-x-1 rtl:space-x-reverse bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
-                                title={text[language].dismiss}
-                              >
-                                <Check className="h-3 w-3" />
-                                <span>{text[language].dismiss}</span>
-                              </button>
-                              
-                              {/* Uphold & Hide Report Button (Red ✗) */}
-                              <button
-                                onClick={() => handleUpholdReport(report)}
-                                className="flex items-center space-x-1 rtl:space-x-reverse bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
-                                title={text[language].upholdAndHide}
-                              >
-                                <AlertTriangle className="h-3 w-3" />
-                                <span>{text[language].upholdAndHide}</span>
-                              </button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {filteredReports.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    {text[language].noData}
+              <div className="space-y-6">
+                <h2 className="text-2xl font-bold text-dark-500">{text[language].reports}</h2>
+
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].reporter}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].reason}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].details}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].reportStatus}
+                          </th>
+                          <th className="px-6 py-3 text-right rtl:text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            {text[language].createdAt}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {reports.map((report) => (
+                          <tr key={report.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900">
+                                {report.profiles 
+                                  ? `${report.profiles.first_name || ''} ${report.profiles.last_name || ''}`.trim() || 'Anonymous'
+                                  : 'Anonymous'
+                                }
+                              </div>
+                              {report.profiles?.email && (
+                                <div className="text-sm text-gray-500">
+                                  {report.profiles.email}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {report.reason}
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="text-sm text-gray-900 max-w-xs truncate">
+                                {report.details || 'No details provided'}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                report.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                report.status === 'reviewed' ? 'bg-blue-100 text-blue-800' :
+                                'bg-green-100 text-green-800'
+                              }`}>
+                                {report.status === 'pending' && text[language].pending}
+                                {report.status === 'reviewed' && text[language].reviewed}
+                                {report.status === 'resolved' && text[language].resolved}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {formatDate(report.created_at)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                )}
+                </div>
               </div>
             )}
           </div>
         </div>
       </div>
-
-      {/* Edit User Modal */}
-      {showEditUserModal && editingUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-dark-500">
-                {text[language].editUser}
-              </h3>
-              <button
-                onClick={() => setShowEditUserModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-dark-500 mb-2">
-                  {text[language].firstName}
-                </label>
-                <input
-                  type="text"
-                  value={editUserForm.firstName}
-                  onChange={(e) => setEditUserForm(prev => ({ ...prev, firstName: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  dir={language === 'ar' ? 'rtl' : 'ltr'}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-dark-500 mb-2">
-                  {text[language].lastName}
-                </label>
-                <input
-                  type="text"
-                  value={editUserForm.lastName}
-                  onChange={(e) => setEditUserForm(prev => ({ ...prev, lastName: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  dir={language === 'ar' ? 'rtl' : 'ltr'}
-                />
-              </div>
-
-              <div className="flex space-x-3 rtl:space-x-reverse pt-4">
-                <button
-                  onClick={() => setShowEditUserModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                >
-                  {text[language].cancel}
-                </button>
-                <button
-                  onClick={handleSaveUser}
-                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors duration-200 flex items-center justify-center space-x-2 rtl:space-x-reverse"
-                >
-                  <Save className="h-4 w-4" />
-                  <span>{text[language].saveChanges}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Category Modal */}
-      {showCategoryModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-dark-500">
-                {editingCategory ? text[language].editCategory : text[language].addNewCategory}
-              </h3>
-              <button
-                onClick={() => setShowCategoryModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-dark-500 mb-2">
-                  {text[language].categoryName}
-                </label>
-                <input
-                  type="text"
-                  value={categoryForm.name}
-                  onChange={(e) => setCategoryForm(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  dir={language === 'ar' ? 'rtl' : 'ltr'}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-dark-500 mb-2">
-                  {text[language].categoryDescription}
-                </label>
-                <textarea
-                  value={categoryForm.description}
-                  onChange={(e) => setCategoryForm(prev => ({ ...prev, description: e.target.value }))}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  dir={language === 'ar' ? 'rtl' : 'ltr'}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-dark-500 mb-2">
-                  {text[language].iconName}
-                </label>
-                <input
-                  type="text"
-                  value={categoryForm.icon_name}
-                  onChange={(e) => setCategoryForm(prev => ({ ...prev, icon_name: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  placeholder="building2, home, users, etc."
-                  dir="ltr"
-                />
-              </div>
-
-              <div className="flex space-x-3 rtl:space-x-reverse pt-4">
-                <button
-                  onClick={() => setShowCategoryModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                >
-                  {text[language].cancel}
-                </button>
-                <button
-                  onClick={handleSaveCategory}
-                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors duration-200 flex items-center justify-center space-x-2 rtl:space-x-reverse"
-                >
-                  <Save className="h-4 w-4" />
-                  <span>{text[language].saveChanges}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {showDeleteModal && deletingCategory && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-red-600">
-                {text[language].confirmDelete}
-              </h3>
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <p className="text-gray-700">
-                {text[language].confirmDeleteCategory}
-              </p>
-              
-              <p className="text-sm text-gray-600">
-                {language === 'ar' 
-                  ? `الفئة: ${deletingCategory.name}`
-                  : `Category: ${deletingCategory.name}`
-                }
-              </p>
-
-              <div>
-                <label className="block text-sm font-semibold text-dark-500 mb-2">
-                  {text[language].typeDeleteToConfirm}
-                </label>
-                <input
-                  type="text"
-                  value={deleteConfirmText}
-                  onChange={(e) => setDeleteConfirmText(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  placeholder="DELETE"
-                  dir="ltr"
-                />
-              </div>
-
-              <div className="flex space-x-3 rtl:space-x-reverse pt-4">
-                <button
-                  onClick={() => setShowDeleteModal(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                >
-                  {text[language].cancel}
-                </button>
-                <button
-                  onClick={handleConfirmDeleteCategory}
-                  disabled={deleteConfirmText !== 'DELETE'}
-                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 rtl:space-x-reverse"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  <span>{text[language].delete}</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       <Footer language={language} />
     </div>
