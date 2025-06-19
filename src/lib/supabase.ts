@@ -90,7 +90,7 @@ export interface Review {
   date_of_experience: string | null
   has_document: boolean | null
   is_anonymous: boolean | null
-  status: 'pending_approval' | 'published' | 'removed' | 'flagged_for_review' | null
+  status: 'deleted' | 'hidden' | 'published' | 'removed' | null
 }
 
 export interface Category {
@@ -630,7 +630,7 @@ export const getReviewsByCompanyId = async (companyId: number, userId?: string):
 
             companyReplyWithVotes = {
               ...companyReply,
-              helpful_count: helpfulCount || 0,
+              helpful_count: replyHelpfulCount || 0,
               not_helpful_count: replyNotHelpfulCount || 0,
               user_vote_type: userReplyVote && userReplyVote.length > 0 ? userReplyVote[0].vote_type : null
             };
