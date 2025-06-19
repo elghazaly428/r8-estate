@@ -561,7 +561,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
       if (reportsError) throw reportsError;
 
-      // Get all pending reply reports
+      // Get all pending reply reports - Fixed the relationship query
       const { data: pendingReplyReports, error: replyReportsError } = await supabase
         .from('reply_reports')
         .select(`
@@ -575,7 +575,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
             reply_body,
             created_at,
             profiles!company_replies_profile_id_fkey(first_name, last_name),
-            reviews!company_replies_review_id_fkey(companies(name))
+            reviews(companies(name))
           )
         `)
         .eq('status', 'pending');
@@ -686,7 +686,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
       if (reviewReportsError) throw reviewReportsError;
 
-      // Fetch resolved reply reports
+      // Fetch resolved reply reports - Fixed the relationship query
       const { data: replyReports, error: replyReportsError } = await supabase
         .from('reply_reports')
         .select(`
