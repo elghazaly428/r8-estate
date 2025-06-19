@@ -1288,154 +1288,151 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
             )}
 
             {/* Reviews Tab */}
-            {activeTab === 'reviews' && (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].author}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].company}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].reviewTitle}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].rating}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].status}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].createdAt}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].actions}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredReviews.map((review) => (
-                      <tr key={review.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-4 px-4 text-gray-600">
-                          {review.profiles 
-                            ? `${review.profiles.first_name || ''} ${review.profiles.last_name || ''}`.trim() || 'Anonymous'
-                            : 'Anonymous'
-                          }
-                        </td>
-                        <td className="py-4 px-4 text-gray-600">{review.companies?.name || '-'}</td>
-                        <td className="py-4 px-4">
-                          <div className="max-w-xs truncate" title={review.title || review.body || ''}>
-                            {review.title || review.body || '-'}
-                          </div>
-                        </td>
-                        <td className="py-4 px-4">{renderStars(review.overall_rating)}</td>
-                        <td className="py-4 px-4">{getStatusBadge(review.status, 'review')}</td>
-                        <td className="py-4 px-4 text-gray-600">{formatDate(review.created_at)}</td>
-                        <td className="py-4 px-4">
-                          <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                            {review.status === 'published' && (
-                              <button
-                                onClick={() => handleReviewAction(review.id, 'hide')}
-                                className="flex items-center space-x-1 rtl:space-x-reverse bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
-                              >
-                                <EyeOff className="h-3 w-3" />
-                                <span>{text[language].hide}</span>
-                              </button>
-                            )}
-                            {review.status === 'hidden' && (
-                              <button
-                                onClick={() => handleReviewAction(review.id, 'unhide')}
-                                className="flex items-center space-x-1 rtl:space-x-reverse bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
-                              >
-                                <Eye className="h-3 w-3" />
-                                <span>{text[language].unhide}</span>
-                              </button>
-                            )}
-                            {review.status !== 'deleted' && (
-                              <button
-                                onClick={() => handleReviewAction(review.id, 'delete')}
-                                className="flex items-center space-x-1 rtl:space-x-reverse bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
-                              >
-                                <Trash2 className="h-3 w-3" />
-                                <span>{text[language].delete}</span>
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {filteredReviews.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    {text[language].noData}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Reports Tab */}
-            {activeTab === 'reports' && (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].reporter}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].reportedContent}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].reason}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].status}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].createdAt}</th>
-                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].actions}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredReports.map((report) => (
-                      <tr key={report.id} className="border-b border-gray-100 hover:bg-gray-50">
-                        <td className="py-4 px-4 text-gray-600">
-                          {report.profiles 
-                            ? `${report.profiles.first_name || ''} ${report.profiles.last_name || ''}`.trim() || 'Anonymous'
-                            : 'Anonymous'
-                          }
-                        </td>
-                        <td className="py-4 px-4 text-gray-600">
-                          {report.reviews?.title || report.reviews?.companies?.name || '-'}
-                        </td>
-                        <td className="py-4 px-4">
-                          <div className="max-w-xs truncate" title={report.reason || ''}>
-                            {report.reason || '-'}
-                          </div>
-                        </td>
-                        <td className="py-4 px-4">{getStatusBadge(report.status, 'report')}</td>
-                        <td className="py-4 px-4 text-gray-600">{formatDate(report.created_at)}</td>
-                        <td className="py-4 px-4">
-                          {/* Only show action buttons for pending reports */}
-                          {(report.status === 'pending' || report.status === 'received') && (
-                            <div className="flex items-center space-x-2 rtl:space-x-reverse">
-                              {/* Dismiss Report Button (Green ✓) */}
-                              <button
-                                onClick={() => handleDismissReport(report)}
-                                className="flex items-center space-x-1 rtl:space-x-reverse bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
-                                title={text[language].dismiss}
-                              >
-                                <Check className="h-3 w-3" />
-                                <span>{text[language].dismiss}</span>
-                              </button>
-                              
-                              {/* Uphold & Hide Report Button (Red ✗) */}
-                              <button
-                                onClick={() => handleUpholdReport(report)}
-                                className="flex items-center space-x-1 rtl:space-x-reverse bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
-                                title={text[language].upholdAndHide}
-                              >
-                                <AlertTriangle className="h-3 w-3" />
-                                <span>{text[language].upholdAndHide}</span>
-                              </button>
-                            </div>
+          {activeTab === 'reviews' && (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].author}</th>
+                    <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].company}</th>
+                    <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].reviewTitle}</th>
+                    <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].rating}</th>
+                    <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].status}</th>
+                    <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].createdAt}</th>
+                    <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].actions}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredReviews.map((review) => (
+                    <tr key={review.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-4 px-4 text-gray-600">
+                        {review.profiles
+                          ? `${review.profiles.first_name || ''} ${review.profiles.last_name || ''}`.trim() || 'Anonymous'
+                          : 'Anonymous'
+                        }
+                      </td>
+                      <td className="py-4 px-4 text-gray-600">{review.companies?.name || '-'}</td>
+                      <td className="py-4 px-4">
+                        <div className="max-w-xs truncate" title={review.title || review.body || ''}>
+                          {review.title || review.body || '-'}
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">{renderStars(review.overall_rating)}</td>
+                      <td className="py-4 px-4">{getStatusBadge(review.status, 'review')}</td>
+                      <td className="py-4 px-4 text-gray-600">{formatDate(review.created_at)}</td>
+                      <td className="py-4 px-4">
+                        <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                          {review.status === 'published' && (
+                            <button
+                              onClick={() => handleReviewAction(review.id, 'hide')}
+                              className="flex items-center space-x-1 rtl:space-x-reverse bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
+                            >
+                              <EyeOff className="h-3 w-3" />
+                              <span>{text[language].hide}</span>
+                            </button>
                           )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {filteredReports.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    {text[language].noData}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+                          {review.status === 'hidden' && (
+                            <button
+                              onClick={() => handleReviewAction(review.id, 'unhide')}
+                              className="flex items-center space-x-1 rtl:space-x-reverse bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
+                            >
+                              <Eye className="h-3 w-3" />
+                              <span>{text[language].unhide}</span>
+                            </button>
+                          )}
+                          {review.status !== 'deleted' && (
+                            <button
+                              onClick={() => handleReviewAction(review.id, 'delete')}
+                              className="flex items-center space-x-1 rtl:space-x-reverse bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              <span>{text[language].delete}</span>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {filteredReviews.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  {text[language].noData}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Reports Tab */}
+          {activeTab === 'reports' && (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].reporter}</th>
+                    <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].reportedContent}</th>
+                    <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].reason}</th>
+                    <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].status}</th>
+                    <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].createdAt}</th>
+                    <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].actions}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredReports.map((report) => (
+                    <tr key={report.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-4 px-4 text-gray-600">
+                        {report.profiles 
+                          ? `${report.profiles.first_name || ''} ${report.profiles.last_name || ''}`.trim() || 'Anonymous'
+                          : 'Anonymous'
+                        }
+                      </td>
+                      <td className="py-4 px-4 text-gray-600">
+                        {report.reviews?.title || report.reviews?.companies?.name || '-'}
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="max-w-xs truncate" title={report.reason || ''}>
+                          {report.reason || '-'}
+                        </div>
+                      </td>
+                      <td className="py-4 px-4">{getStatusBadge(report.status, 'report')}</td>
+                      <td className="py-4 px-4 text-gray-600">{formatDate(report.created_at)}</td>
+                      <td className="py-4 px-4">
+                        {/* Only show action buttons for pending reports */}
+                        {(report.status === 'pending' || report.status === 'received') && (
+                          <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                            {/* Dismiss Report Button (Green ✓) */}
+                            <button
+                              onClick={() => handleDismissReport(report)}
+                              className="flex items-center space-x-1 rtl:space-x-reverse bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
+                              title={text[language].dismiss}
+                            >
+                              <Check className="h-3 w-3" />
+                              <span>{text[language].dismiss}</span>
+                            </button>
+                            
+                            {/* Uphold & Hide Report Button (Red ✗) */}
+                            <button
+                              onClick={() => handleUpholdReport(report)}
+                              className="flex items-center space-x-1 rtl:space-x-reverse bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
+                              title={text[language].upholdAndHide}
+                            >
+                              <AlertTriangle className="h-3 w-3" />
+                              <span>{text[language].upholdAndHide}</span>
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {filteredReports.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  {text[language].noData}
+                </div>
+              )}
+            </div>
+          )}
 
       {/* Edit User Modal */}
       {showEditUserModal && editingUser && (
