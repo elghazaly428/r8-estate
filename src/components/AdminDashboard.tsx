@@ -561,7 +561,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
       if (reportsError) throw reportsError;
 
-      // Get all pending reply reports
+      // Get all pending reply reports - Fixed the foreign key reference
       const { data: pendingReplyReports, error: replyReportsError } = await supabase
         .from('reply_reports')
         .select(`
@@ -574,8 +574,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
             id,
             reply_body,
             created_at,
-            profiles!company_replies_profile_id_fkey(first_name, last_name),
-            reviews!company_replies_review_id_fkey(companies(name))
+            profiles!company_repl_profile_id_fkey(first_name, last_name),
+            reviews(companies(name))
           )
         `)
         .eq('status', 'pending');
