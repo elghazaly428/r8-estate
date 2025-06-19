@@ -1045,3 +1045,41 @@ export const claimCompany = async (companyId: number): Promise<{ success: boolea
     return { success: false, error: error.message };
   }
 };
+
+// Admin dashboard functions to fix the "Failed to fetch" error
+export const getCompanyReplyByReviewId = async (reviewId: number): Promise<CompanyReply | null> => {
+  try {
+    const { data, error } = await supabase.rpc('get_company_reply_by_review_id', {
+      review_id_param: reviewId
+    });
+
+    if (error) {
+      console.error('Supabase error in getCompanyReplyByReviewId:', error);
+      throw error;
+    }
+
+    return data && data.length > 0 ? data[0] : null;
+  } catch (error: any) {
+    console.error('Error checking company reply:', error);
+    return null;
+  }
+};
+
+export const getReviewsWithReplies = async (limit: number = 50, offset: number = 0) => {
+  try {
+    const { data, error } = await supabase.rpc('get_reviews_with_replies', {
+      limit_param: limit,
+      offset_param: offset
+    });
+
+    if (error) {
+      console.error('Supabase error in getReviewsWithReplies:', error);
+      throw error;
+    }
+
+    return data || [];
+  } catch (error: any) {
+    console.error('Error fetching reviews with replies:', error);
+    return [];
+  }
+};
