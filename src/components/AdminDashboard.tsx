@@ -20,8 +20,8 @@ import {
   MoreHorizontal,
   ChevronDown,
   Info,
-  User,
-  Save
+  Star,
+  EyeOff
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import Header from './Header';
@@ -70,12 +70,12 @@ interface UserProfile {
   updated_at: string;
 }
 
-interface Review {
+interface AdminReview {
   id: number;
   title: string | null;
   body: string | null;
   overall_rating: number | null;
-  status: string | null;
+  status: 'pending_approval' | 'published' | 'removed' | 'flagged_for_review' | null;
   created_at: string;
   is_anonymous: boolean | null;
   profiles?: {
@@ -122,9 +122,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
   });
   const [companies, setCompanies] = useState<Company[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
-  const [filteredUsers, setFilteredUsers] = useState<UserProfile[]>([]);
-  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviews, setReviews] = useState<AdminReview[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
+  
+  // Filter states
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userStatusFilter, setUserStatusFilter] = useState<'all' | 'active' | 'suspended'>('all');
+  const [reviewStatusFilter, setReviewStatusFilter] = useState<'all' | 'published' | 'pending_approval' | 'removed' | 'flagged_for_review'>('all');
   
   // Modal states
   const [assignModalOpen, setAssignModalOpen] = useState(false);
@@ -135,13 +139,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
   const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
-  const [isSavingUser, setIsSavingUser] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
-  // User filters
-  const [userSearchQuery, setUserSearchQuery] = useState('');
-  const [userStatusFilter, setUserStatusFilter] = useState<'all' | 'active' | 'suspended'>('all');
-  
-  // Edit user form
+  // Edit user form state
   const [editUserForm, setEditUserForm] = useState({
     firstName: '',
     lastName: ''
@@ -149,55 +149,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
   const text = {
     ar: {
-      // Navigation
+      adminDashboard: 'لوحة تحكم الأدمن',
       overview: 'نظرة عامة',
       users: 'المستخدمين',
       companies: 'الشركات',
       reviews: 'التقييمات',
       reports: 'البلاغات',
-      viewPublicProfile: 'عرض الملف الشخصي العام',
-      
-      // Overview
       totalUsers: 'إجمالي المستخدمين',
       totalCompanies: 'إجمالي الشركات',
       totalReviews: 'إجمالي التقييمات',
       pendingReports: 'البلاغات المعلقة',
-      
-      // Users
-      searchUsers: 'البحث بالاسم أو البريد الإلكتروني...',
-      statusFilter: 'تصفية الحالة',
-      allUsers: 'جميع المستخدمين',
-      activeUsers: 'المستخدمين النشطين',
-      suspendedUsers: 'المستخدمين الموقوفين',
-      fullName: 'الاسم الكامل',
-      email: 'البريد الإلكتروني',
-      signupDate: 'تاريخ التسجيل',
-      status: 'الحالة',
-      actions: 'الإجراءات',
-      active: 'نشط',
-      suspended: 'موقوف',
-      admin: 'أدمن',
-      edit: 'تعديل',
-      suspend: 'إيقاف',
-      activate: 'تفعيل',
-      editUser: 'تعديل المستخدم',
-      firstName: 'الاسم الأول',
-      lastName: 'اسم العائلة',
-      saveChanges: 'حفظ التغييرات',
-      cancel: 'إلغاء',
-      confirmSuspend: 'هل أنت متأكد من إيقاف هذا المستخدم؟',
-      confirmActivate: 'هل أنت متأكد من تفعيل هذا المستخدم؟',
-      userSuspended: 'تم إيقاف المستخدم بنجاح',
-      userActivated: 'تم تفعيل المستخدم بنجاح',
-      userUpdated: 'تم تحديث بيانات المستخدم بنجاح',
-      errorOccurred: 'حدث خطأ',
-      saving: 'جاري الحفظ...',
-      
-      // Companies
+      loading: 'جاري التحميل...',
+      accessDenied: 'غير مسموح بالوصول',
+      notAuthorized: 'أنت غير مخول للوصول إلى هذه الصفحة',
+      backToDashboard: 'العودة إلى لوحة التحكم',
       assignRepresentative: 'تعيين ممثل',
       searchByEmail: 'البحث بالبريد الإلكتروني...',
       selectUser: 'اختر مستخدم',
       confirmAssignment: 'تأكيد التعيين',
+      cancel: 'إلغاء',
       assign: 'تعيين',
       assigning: 'جاري التعيين...',
       assignmentSuccess: 'تم تعيين الممثل بنجاح! تم إرسال إشعار للمستخدم.',
@@ -207,72 +177,78 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       confirmAssignmentMessage: 'هل أنت متأكد من منح {userName} صلاحية إدارة {companyName}؟',
       domain: 'النطاق',
       noDomain: 'لا يوجد نطاق',
+      status: 'الحالة',
       claimed: 'مُدارة',
       unclaimed: 'غير مُدارة',
+      actions: 'الإجراءات',
       name: 'الاسم',
-      
-      // Messages
-      loading: 'جاري التحميل...',
-      accessDenied: 'غير مسموح بالوصول',
-      notAuthorized: 'أنت غير مخول للوصول إلى هذه الصفحة',
-      backToDashboard: 'العودة إلى لوحة التحكم',
+      email: 'البريد الإلكتروني',
+      admin: 'أدمن',
+      suspended: 'موقوف',
+      active: 'نشط',
       noResults: 'لا توجد نتائج',
       searchingUsers: 'جاري البحث عن المستخدمين...',
       userNotFound: 'لم يتم العثور على مستخدمين',
       domainMismatch: 'تحذير: لا يوجد نطاق محدد للشركة، البحث في جميع المستخدمين',
       emailDomainMatch: 'تطابق نطاق البريد الإلكتروني',
-      emailDomainMismatch: 'عدم تطابق نطاق البريد الإلكتروني'
+      emailDomainMismatch: 'عدم تطابق نطاق البريد الإلكتروني',
+      // Users view
+      searchByNameOrEmail: 'البحث بالاسم أو البريد الإلكتروني...',
+      allStatuses: 'جميع الحالات',
+      fullName: 'الاسم الكامل',
+      signupDate: 'تاريخ التسجيل',
+      edit: 'تعديل',
+      suspendUser: 'إيقاف المستخدم',
+      activateUser: 'تفعيل المستخدم',
+      editUser: 'تعديل المستخدم',
+      firstName: 'الاسم الأول',
+      lastName: 'اسم العائلة',
+      saveChanges: 'حفظ التغييرات',
+      saving: 'جاري الحفظ...',
+      userUpdated: 'تم تحديث بيانات المستخدم بنجاح',
+      userSuspended: 'تم إيقاف المستخدم بنجاح',
+      userActivated: 'تم تفعيل المستخدم بنجاح',
+      confirmSuspend: 'هل أنت متأكد من إيقاف هذا المستخدم؟',
+      confirmActivate: 'هل أنت متأكد من تفعيل هذا المستخدم؟',
+      // Reviews view
+      reviewTitle: 'عنوان التقييم',
+      author: 'الكاتب',
+      company: 'الشركة',
+      rating: 'التقييم',
+      dateCreated: 'تاريخ الإنشاء',
+      published: 'منشور',
+      pendingApproval: 'في انتظار الموافقة',
+      removed: 'محذوف',
+      flaggedForReview: 'مبلغ عنه',
+      hide: 'إخفاء',
+      delete: 'حذف',
+      confirmHide: 'هل أنت متأكد من إخفاء هذا التقييم؟',
+      confirmDelete: 'هل أنت متأكد من حذف هذا التقييم نهائياً؟',
+      reviewHidden: 'تم إخفاء التقييم بنجاح',
+      reviewDeleted: 'تم حذف التقييم بنجاح',
+      anonymous: 'مجهول',
+      noTitle: 'بدون عنوان'
     },
     en: {
-      // Navigation
+      adminDashboard: 'Admin Dashboard',
       overview: 'Overview',
       users: 'Users',
       companies: 'Companies',
       reviews: 'Reviews',
       reports: 'Reports',
-      viewPublicProfile: 'View Public Profile',
-      
-      // Overview
       totalUsers: 'Total Users',
       totalCompanies: 'Total Companies',
       totalReviews: 'Total Reviews',
       pendingReports: 'Pending Reports',
-      
-      // Users
-      searchUsers: 'Search by name or email...',
-      statusFilter: 'Status Filter',
-      allUsers: 'All Users',
-      activeUsers: 'Active Users',
-      suspendedUsers: 'Suspended Users',
-      fullName: 'Full Name',
-      email: 'Email',
-      signupDate: 'Signup Date',
-      status: 'Status',
-      actions: 'Actions',
-      active: 'Active',
-      suspended: 'Suspended',
-      admin: 'Admin',
-      edit: 'Edit',
-      suspend: 'Suspend',
-      activate: 'Activate',
-      editUser: 'Edit User',
-      firstName: 'First Name',
-      lastName: 'Last Name',
-      saveChanges: 'Save Changes',
-      cancel: 'Cancel',
-      confirmSuspend: 'Are you sure you want to suspend this user?',
-      confirmActivate: 'Are you sure you want to activate this user?',
-      userSuspended: 'User suspended successfully',
-      userActivated: 'User activated successfully',
-      userUpdated: 'User updated successfully',
-      errorOccurred: 'An error occurred',
-      saving: 'Saving...',
-      
-      // Companies
+      loading: 'Loading...',
+      accessDenied: 'Access Denied',
+      notAuthorized: 'You are not authorized to access this page',
+      backToDashboard: 'Back to Dashboard',
       assignRepresentative: 'Assign Representative',
       searchByEmail: 'Search by email...',
       selectUser: 'Select User',
       confirmAssignment: 'Confirm Assignment',
+      cancel: 'Cancel',
       assign: 'Assign',
       assigning: 'Assigning...',
       assignmentSuccess: 'Representative assigned successfully! User has been notified.',
@@ -282,21 +258,57 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       confirmAssignmentMessage: 'Are you sure you want to grant {userName} representative access for {companyName}?',
       domain: 'Domain',
       noDomain: 'No Domain',
+      status: 'Status',
       claimed: 'Claimed',
       unclaimed: 'Unclaimed',
+      actions: 'Actions',
       name: 'Name',
-      
-      // Messages
-      loading: 'Loading...',
-      accessDenied: 'Access Denied',
-      notAuthorized: 'You are not authorized to access this page',
-      backToDashboard: 'Back to Dashboard',
+      email: 'Email',
+      admin: 'Admin',
+      suspended: 'Suspended',
+      active: 'Active',
       noResults: 'No results found',
       searchingUsers: 'Searching users...',
       userNotFound: 'No users found',
       domainMismatch: 'Warning: No domain set for company, searching all users',
       emailDomainMatch: 'Email domain matches',
-      emailDomainMismatch: 'Email domain does not match'
+      emailDomainMismatch: 'Email domain does not match',
+      // Users view
+      searchByNameOrEmail: 'Search by name or email...',
+      allStatuses: 'All Statuses',
+      fullName: 'Full Name',
+      signupDate: 'Signup Date',
+      edit: 'Edit',
+      suspendUser: 'Suspend User',
+      activateUser: 'Activate User',
+      editUser: 'Edit User',
+      firstName: 'First Name',
+      lastName: 'Last Name',
+      saveChanges: 'Save Changes',
+      saving: 'Saving...',
+      userUpdated: 'User updated successfully',
+      userSuspended: 'User suspended successfully',
+      userActivated: 'User activated successfully',
+      confirmSuspend: 'Are you sure you want to suspend this user?',
+      confirmActivate: 'Are you sure you want to activate this user?',
+      // Reviews view
+      reviewTitle: 'Review Title',
+      author: 'Author',
+      company: 'Company',
+      rating: 'Rating',
+      dateCreated: 'Date Created',
+      published: 'Published',
+      pendingApproval: 'Pending Approval',
+      removed: 'Removed',
+      flaggedForReview: 'Flagged for Review',
+      hide: 'Hide',
+      delete: 'Delete',
+      confirmHide: 'Are you sure you want to hide this review?',
+      confirmDelete: 'Are you sure you want to permanently delete this review?',
+      reviewHidden: 'Review hidden successfully',
+      reviewDeleted: 'Review deleted successfully',
+      anonymous: 'Anonymous',
+      noTitle: 'No Title'
     }
   };
 
@@ -345,41 +357,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
     checkAdminAccess();
   }, [user, authLoading, onNavigate]);
-
-  // Filter users based on search and status
-  useEffect(() => {
-    let filtered = users;
-
-    // Apply search filter
-    if (userSearchQuery.trim()) {
-      const query = userSearchQuery.toLowerCase();
-      filtered = filtered.filter(user => {
-        const firstName = user.first_name?.toLowerCase() || '';
-        const lastName = user.last_name?.toLowerCase() || '';
-        const email = user.email?.toLowerCase() || '';
-        const fullName = `${firstName} ${lastName}`.trim();
-        
-        return firstName.includes(query) || 
-               lastName.includes(query) || 
-               fullName.includes(query) || 
-               email.includes(query);
-      });
-    }
-
-    // Apply status filter
-    if (userStatusFilter !== 'all') {
-      filtered = filtered.filter(user => {
-        if (userStatusFilter === 'suspended') {
-          return user.is_suspended === true;
-        } else if (userStatusFilter === 'active') {
-          return user.is_suspended !== true;
-        }
-        return true;
-      });
-    }
-
-    setFilteredUsers(filtered);
-  }, [users, userSearchQuery, userStatusFilter]);
 
   const fetchStats = async () => {
     try {
@@ -438,8 +415,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
           profiles!reviews_profile_id_fkey(first_name, last_name),
           companies(name)
         `)
-        .order('created_at', { ascending: false })
-        .limit(50);
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
       setReviews(data || []);
@@ -629,6 +605,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     }
   };
 
+  // User management functions
   const handleEditUser = (user: UserProfile) => {
     setSelectedUser(user);
     setEditUserForm({
@@ -641,8 +618,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
   const handleSaveUser = async () => {
     if (!selectedUser) return;
 
-    setIsSavingUser(true);
-
+    setIsSaving(true);
     try {
       const { error } = await supabase
         .from('profiles')
@@ -656,15 +632,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       if (error) throw error;
 
       // Update local state
-      setUsers(prev => prev.map(user => 
-        user.id === selectedUser.id 
-          ? { 
-              ...user, 
-              first_name: editUserForm.firstName.trim(),
-              last_name: editUserForm.lastName.trim(),
-              updated_at: new Date().toISOString()
-            }
-          : user
+      setUsers(prev => prev.map(u => 
+        u.id === selectedUser.id 
+          ? { ...u, first_name: editUserForm.firstName.trim(), last_name: editUserForm.lastName.trim() }
+          : u
       ));
 
       toast.success(text[language].userUpdated);
@@ -672,15 +643,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       setSelectedUser(null);
     } catch (error: any) {
       console.error('Error updating user:', error);
-      toast.error(text[language].errorOccurred);
+      toast.error('Error updating user');
     } finally {
-      setIsSavingUser(false);
+      setIsSaving(false);
     }
   };
 
-  const handleToggleUserStatus = async (user: UserProfile) => {
-    const newStatus = !user.is_suspended;
-    const confirmMessage = newStatus ? text[language].confirmSuspend : text[language].confirmActivate;
+  const handleToggleUserSuspension = async (user: UserProfile) => {
+    const action = user.is_suspended ? 'activate' : 'suspend';
+    const confirmMessage = user.is_suspended ? text[language].confirmActivate : text[language].confirmSuspend;
     
     if (!confirm(confirmMessage)) return;
 
@@ -688,7 +659,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       const { error } = await supabase
         .from('profiles')
         .update({ 
-          is_suspended: newStatus,
+          is_suspended: !user.is_suspended,
           updated_at: new Date().toISOString()
         })
         .eq('id', user.id);
@@ -697,18 +668,105 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
       // Update local state
       setUsers(prev => prev.map(u => 
-        u.id === user.id 
-          ? { ...u, is_suspended: newStatus, updated_at: new Date().toISOString() }
-          : u
+        u.id === user.id ? { ...u, is_suspended: !user.is_suspended } : u
       ));
 
-      toast.success(newStatus ? text[language].userSuspended : text[language].userActivated);
+      toast.success(user.is_suspended ? text[language].userActivated : text[language].userSuspended);
     } catch (error: any) {
-      console.error('Error updating user status:', error);
-      toast.error(text[language].errorOccurred);
+      console.error('Error toggling user suspension:', error);
+      toast.error('Error updating user status');
     }
   };
 
+  // Review management functions
+  const handleHideReview = async (review: AdminReview) => {
+    if (!confirm(text[language].confirmHide)) return;
+
+    try {
+      const { error } = await supabase
+        .from('reviews')
+        .update({ status: 'removed' })
+        .eq('id', review.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setReviews(prev => prev.map(r => 
+        r.id === review.id ? { ...r, status: 'removed' } : r
+      ));
+
+      toast.success(text[language].reviewHidden);
+    } catch (error: any) {
+      console.error('Error hiding review:', error);
+      toast.error('Error hiding review');
+    }
+  };
+
+  const handleDeleteReview = async (review: AdminReview) => {
+    if (!confirm(text[language].confirmDelete)) return;
+
+    try {
+      const { error } = await supabase
+        .from('reviews')
+        .delete()
+        .eq('id', review.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setReviews(prev => prev.filter(r => r.id !== review.id));
+
+      toast.success(text[language].reviewDeleted);
+    } catch (error: any) {
+      console.error('Error deleting review:', error);
+      toast.error('Error deleting review');
+    }
+  };
+
+  // Helper function to check if email domain matches company domain
+  const checkEmailDomainMatch = (email: string | null, companyDomain: string | null): boolean => {
+    if (!email || !companyDomain) return false;
+    const emailDomain = email.split('@')[1]?.toLowerCase();
+    return emailDomain === companyDomain.toLowerCase();
+  };
+
+  // Filter users based on search and status
+  const filteredUsers = users.filter(user => {
+    const matchesSearch = userSearchQuery === '' || 
+      (user.first_name?.toLowerCase().includes(userSearchQuery.toLowerCase())) ||
+      (user.last_name?.toLowerCase().includes(userSearchQuery.toLowerCase())) ||
+      (user.email?.toLowerCase().includes(userSearchQuery.toLowerCase()));
+    
+    const matchesStatus = userStatusFilter === 'all' ||
+      (userStatusFilter === 'active' && !user.is_suspended) ||
+      (userStatusFilter === 'suspended' && user.is_suspended);
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  // Filter reviews based on status
+  const filteredReviews = reviews.filter(review => {
+    return reviewStatusFilter === 'all' || review.status === reviewStatusFilter;
+  });
+
+  // Render stars for rating
+  const renderStars = (rating: number | null) => {
+    const stars = [];
+    const ratingValue = rating || 0;
+    for (let i = 0; i < 5; i++) {
+      stars.push(
+        <Star
+          key={i}
+          className={`h-4 w-4 ${
+            i < ratingValue ? 'fill-current text-highlight-500' : 'text-gray-300'
+          }`}
+        />
+      );
+    }
+    return stars;
+  };
+
+  // Format date
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US', {
@@ -718,11 +776,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     });
   };
 
-  // Helper function to check if email domain matches company domain
-  const checkEmailDomainMatch = (email: string | null, companyDomain: string | null): boolean => {
-    if (!email || !companyDomain) return false;
-    const emailDomain = email.split('@')[1]?.toLowerCase();
-    return emailDomain === companyDomain.toLowerCase();
+  // Get status badge color and text
+  const getStatusBadge = (status: string | null, type: 'user' | 'review') => {
+    if (type === 'user') {
+      const isActive = !status; // is_suspended is false or null
+      return {
+        color: isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800',
+        text: isActive ? text[language].active : text[language].suspended
+      };
+    } else {
+      // Review status
+      switch (status) {
+        case 'published':
+          return { color: 'bg-green-100 text-green-800', text: text[language].published };
+        case 'pending_approval':
+          return { color: 'bg-yellow-100 text-yellow-800', text: text[language].pendingApproval };
+        case 'removed':
+          return { color: 'bg-red-100 text-red-800', text: text[language].removed };
+        case 'flagged_for_review':
+          return { color: 'bg-orange-100 text-orange-800', text: text[language].flaggedForReview };
+        default:
+          return { color: 'bg-gray-100 text-gray-800', text: text[language].published };
+      }
+    }
   };
 
   // Loading state
@@ -835,9 +911,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
       {/* Filters */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0 md:space-x-4 rtl:md:space-x-reverse">
           {/* Search Input */}
-          <div className="relative">
+          <div className="relative flex-1 max-w-md">
             <div className="absolute inset-y-0 right-0 pr-3 rtl:left-0 rtl:right-auto rtl:pl-3 rtl:pr-0 flex items-center pointer-events-none">
               <Search className="h-4 w-4 text-gray-400" />
             </div>
@@ -845,22 +921,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
               type="text"
               value={userSearchQuery}
               onChange={(e) => setUserSearchQuery(e.target.value)}
-              placeholder={text[language].searchUsers}
-              className="w-full px-4 py-2 pr-10 rtl:pl-10 rtl:pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+              placeholder={text[language].searchByNameOrEmail}
+              className="w-full px-4 py-2 pr-10 rtl:pl-10 rtl:pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
               dir={language === 'ar' ? 'rtl' : 'ltr'}
             />
           </div>
 
           {/* Status Filter */}
           <div className="relative">
-            <select
+            <select 
               value={userStatusFilter}
               onChange={(e) => setUserStatusFilter(e.target.value as 'all' | 'active' | 'suspended')}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 appearance-none bg-white"
+              className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 rtl:pl-8 rtl:pr-4 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
             >
-              <option value="all">{text[language].allUsers}</option>
-              <option value="active">{text[language].activeUsers}</option>
-              <option value="suspended">{text[language].suspendedUsers}</option>
+              <option value="all">{text[language].allStatuses}</option>
+              <option value="active">{text[language].active}</option>
+              <option value="suspended">{text[language].suspended}</option>
             </select>
             <ChevronDown className="absolute right-2 rtl:left-2 rtl:right-auto top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
           </div>
@@ -891,59 +967,56 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredUsers.map((user) => (
-                <tr key={user.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                      <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                        {user.avatar_url ? (
-                          <img 
-                            src={user.avatar_url} 
-                            alt="Avatar" 
-                            className="w-full h-full object-cover rounded-full"
-                          />
-                        ) : (
-                          <User className="h-4 w-4 text-gray-400" />
-                        )}
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-gray-900 flex items-center space-x-2 rtl:space-x-reverse">
-                          <span>{`${user.first_name || ''} ${user.last_name || ''}`.trim() || 'No Name'}</span>
-                          {user.is_admin && (
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
-                              {text[language].admin}
-                            </span>
+              {filteredUsers.map((user) => {
+                const statusBadge = getStatusBadge(user.is_suspended, 'user');
+                return (
+                  <tr key={user.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-3 rtl:space-x-reverse">
+                        <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-xs">
+                          {user.avatar_url ? (
+                            <img 
+                              src={user.avatar_url} 
+                              alt="Avatar" 
+                              className="w-full h-full object-cover rounded-full"
+                            />
+                          ) : (
+                            <Users className="h-4 w-4 text-gray-400" />
                           )}
                         </div>
+                        <div>
+                          <div className="text-sm font-medium text-gray-900 flex items-center space-x-2 rtl:space-x-reverse">
+                            <span>{`${user.first_name || ''} ${user.last_name || ''}`.trim() || 'No Name'}</span>
+                            {user.is_admin && (
+                              <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                                {text[language].admin}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {user.email || 'No Email'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(user.updated_at)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      user.is_suspended 
-                        ? 'bg-red-100 text-red-800' 
-                        : 'bg-green-100 text-green-800'
-                    }`}>
-                      {user.is_suspended ? text[language].suspended : text[language].active}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {user.email || 'No Email'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {formatDate(user.updated_at)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusBadge.color}`}>
+                        {statusBadge.text}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2 rtl:space-x-reverse">
                       <button
                         onClick={() => handleEditUser(user)}
                         className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded-lg text-sm font-medium bg-blue-500 hover:bg-blue-600 text-white transition-colors duration-200"
                       >
-                        <Edit className="h-3 w-3" />
+                        <Edit className="h-4 w-4" />
                         <span>{text[language].edit}</span>
                       </button>
                       <button
-                        onClick={() => handleToggleUserStatus(user)}
+                        onClick={() => handleToggleUserSuspension(user)}
                         className={`inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded-lg text-sm font-medium transition-colors duration-200 ${
                           user.is_suspended
                             ? 'bg-green-500 hover:bg-green-600 text-white'
@@ -952,20 +1025,151 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                       >
                         {user.is_suspended ? (
                           <>
-                            <CheckCircle className="h-3 w-3" />
-                            <span>{text[language].activate}</span>
+                            <CheckCircle className="h-4 w-4" />
+                            <span>{text[language].activateUser}</span>
                           </>
                         ) : (
                           <>
-                            <X className="h-3 w-3" />
-                            <span>{text[language].suspend}</span>
+                            <X className="h-4 w-4" />
+                            <span>{text[language].suspendUser}</span>
                           </>
                         )}
                       </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Reviews View
+  const ReviewsView = () => (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-dark-500 mb-2">
+          {text[language].reviews}
+        </h1>
+        <div className="w-16 h-1 bg-red-500 rounded-full"></div>
+      </div>
+
+      {/* Status Filter */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <div className="flex items-center space-x-4 rtl:space-x-reverse">
+          <label className="text-sm font-medium text-gray-700">{text[language].status}:</label>
+          <div className="relative">
+            <select 
+              value={reviewStatusFilter}
+              onChange={(e) => setReviewStatusFilter(e.target.value as 'all' | 'published' | 'pending_approval' | 'removed' | 'flagged_for_review')}
+              className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 rtl:pl-8 rtl:pr-4 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
+            >
+              <option value="all">{text[language].allStatuses}</option>
+              <option value="published">{text[language].published}</option>
+              <option value="pending_approval">{text[language].pendingApproval}</option>
+              <option value="removed">{text[language].removed}</option>
+              <option value="flagged_for_review">{text[language].flaggedForReview}</option>
+            </select>
+            <ChevronDown className="absolute right-2 rtl:left-2 rtl:right-auto top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+          </div>
+        </div>
+      </div>
+
+      {/* Reviews Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].reviewTitle}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].author}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].company}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].rating}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].status}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].dateCreated}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].actions}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredReviews.map((review) => {
+                const statusBadge = getStatusBadge(review.status, 'review');
+                const authorName = review.is_anonymous 
+                  ? text[language].anonymous
+                  : review.profiles 
+                    ? `${review.profiles.first_name || ''} ${review.profiles.last_name || ''}`.trim() || text[language].anonymous
+                    : text[language].anonymous;
+
+                return (
+                  <tr key={review.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">
+                        {review.title || text[language].noTitle}
+                      </div>
+                      {review.body && (
+                        <div className="text-sm text-gray-500 truncate max-w-xs">
+                          {review.body.substring(0, 100)}...
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {authorName}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {review.companies?.name || 'Unknown Company'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-1 rtl:space-x-reverse">
+                        {renderStars(review.overall_rating)}
+                        <span className="text-sm text-gray-600 ml-2 rtl:mr-2">
+                          ({review.overall_rating || 0})
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusBadge.color}`}>
+                        {statusBadge.text}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {formatDate(review.created_at)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2 rtl:space-x-reverse">
+                      {review.status !== 'removed' && (
+                        <button
+                          onClick={() => handleHideReview(review)}
+                          className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded-lg text-sm font-medium bg-orange-500 hover:bg-orange-600 text-white transition-colors duration-200"
+                        >
+                          <EyeOff className="h-4 w-4" />
+                          <span>{text[language].hide}</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDeleteReview(review)}
+                        className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded-lg text-sm font-medium bg-red-500 hover:bg-red-600 text-white transition-colors duration-200"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span>{text[language].delete}</span>
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -1119,6 +1323,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                   <Building2 className="h-5 w-5" />
                   <span className="font-medium">{text[language].companies}</span>
                 </button>
+
+                <button
+                  onClick={() => setActiveTab('reviews')}
+                  className={`w-full flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-lg text-right transition-all duration-200 ${
+                    activeTab === 'reviews'
+                      ? 'bg-red-50 text-red-600 border-r-4 border-red-500 rtl:border-l-4 rtl:border-r-0'
+                      : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <FileText className="h-5 w-5" />
+                  <span className="font-medium">{text[language].reviews}</span>
+                </button>
               </nav>
             </div>
           </div>
@@ -1128,6 +1344,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
             {activeTab === 'overview' && <OverviewView />}
             {activeTab === 'users' && <UsersView />}
             {activeTab === 'companies' && <CompaniesView />}
+            {activeTab === 'reviews' && <ReviewsView />}
           </div>
         </div>
       </div>
@@ -1162,7 +1379,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                   onChange={(e) => setEditUserForm(prev => ({ ...prev, firstName: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
                   dir={language === 'ar' ? 'rtl' : 'ltr'}
-                  disabled={isSavingUser}
+                  disabled={isSaving}
                 />
               </div>
 
@@ -1176,7 +1393,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                   onChange={(e) => setEditUserForm(prev => ({ ...prev, lastName: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
                   dir={language === 'ar' ? 'rtl' : 'ltr'}
-                  disabled={isSavingUser}
+                  disabled={isSaving}
                 />
               </div>
 
@@ -1187,23 +1404,23 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                     setSelectedUser(null);
                   }}
                   className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                  disabled={isSavingUser}
+                  disabled={isSaving}
                 >
                   {text[language].cancel}
                 </button>
                 <button
                   onClick={handleSaveUser}
-                  disabled={isSavingUser}
+                  disabled={isSaving}
                   className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 rtl:space-x-reverse"
                 >
-                  {isSavingUser ? (
+                  {isSaving ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                       <span>{text[language].saving}</span>
                     </>
                   ) : (
                     <>
-                      <Save className="h-4 w-4" />
+                      <Edit className="h-4 w-4" />
                       <span>{text[language].saveChanges}</span>
                     </>
                   )}
