@@ -106,9 +106,11 @@ const CategoryGrid: React.FC<CategoryGridProps> = ({ language, onNavigate }) => 
     fetchCategories();
   }, []);
 
-  // Responsive carousel settings
+  // Responsive carousel settings - now showing 8 cards
   const getItemsPerView = () => {
     if (typeof window !== 'undefined') {
+      if (window.innerWidth >= 1536) return 8; // 2XL: 8 items
+      if (window.innerWidth >= 1280) return 6; // XL: 6 items
       if (window.innerWidth >= 1024) return 4; // Desktop: 4 items
       if (window.innerWidth >= 768) return 2;  // Tablet: 2 items
     }
@@ -130,7 +132,7 @@ const CategoryGrid: React.FC<CategoryGridProps> = ({ language, onNavigate }) => 
   // Calculate total slides needed
   const totalSlides = Math.ceil(categories.length / itemsToShow);
 
-  // Navigation functions with looping
+  // Navigation functions with looping - now moves one complete card at a time
   const goToNext = () => {
     setCurrentIndex((prevIndex) => {
       const nextIndex = prevIndex + 1;
