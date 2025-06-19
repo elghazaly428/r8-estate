@@ -192,8 +192,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       domainMismatch: 'تحذير: لا يوجد نطاق محدد للشركة، البحث في جميع المستخدمين',
       emailDomainMatch: 'تطابق نطاق البريد الإلكتروني',
       emailDomainMismatch: 'عدم تطابق نطاق البريد الإلكتروني',
-      // Users view
-      searchByNameOrEmail: 'البحث بالاسم أو البريد الإلكتروني...',
+      // Users management
+      searchUsers: 'البحث بالاسم أو البريد الإلكتروني...',
       allStatuses: 'جميع الحالات',
       fullName: 'الاسم الكامل',
       signupDate: 'تاريخ التسجيل',
@@ -210,12 +210,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       userActivated: 'تم تفعيل المستخدم بنجاح',
       confirmSuspend: 'هل أنت متأكد من إيقاف هذا المستخدم؟',
       confirmActivate: 'هل أنت متأكد من تفعيل هذا المستخدم؟',
-      // Reviews view
+      // Reviews management
       reviewTitle: 'عنوان التقييم',
       author: 'الكاتب',
       company: 'الشركة',
       rating: 'التقييم',
       dateCreated: 'تاريخ الإنشاء',
+      allReviews: 'جميع التقييمات',
       published: 'منشور',
       pendingApproval: 'في انتظار الموافقة',
       removed: 'محذوف',
@@ -273,8 +274,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       domainMismatch: 'Warning: No domain set for company, searching all users',
       emailDomainMatch: 'Email domain matches',
       emailDomainMismatch: 'Email domain does not match',
-      // Users view
-      searchByNameOrEmail: 'Search by name or email...',
+      // Users management
+      searchUsers: 'Search by name or email...',
       allStatuses: 'All Statuses',
       fullName: 'Full Name',
       signupDate: 'Signup Date',
@@ -291,12 +292,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       userActivated: 'User activated successfully',
       confirmSuspend: 'Are you sure you want to suspend this user?',
       confirmActivate: 'Are you sure you want to activate this user?',
-      // Reviews view
+      // Reviews management
       reviewTitle: 'Review Title',
       author: 'Author',
       company: 'Company',
       rating: 'Rating',
       dateCreated: 'Date Created',
+      allReviews: 'All Reviews',
       published: 'Published',
       pendingApproval: 'Pending Approval',
       removed: 'Removed',
@@ -631,16 +633,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
       if (error) throw error;
 
-      // Update local state
-      setUsers(prev => prev.map(u => 
-        u.id === selectedUser.id 
-          ? { ...u, first_name: editUserForm.firstName.trim(), last_name: editUserForm.lastName.trim() }
-          : u
-      ));
-
       toast.success(text[language].userUpdated);
       setEditUserModalOpen(false);
-      setSelectedUser(null);
+      fetchUsers(); // Refresh users list
     } catch (error: any) {
       console.error('Error updating user:', error);
       toast.error('Error updating user');
@@ -649,31 +644,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     }
   };
 
-  const handleToggleUserSuspension = async (user: UserProfile) => {
-    const action = user.is_suspended ? 'activate' : 'suspend';
-    const confirmMessage = user.is_suspended ? text[language].confirmActivate : text[language].confirmSuspend;
+  const handleSuspendUser = async (user: UserProfile) => {
+    const isCurrentlySuspended = user.is_suspended;
+    const confirmMessage = isCurrentlySuspended ? text[language].confirmActivate : text[language].confirmSuspend;
     
     if (!confirm(confirmMessage)) return;
 
     try {
       const { error } = await supabase
         .from('profiles')
-        .update({ 
-          is_suspended: !user.is_suspended,
+        .update({
+          is_suspended: !isCurrentlySuspended,
           updated_at: new Date().toISOString()
         })
         .eq('id', user.id);
 
       if (error) throw error;
 
-      // Update local state
-      setUsers(prev => prev.map(u => 
-        u.id === user.id ? { ...u, is_suspended: !user.is_suspended } : u
-      ));
-
-      toast.success(user.is_suspended ? text[language].userActivated : text[language].userSuspended);
+      const successMessage = isCurrentlySuspended ? text[language].userActivated : text[language].userSuspended;
+      toast.success(successMessage);
+      fetchUsers(); // Refresh users list
     } catch (error: any) {
-      console.error('Error toggling user suspension:', error);
+      console.error('Error updating user suspension status:', error);
       toast.error('Error updating user status');
     }
   };
@@ -690,12 +682,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
       if (error) throw error;
 
-      // Update local state
-      setReviews(prev => prev.map(r => 
-        r.id === review.id ? { ...r, status: 'removed' } : r
-      ));
-
       toast.success(text[language].reviewHidden);
+      fetchReviews(); // Refresh reviews list
     } catch (error: any) {
       console.error('Error hiding review:', error);
       toast.error('Error hiding review');
@@ -713,10 +701,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
       if (error) throw error;
 
-      // Update local state
-      setReviews(prev => prev.filter(r => r.id !== review.id));
-
       toast.success(text[language].reviewDeleted);
+      fetchReviews(); // Refresh reviews list
     } catch (error: any) {
       console.error('Error deleting review:', error);
       toast.error('Error deleting review');
@@ -749,7 +735,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     return reviewStatusFilter === 'all' || review.status === reviewStatusFilter;
   });
 
-  // Render stars for rating
   const renderStars = (rating: number | null) => {
     const stars = [];
     const ratingValue = rating || 0;
@@ -766,7 +751,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     return stars;
   };
 
-  // Format date
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString(language === 'ar' ? 'ar-EG' : 'en-US', {
@@ -776,28 +760,40 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     });
   };
 
-  // Get status badge color and text
   const getStatusBadge = (status: string | null, type: 'user' | 'review') => {
     if (type === 'user') {
       const isActive = !status; // is_suspended is false or null
-      return {
-        color: isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800',
-        text: isActive ? text[language].active : text[language].suspended
-      };
+      return (
+        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+          isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+        }`}>
+          {isActive ? text[language].active : text[language].suspended}
+        </span>
+      );
     } else {
       // Review status
-      switch (status) {
-        case 'published':
-          return { color: 'bg-green-100 text-green-800', text: text[language].published };
-        case 'pending_approval':
-          return { color: 'bg-yellow-100 text-yellow-800', text: text[language].pendingApproval };
-        case 'removed':
-          return { color: 'bg-red-100 text-red-800', text: text[language].removed };
-        case 'flagged_for_review':
-          return { color: 'bg-orange-100 text-orange-800', text: text[language].flaggedForReview };
-        default:
-          return { color: 'bg-gray-100 text-gray-800', text: text[language].published };
-      }
+      const statusColors = {
+        published: 'bg-green-100 text-green-800',
+        pending_approval: 'bg-yellow-100 text-yellow-800',
+        removed: 'bg-red-100 text-red-800',
+        flagged_for_review: 'bg-orange-100 text-orange-800'
+      };
+      
+      const statusText = {
+        published: text[language].published,
+        pending_approval: text[language].pendingApproval,
+        removed: text[language].removed,
+        flagged_for_review: text[language].flaggedForReview
+      };
+
+      const colorClass = statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800';
+      const displayText = statusText[status as keyof typeof statusText] || status;
+
+      return (
+        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${colorClass}`}>
+          {displayText}
+        </span>
+      );
     }
   };
 
@@ -921,7 +917,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
               type="text"
               value={userSearchQuery}
               onChange={(e) => setUserSearchQuery(e.target.value)}
-              placeholder={text[language].searchByNameOrEmail}
+              placeholder={text[language].searchUsers}
               className="w-full px-4 py-2 pr-10 rtl:pl-10 rtl:pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
               dir={language === 'ar' ? 'rtl' : 'ltr'}
             />
@@ -967,56 +963,53 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredUsers.map((user) => {
-                const statusBadge = getStatusBadge(user.is_suspended, 'user');
-                return (
-                  <tr key={user.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                        <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-xs">
-                          {user.avatar_url ? (
-                            <img 
-                              src={user.avatar_url} 
-                              alt="Avatar" 
-                              className="w-full h-full object-cover rounded-full"
-                            />
-                          ) : (
-                            <Users className="h-4 w-4 text-gray-400" />
+              {filteredUsers.map((user) => (
+                <tr key={user.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-3 rtl:space-x-reverse">
+                      <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
+                        {user.avatar_url ? (
+                          <img 
+                            src={user.avatar_url} 
+                            alt="Avatar" 
+                            className="w-full h-full object-cover rounded-full"
+                          />
+                        ) : (
+                          <Users className="h-4 w-4 text-gray-400" />
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900 flex items-center space-x-2 rtl:space-x-reverse">
+                          <span>{`${user.first_name || ''} ${user.last_name || ''}`.trim() || 'No Name'}</span>
+                          {user.is_admin && (
+                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                              {text[language].admin}
+                            </span>
                           )}
                         </div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900 flex items-center space-x-2 rtl:space-x-reverse">
-                            <span>{`${user.first_name || ''} ${user.last_name || ''}`.trim() || 'No Name'}</span>
-                            {user.is_admin && (
-                              <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
-                                {text[language].admin}
-                              </span>
-                            )}
-                          </div>
-                        </div>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {user.email || 'No Email'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatDate(user.updated_at)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusBadge.color}`}>
-                        {statusBadge.text}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2 rtl:space-x-reverse">
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {user.email || 'No Email'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {formatDate(user.updated_at)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {getStatusBadge(user.is_suspended, 'user')}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex space-x-2 rtl:space-x-reverse">
                       <button
                         onClick={() => handleEditUser(user)}
                         className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded-lg text-sm font-medium bg-blue-500 hover:bg-blue-600 text-white transition-colors duration-200"
                       >
-                        <Edit className="h-4 w-4" />
+                        <Edit className="h-3 w-3" />
                         <span>{text[language].edit}</span>
                       </button>
                       <button
-                        onClick={() => handleToggleUserSuspension(user)}
+                        onClick={() => handleSuspendUser(user)}
                         className={`inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded-lg text-sm font-medium transition-colors duration-200 ${
                           user.is_suspended
                             ? 'bg-green-500 hover:bg-green-600 text-white'
@@ -1025,20 +1018,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                       >
                         {user.is_suspended ? (
                           <>
-                            <CheckCircle className="h-4 w-4" />
+                            <CheckCircle className="h-3 w-3" />
                             <span>{text[language].activateUser}</span>
                           </>
                         ) : (
                           <>
-                            <X className="h-4 w-4" />
+                            <X className="h-3 w-3" />
                             <span>{text[language].suspendUser}</span>
                           </>
                         )}
                       </button>
-                    </td>
-                  </tr>
-                );
-              })}
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -1066,7 +1059,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
               onChange={(e) => setReviewStatusFilter(e.target.value as 'all' | 'published' | 'pending_approval' | 'removed' | 'flagged_for_review')}
               className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 rtl:pl-8 rtl:pr-4 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
             >
-              <option value="all">{text[language].allStatuses}</option>
+              <option value="all">{text[language].allReviews}</option>
               <option value="published">{text[language].published}</option>
               <option value="pending_approval">{text[language].pendingApproval}</option>
               <option value="removed">{text[language].removed}</option>
@@ -1107,55 +1100,46 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredReviews.map((review) => {
-                const statusBadge = getStatusBadge(review.status, 'review');
-                const authorName = review.is_anonymous 
-                  ? text[language].anonymous
-                  : review.profiles 
-                    ? `${review.profiles.first_name || ''} ${review.profiles.last_name || ''}`.trim() || text[language].anonymous
-                    : text[language].anonymous;
-
-                return (
-                  <tr key={review.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {review.title || text[language].noTitle}
-                      </div>
-                      {review.body && (
-                        <div className="text-sm text-gray-500 truncate max-w-xs">
-                          {review.body.substring(0, 100)}...
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {authorName}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {review.companies?.name || 'Unknown Company'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center space-x-1 rtl:space-x-reverse">
-                        {renderStars(review.overall_rating)}
-                        <span className="text-sm text-gray-600 ml-2 rtl:mr-2">
-                          ({review.overall_rating || 0})
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusBadge.color}`}>
-                        {statusBadge.text}
+              {filteredReviews.map((review) => (
+                <tr key={review.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm font-medium text-gray-900 max-w-xs truncate">
+                      {review.title || text[language].noTitle}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {review.is_anonymous 
+                      ? text[language].anonymous
+                      : review.profiles 
+                        ? `${review.profiles.first_name || ''} ${review.profiles.last_name || ''}`.trim() || text[language].anonymous
+                        : text[language].anonymous
+                    }
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {review.companies?.name || 'Unknown Company'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-1 rtl:space-x-reverse">
+                      {renderStars(review.overall_rating)}
+                      <span className="text-sm text-gray-600 ml-1 rtl:mr-1">
+                        ({review.overall_rating || 0})
                       </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatDate(review.created_at)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2 rtl:space-x-reverse">
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {getStatusBadge(review.status, 'review')}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {formatDate(review.created_at)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <div className="flex space-x-2 rtl:space-x-reverse">
                       {review.status !== 'removed' && (
                         <button
                           onClick={() => handleHideReview(review)}
                           className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded-lg text-sm font-medium bg-orange-500 hover:bg-orange-600 text-white transition-colors duration-200"
                         >
-                          <EyeOff className="h-4 w-4" />
+                          <EyeOff className="h-3 w-3" />
                           <span>{text[language].hide}</span>
                         </button>
                       )}
@@ -1163,13 +1147,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                         onClick={() => handleDeleteReview(review)}
                         className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded-lg text-sm font-medium bg-red-500 hover:bg-red-600 text-white transition-colors duration-200"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-3 w-3" />
                         <span>{text[language].delete}</span>
                       </button>
-                    </td>
-                  </tr>
-                );
-              })}
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -1358,10 +1342,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                 {text[language].editUser}
               </h3>
               <button
-                onClick={() => {
-                  setEditUserModalOpen(false);
-                  setSelectedUser(null);
-                }}
+                onClick={() => setEditUserModalOpen(false)}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <X className="h-5 w-5" />
@@ -1399,10 +1380,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
               <div className="flex space-x-3 rtl:space-x-reverse pt-4">
                 <button
-                  onClick={() => {
-                    setEditUserModalOpen(false);
-                    setSelectedUser(null);
-                  }}
+                  onClick={() => setEditUserModalOpen(false)}
                   className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
                   disabled={isSaving}
                 >
