@@ -249,7 +249,7 @@ const WriteReview: React.FC<WriteReviewProps> = ({
         overall_rating: overallRating,
         date_of_experience: formData.dateOfExperience || null,
         is_anonymous: formData.isAnonymous,
-        status: 'published' as const,
+        status: 'published' as const, // Set status to 'published' for instant publication
         created_at: new Date().toISOString()
       };
 
