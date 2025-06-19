@@ -737,17 +737,6 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
                         <span className="text-sm">{text[language].notHelpful}</span>
                         <span className="text-sm">({review.not_helpful_count || 0})</span>
                       </button>
-
-                      {/* Reply Button - Only show for company representatives */}
-                      {isCompanyRepresentative && !checkingRepresentative && !review.company_reply && (
-                        <button
-                          onClick={() => setReplyingToReviewId(review.id)}
-                          className="flex items-center space-x-1 rtl:space-x-reverse text-gray-600 hover:text-primary-500 transition-colors duration-200"
-                        >
-                          <MessageSquare className="h-4 w-4" />
-                          <span className="text-sm">{text[language].reply}</span>
-                        </button>
-                      )}
                     </div>
 
                     <div className="flex items-center space-x-2 rtl:space-x-reverse">
@@ -773,8 +762,9 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
                     </div>
                   </div>
 
-                  {/* Company Reply */}
-                  {review.company_reply && (
+                  {/* Company Reply Section */}
+                  {review.company_reply ? (
+                    // Show existing reply
                     <div id={`reply-${review.company_reply.id}`} className="mt-4 bg-blue-50 border-l-4 border-blue-500 p-4">
                       <div className="flex items-center space-x-2 rtl:space-x-reverse mb-2">
                         <Building2 className="h-4 w-4 text-blue-600" />
@@ -841,50 +831,40 @@ const CompanyProfile: React.FC<CompanyProfileProps> = ({
                         </div>
                       </div>
                     </div>
-                  )}
-
-                  {/* Reply Form - Only show for company representatives */}
-                  {isCompanyRepresentative && !checkingRepresentative && replyingToReviewId === review.id && (
-                    <div className="mt-4 bg-gray-50 p-4 rounded-lg">
-                      <textarea
-                        value={replyText}
-                        onChange={(e) => setReplyText(e.target.value)}
-                        placeholder={text[language].writeReply}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 mb-3"
-                        dir={language === 'ar' ? 'rtl' : 'ltr'}
-                        disabled={submittingReply}
-                      />
-                      <div className="flex space-x-3 rtl:space-x-reverse">
-                        <button
-                          onClick={() => {
-                            setReplyingToReviewId(null);
-                            setReplyText('');
-                          }}
-                          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                  ) : (
+                    // Show reply input for company representatives (NEW LOGIC)
+                    isCompanyRepresentative && !checkingRepresentative && (
+                      <div className="mt-4 bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
+                        <textarea
+                          value={replyText}
+                          onChange={(e) => setReplyText(e.target.value)}
+                          placeholder={text[language].writeReply}
+                          rows={3}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all duration-200 mb-3"
+                          dir={language === 'ar' ? 'rtl' : 'ltr'}
                           disabled={submittingReply}
-                        >
-                          {text[language].cancel}
-                        </button>
-                        <button
-                          onClick={() => handleReplySubmit(review.id)}
-                          disabled={!replyText.trim() || submittingReply}
-                          className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 rtl:space-x-reverse"
-                        >
-                          {submittingReply ? (
-                            <>
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                              <span>{text[language].submitting}</span>
-                            </>
-                          ) : (
-                            <>
-                              <Send className="h-4 w-4" />
-                              <span>{text[language].submitReply}</span>
-                            </>
-                          )}
-                        </button>
+                        />
+                        <div className="flex space-x-3 rtl:space-x-reverse">
+                          <button
+                            onClick={() => handleReplySubmit(review.id)}
+                            disabled={!replyText.trim() || submittingReply}
+                            className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 rtl:space-x-reverse"
+                          >
+                            {submittingReply ? (
+                              <>
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                                <span>{text[language].submitting}</span>
+                              </>
+                            ) : (
+                              <>
+                                <Send className="h-4 w-4" />
+                                <span>{text[language].submitReply}</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
-                    </div>
+                    )
                   )}
                 </div>
               ))}
