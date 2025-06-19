@@ -836,6 +836,98 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     </div>
   );
 
+  // Users View
+  const UsersView = () => (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-dark-500 mb-2">
+          {text[language].users}
+        </h1>
+        <div className="w-16 h-1 bg-red-500 rounded-full"></div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  ID
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].author}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].company}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].email}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].status}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {users.map((user) => (
+                <tr key={user.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {user.id.substring(0, 8)}...
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-3 rtl:space-x-reverse">
+                      <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-xs">
+                        {user.avatar_url ? (
+                          <img 
+                            src={user.avatar_url} 
+                            alt={`${user.first_name} ${user.last_name}`} 
+                            className="w-full h-full object-cover rounded-full"
+                          />
+                        ) : (
+                          '👤'
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {`${user.first_name || ''} ${user.last_name || ''}`.trim() || 'No Name'}
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {/* This would need to be populated with company data if user is a representative */}
+                    -
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {user.email || 'No Email'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                      {user.is_admin && (
+                        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                          {text[language].admin}
+                        </span>
+                      )}
+                      {user.is_suspended ? (
+                        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+                          {text[language].suspended}
+                        </span>
+                      ) : (
+                        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                          {text[language].active}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
   // Companies View
   const CompaniesView = () => (
     <div className="space-y-6">
@@ -1111,6 +1203,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                   <Shield className="h-5 w-5" />
                   <span className="font-medium">{text[language].overview}</span>
                 </button>
+
+                <button
+                  onClick={() => setActiveTab('users')}
+                  className={`w-full flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-lg text-right transition-all duration-200 ${
+                    activeTab === 'users'
+                      ? 'bg-red-50 text-red-600 border-r-4 border-red-500 rtl:border-l-4 rtl:border-r-0'
+                      : 'text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Users className="h-5 w-5" />
+                  <span className="font-medium">{text[language].users}</span>
+                </button>
                 
                 <button
                   onClick={() => setActiveTab('companies')}
@@ -1142,6 +1246,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
           {/* Main Content Area */}
           <div className="lg:col-span-3">
             {activeTab === 'overview' && <OverviewView />}
+            {activeTab === 'users' && <UsersView />}
             {activeTab === 'companies' && <CompaniesView />}
             {activeTab === 'reviews' && <ReviewsView />}
           </div>
