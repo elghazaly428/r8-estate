@@ -70,14 +70,15 @@ interface UserProfile {
   updated_at: string;
 }
 
-interface AdminReview {
+interface Review {
   id: number;
   title: string | null;
   body: string | null;
   overall_rating: number | null;
-  status: 'pending_approval' | 'published' | 'removed' | 'flagged_for_review' | null;
+  status: string | null;
   created_at: string;
   is_anonymous: boolean | null;
+  has_company_reply: boolean;
   profiles?: {
     first_name: string | null;
     last_name: string | null;
@@ -122,30 +123,20 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
   });
   const [companies, setCompanies] = useState<Company[]>([]);
   const [users, setUsers] = useState<UserProfile[]>([]);
-  const [reviews, setReviews] = useState<AdminReview[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
   
-  // Filter states
-  const [userSearchQuery, setUserSearchQuery] = useState('');
-  const [userStatusFilter, setUserStatusFilter] = useState<'all' | 'active' | 'suspended'>('all');
-  const [reviewStatusFilter, setReviewStatusFilter] = useState<'all' | 'published' | 'pending_approval' | 'removed' | 'flagged_for_review'>('all');
+  // Review filter state
+  const [reviewStatusFilter, setReviewStatusFilter] = useState<string>('all');
   
   // Modal states
   const [assignModalOpen, setAssignModalOpen] = useState(false);
-  const [editUserModalOpen, setEditUserModalOpen] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
-  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  
-  // Edit user form state
-  const [editUserForm, setEditUserForm] = useState({
-    firstName: '',
-    lastName: ''
-  });
 
   const text = {
     ar: {
@@ -192,43 +183,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       domainMismatch: 'تحذير: لا يوجد نطاق محدد للشركة، البحث في جميع المستخدمين',
       emailDomainMatch: 'تطابق نطاق البريد الإلكتروني',
       emailDomainMismatch: 'عدم تطابق نطاق البريد الإلكتروني',
-      // Users management
-      searchUsers: 'البحث بالاسم أو البريد الإلكتروني...',
+      // Reviews specific text
+      filterByStatus: 'تصفية حسب الحالة',
       allStatuses: 'جميع الحالات',
-      fullName: 'الاسم الكامل',
-      signupDate: 'تاريخ التسجيل',
-      edit: 'تعديل',
-      suspendUser: 'إيقاف المستخدم',
-      activateUser: 'تفعيل المستخدم',
-      editUser: 'تعديل المستخدم',
-      firstName: 'الاسم الأول',
-      lastName: 'اسم العائلة',
-      saveChanges: 'حفظ التغييرات',
-      saving: 'جاري الحفظ...',
-      userUpdated: 'تم تحديث بيانات المستخدم بنجاح',
-      userSuspended: 'تم إيقاف المستخدم بنجاح',
-      userActivated: 'تم تفعيل المستخدم بنجاح',
-      confirmSuspend: 'هل أنت متأكد من إيقاف هذا المستخدم؟',
-      confirmActivate: 'هل أنت متأكد من تفعيل هذا المستخدم؟',
-      // Reviews management
+      published: 'منشور',
+      hidden: 'مخفي',
+      removed: 'محذوف',
+      deleted: 'محذوف نهائياً',
       reviewTitle: 'عنوان التقييم',
       author: 'الكاتب',
       company: 'الشركة',
       rating: 'التقييم',
       dateCreated: 'تاريخ الإنشاء',
-      allReviews: 'جميع التقييمات',
-      published: 'منشور',
-      pendingApproval: 'في انتظار الموافقة',
-      removed: 'محذوف',
-      flaggedForReview: 'مبلغ عنه',
       hide: 'إخفاء',
+      unhide: 'إظهار',
       delete: 'حذف',
       confirmHide: 'هل أنت متأكد من إخفاء هذا التقييم؟',
+      confirmUnhide: 'هل أنت متأكد من إظهار هذا التقييم؟',
       confirmDelete: 'هل أنت متأكد من حذف هذا التقييم نهائياً؟',
-      reviewHidden: 'تم إخفاء التقييم بنجاح',
-      reviewDeleted: 'تم حذف التقييم بنجاح',
+      hideSuccess: 'تم إخفاء التقييم بنجاح',
+      unhideSuccess: 'تم إظهار التقييم بنجاح',
+      deleteSuccess: 'تم حذف التقييم بنجاح',
+      hideError: 'حدث خطأ أثناء إخفاء التقييم',
+      unhideError: 'حدث خطأ أثناء إظهار التقييم',
+      deleteError: 'حدث خطأ أثناء حذف التقييم',
+      cannotDeleteWithReply: 'لا يمكن حذف التقييم لأن الشركة قد ردت عليه',
       anonymous: 'مجهول',
-      noTitle: 'بدون عنوان'
+      noReviews: 'لا توجد تقييمات'
     },
     en: {
       adminDashboard: 'Admin Dashboard',
@@ -274,43 +255,33 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       domainMismatch: 'Warning: No domain set for company, searching all users',
       emailDomainMatch: 'Email domain matches',
       emailDomainMismatch: 'Email domain does not match',
-      // Users management
-      searchUsers: 'Search by name or email...',
+      // Reviews specific text
+      filterByStatus: 'Filter by Status',
       allStatuses: 'All Statuses',
-      fullName: 'Full Name',
-      signupDate: 'Signup Date',
-      edit: 'Edit',
-      suspendUser: 'Suspend User',
-      activateUser: 'Activate User',
-      editUser: 'Edit User',
-      firstName: 'First Name',
-      lastName: 'Last Name',
-      saveChanges: 'Save Changes',
-      saving: 'Saving...',
-      userUpdated: 'User updated successfully',
-      userSuspended: 'User suspended successfully',
-      userActivated: 'User activated successfully',
-      confirmSuspend: 'Are you sure you want to suspend this user?',
-      confirmActivate: 'Are you sure you want to activate this user?',
-      // Reviews management
+      published: 'Published',
+      hidden: 'Hidden',
+      removed: 'Removed',
+      deleted: 'Deleted',
       reviewTitle: 'Review Title',
       author: 'Author',
       company: 'Company',
       rating: 'Rating',
       dateCreated: 'Date Created',
-      allReviews: 'All Reviews',
-      published: 'Published',
-      pendingApproval: 'Pending Approval',
-      removed: 'Removed',
-      flaggedForReview: 'Flagged for Review',
       hide: 'Hide',
+      unhide: 'Unhide',
       delete: 'Delete',
       confirmHide: 'Are you sure you want to hide this review?',
+      confirmUnhide: 'Are you sure you want to unhide this review?',
       confirmDelete: 'Are you sure you want to permanently delete this review?',
-      reviewHidden: 'Review hidden successfully',
-      reviewDeleted: 'Review deleted successfully',
+      hideSuccess: 'Review hidden successfully',
+      unhideSuccess: 'Review unhidden successfully',
+      deleteSuccess: 'Review deleted successfully',
+      hideError: 'Error hiding review',
+      unhideError: 'Error unhiding review',
+      deleteError: 'Error deleting review',
+      cannotDeleteWithReply: 'Cannot delete review because the company has replied to it',
       anonymous: 'Anonymous',
-      noTitle: 'No Title'
+      noReviews: 'No reviews found'
     }
   };
 
@@ -408,9 +379,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     }
   };
 
-  const fetchReviews = async () => {
+  const fetchReviews = async (statusFilter: string = 'all') => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('reviews')
         .select(`
           *,
@@ -419,8 +390,37 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
         `)
         .order('created_at', { ascending: false });
 
+      // Apply status filter
+      if (statusFilter !== 'all') {
+        query = query.eq('status', statusFilter);
+      }
+
+      const { data, error } = await query;
+
       if (error) throw error;
-      setReviews(data || []);
+
+      // Check for company replies for each review
+      const reviewsWithReplyStatus = await Promise.all(
+        (data || []).map(async (review) => {
+          const { data: replyData, error: replyError } = await supabase
+            .from('company_replies')
+            .select('id')
+            .eq('review_id', review.id)
+            .limit(1);
+
+          if (replyError) {
+            console.error('Error checking company reply:', replyError);
+            return { ...review, has_company_reply: false };
+          }
+
+          return {
+            ...review,
+            has_company_reply: replyData && replyData.length > 0
+          };
+        })
+      );
+
+      setReviews(reviewsWithReplyStatus);
     } catch (error) {
       console.error('Error fetching reviews:', error);
     }
@@ -441,6 +441,67 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       setReports(data || []);
     } catch (error) {
       console.error('Error fetching reports:', error);
+    }
+  };
+
+  // Handle review status toggle (hide/unhide)
+  const handleToggleReviewStatus = async (reviewId: number, currentStatus: string) => {
+    const newStatus = currentStatus === 'published' ? 'hidden' : 'published';
+    const confirmMessage = newStatus === 'hidden' ? text[language].confirmHide : text[language].confirmUnhide;
+    
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('reviews')
+        .update({ status: newStatus })
+        .eq('id', reviewId);
+
+      if (error) throw error;
+
+      // Update local state
+      setReviews(prev => prev.map(review => 
+        review.id === reviewId 
+          ? { ...review, status: newStatus }
+          : review
+      ));
+
+      const successMessage = newStatus === 'hidden' ? text[language].hideSuccess : text[language].unhideSuccess;
+      toast.success(successMessage);
+    } catch (error: any) {
+      console.error('Error toggling review status:', error);
+      const errorMessage = newStatus === 'hidden' ? text[language].hideError : text[language].unhideError;
+      toast.error(errorMessage);
+    }
+  };
+
+  // Handle review deletion
+  const handleDeleteReview = async (reviewId: number, hasCompanyReply: boolean) => {
+    if (hasCompanyReply) {
+      toast.error(text[language].cannotDeleteWithReply);
+      return;
+    }
+
+    if (!confirm(text[language].confirmDelete)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('reviews')
+        .delete()
+        .eq('id', reviewId);
+
+      if (error) throw error;
+
+      // Remove from local state
+      setReviews(prev => prev.filter(review => review.id !== reviewId));
+      toast.success(text[language].deleteSuccess);
+    } catch (error: any) {
+      console.error('Error deleting review:', error);
+      toast.error(text[language].deleteError);
     }
   };
 
@@ -506,6 +567,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
 
     return () => clearTimeout(timeoutId);
   }, [searchQuery, selectedCompany]);
+
+  // Fetch reviews when status filter changes
+  useEffect(() => {
+    if (!loading && user) {
+      fetchReviews(reviewStatusFilter);
+    }
+  }, [reviewStatusFilter]);
 
   const handleAssignRepresentative = async () => {
     if (!selectedCompany || !selectedUser) return;
@@ -607,108 +675,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     }
   };
 
-  // User management functions
-  const handleEditUser = (user: UserProfile) => {
-    setSelectedUser(user);
-    setEditUserForm({
-      firstName: user.first_name || '',
-      lastName: user.last_name || ''
-    });
-    setEditUserModalOpen(true);
-  };
-
-  const handleSaveUser = async () => {
-    if (!selectedUser) return;
-
-    setIsSaving(true);
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          first_name: editUserForm.firstName.trim(),
-          last_name: editUserForm.lastName.trim(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', selectedUser.id);
-
-      if (error) throw error;
-
-      toast.success(text[language].userUpdated);
-      setEditUserModalOpen(false);
-      fetchUsers(); // Refresh users list
-    } catch (error: any) {
-      console.error('Error updating user:', error);
-      toast.error('Error updating user');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleSuspendUser = async (user: UserProfile) => {
-    const isCurrentlySuspended = user.is_suspended;
-    const confirmMessage = isCurrentlySuspended ? text[language].confirmActivate : text[language].confirmSuspend;
-    
-    if (!confirm(confirmMessage)) return;
-
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          is_suspended: !isCurrentlySuspended,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', user.id);
-
-      if (error) throw error;
-
-      const successMessage = isCurrentlySuspended ? text[language].userActivated : text[language].userSuspended;
-      toast.success(successMessage);
-      fetchUsers(); // Refresh users list
-    } catch (error: any) {
-      console.error('Error updating user suspension status:', error);
-      toast.error('Error updating user status');
-    }
-  };
-
-  // Review management functions
-  const handleHideReview = async (review: AdminReview) => {
-    if (!confirm(text[language].confirmHide)) return;
-
-    try {
-      const { error } = await supabase
-        .from('reviews')
-        .update({ status: 'removed' })
-        .eq('id', review.id);
-
-      if (error) throw error;
-
-      toast.success(text[language].reviewHidden);
-      fetchReviews(); // Refresh reviews list
-    } catch (error: any) {
-      console.error('Error hiding review:', error);
-      toast.error('Error hiding review');
-    }
-  };
-
-  const handleDeleteReview = async (review: AdminReview) => {
-    if (!confirm(text[language].confirmDelete)) return;
-
-    try {
-      const { error } = await supabase
-        .from('reviews')
-        .delete()
-        .eq('id', review.id);
-
-      if (error) throw error;
-
-      toast.success(text[language].reviewDeleted);
-      fetchReviews(); // Refresh reviews list
-    } catch (error: any) {
-      console.error('Error deleting review:', error);
-      toast.error('Error deleting review');
-    }
-  };
-
   // Helper function to check if email domain matches company domain
   const checkEmailDomainMatch = (email: string | null, companyDomain: string | null): boolean => {
     if (!email || !companyDomain) return false;
@@ -716,24 +682,36 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     return emailDomain === companyDomain.toLowerCase();
   };
 
-  // Filter users based on search and status
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = userSearchQuery === '' || 
-      (user.first_name?.toLowerCase().includes(userSearchQuery.toLowerCase())) ||
-      (user.last_name?.toLowerCase().includes(userSearchQuery.toLowerCase())) ||
-      (user.email?.toLowerCase().includes(userSearchQuery.toLowerCase()));
-    
-    const matchesStatus = userStatusFilter === 'all' ||
-      (userStatusFilter === 'active' && !user.is_suspended) ||
-      (userStatusFilter === 'suspended' && user.is_suspended);
-    
-    return matchesSearch && matchesStatus;
-  });
+  // Helper functions for status display
+  const getStatusText = (status: string | null) => {
+    switch (status) {
+      case 'published':
+        return text[language].published;
+      case 'hidden':
+        return text[language].hidden;
+      case 'removed':
+        return text[language].removed;
+      case 'deleted':
+        return text[language].deleted;
+      default:
+        return text[language].published;
+    }
+  };
 
-  // Filter reviews based on status
-  const filteredReviews = reviews.filter(review => {
-    return reviewStatusFilter === 'all' || review.status === reviewStatusFilter;
-  });
+  const getStatusColor = (status: string | null) => {
+    switch (status) {
+      case 'published':
+        return 'bg-green-100 text-green-800';
+      case 'hidden':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'removed':
+        return 'bg-red-100 text-red-800';
+      case 'deleted':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return 'bg-green-100 text-green-800';
+    }
+  };
 
   const renderStars = (rating: number | null) => {
     const stars = [];
@@ -758,43 +736,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       month: 'short',
       day: 'numeric'
     });
-  };
-
-  const getStatusBadge = (status: string | null, type: 'user' | 'review') => {
-    if (type === 'user') {
-      const isActive = !status; // is_suspended is false or null
-      return (
-        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-          isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-        }`}>
-          {isActive ? text[language].active : text[language].suspended}
-        </span>
-      );
-    } else {
-      // Review status
-      const statusColors = {
-        published: 'bg-green-100 text-green-800',
-        pending_approval: 'bg-yellow-100 text-yellow-800',
-        removed: 'bg-red-100 text-red-800',
-        flagged_for_review: 'bg-orange-100 text-orange-800'
-      };
-      
-      const statusText = {
-        published: text[language].published,
-        pending_approval: text[language].pendingApproval,
-        removed: text[language].removed,
-        flagged_for_review: text[language].flaggedForReview
-      };
-
-      const colorClass = statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800';
-      const displayText = statusText[status as keyof typeof statusText] || status;
-
-      return (
-        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${colorClass}`}>
-          {displayText}
-        </span>
-      );
-    }
   };
 
   // Loading state
@@ -895,272 +836,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     </div>
   );
 
-  // Users View
-  const UsersView = () => (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-dark-500 mb-2">
-          {text[language].users}
-        </h1>
-        <div className="w-16 h-1 bg-red-500 rounded-full"></div>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0 md:space-x-4 rtl:md:space-x-reverse">
-          {/* Search Input */}
-          <div className="relative flex-1 max-w-md">
-            <div className="absolute inset-y-0 right-0 pr-3 rtl:left-0 rtl:right-auto rtl:pl-3 rtl:pr-0 flex items-center pointer-events-none">
-              <Search className="h-4 w-4 text-gray-400" />
-            </div>
-            <input
-              type="text"
-              value={userSearchQuery}
-              onChange={(e) => setUserSearchQuery(e.target.value)}
-              placeholder={text[language].searchUsers}
-              className="w-full px-4 py-2 pr-10 rtl:pl-10 rtl:pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
-              dir={language === 'ar' ? 'rtl' : 'ltr'}
-            />
-          </div>
-
-          {/* Status Filter */}
-          <div className="relative">
-            <select 
-              value={userStatusFilter}
-              onChange={(e) => setUserStatusFilter(e.target.value as 'all' | 'active' | 'suspended')}
-              className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 rtl:pl-8 rtl:pr-4 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
-            >
-              <option value="all">{text[language].allStatuses}</option>
-              <option value="active">{text[language].active}</option>
-              <option value="suspended">{text[language].suspended}</option>
-            </select>
-            <ChevronDown className="absolute right-2 rtl:left-2 rtl:right-auto top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-          </div>
-        </div>
-      </div>
-
-      {/* Users Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].fullName}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].email}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].signupDate}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].status}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].actions}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredUsers.map((user) => (
-                <tr key={user.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-3 rtl:space-x-reverse">
-                      <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-                        {user.avatar_url ? (
-                          <img 
-                            src={user.avatar_url} 
-                            alt="Avatar" 
-                            className="w-full h-full object-cover rounded-full"
-                          />
-                        ) : (
-                          <Users className="h-4 w-4 text-gray-400" />
-                        )}
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-gray-900 flex items-center space-x-2 rtl:space-x-reverse">
-                          <span>{`${user.first_name || ''} ${user.last_name || ''}`.trim() || 'No Name'}</span>
-                          {user.is_admin && (
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
-                              {text[language].admin}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {user.email || 'No Email'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatDate(user.updated_at)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {getStatusBadge(user.is_suspended, 'user')}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-2 rtl:space-x-reverse">
-                      <button
-                        onClick={() => handleEditUser(user)}
-                        className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded-lg text-sm font-medium bg-blue-500 hover:bg-blue-600 text-white transition-colors duration-200"
-                      >
-                        <Edit className="h-3 w-3" />
-                        <span>{text[language].edit}</span>
-                      </button>
-                      <button
-                        onClick={() => handleSuspendUser(user)}
-                        className={`inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded-lg text-sm font-medium transition-colors duration-200 ${
-                          user.is_suspended
-                            ? 'bg-green-500 hover:bg-green-600 text-white'
-                            : 'bg-red-500 hover:bg-red-600 text-white'
-                        }`}
-                      >
-                        {user.is_suspended ? (
-                          <>
-                            <CheckCircle className="h-3 w-3" />
-                            <span>{text[language].activateUser}</span>
-                          </>
-                        ) : (
-                          <>
-                            <X className="h-3 w-3" />
-                            <span>{text[language].suspendUser}</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Reviews View
-  const ReviewsView = () => (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-dark-500 mb-2">
-          {text[language].reviews}
-        </h1>
-        <div className="w-16 h-1 bg-red-500 rounded-full"></div>
-      </div>
-
-      {/* Status Filter */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center space-x-4 rtl:space-x-reverse">
-          <label className="text-sm font-medium text-gray-700">{text[language].status}:</label>
-          <div className="relative">
-            <select 
-              value={reviewStatusFilter}
-              onChange={(e) => setReviewStatusFilter(e.target.value as 'all' | 'published' | 'pending_approval' | 'removed' | 'flagged_for_review')}
-              className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 rtl:pl-8 rtl:pr-4 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
-            >
-              <option value="all">{text[language].allReviews}</option>
-              <option value="published">{text[language].published}</option>
-              <option value="pending_approval">{text[language].pendingApproval}</option>
-              <option value="removed">{text[language].removed}</option>
-              <option value="flagged_for_review">{text[language].flaggedForReview}</option>
-            </select>
-            <ChevronDown className="absolute right-2 rtl:left-2 rtl:right-auto top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-          </div>
-        </div>
-      </div>
-
-      {/* Reviews Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].reviewTitle}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].author}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].company}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].rating}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].status}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].dateCreated}
-                </th>
-                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {text[language].actions}
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredReviews.map((review) => (
-                <tr key={review.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900 max-w-xs truncate">
-                      {review.title || text[language].noTitle}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {review.is_anonymous 
-                      ? text[language].anonymous
-                      : review.profiles 
-                        ? `${review.profiles.first_name || ''} ${review.profiles.last_name || ''}`.trim() || text[language].anonymous
-                        : text[language].anonymous
-                    }
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {review.companies?.name || 'Unknown Company'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center space-x-1 rtl:space-x-reverse">
-                      {renderStars(review.overall_rating)}
-                      <span className="text-sm text-gray-600 ml-1 rtl:mr-1">
-                        ({review.overall_rating || 0})
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {getStatusBadge(review.status, 'review')}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatDate(review.created_at)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-2 rtl:space-x-reverse">
-                      {review.status !== 'removed' && (
-                        <button
-                          onClick={() => handleHideReview(review)}
-                          className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded-lg text-sm font-medium bg-orange-500 hover:bg-orange-600 text-white transition-colors duration-200"
-                        >
-                          <EyeOff className="h-3 w-3" />
-                          <span>{text[language].hide}</span>
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleDeleteReview(review)}
-                        className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded-lg text-sm font-medium bg-red-500 hover:bg-red-600 text-white transition-colors duration-200"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                        <span>{text[language].delete}</span>
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-
   // Companies View
   const CompaniesView = () => (
     <div className="space-y-6">
@@ -1176,6 +851,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  ID
+                </th>
                 <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {text[language].name}
                 </th>
@@ -1193,6 +871,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
             <tbody className="bg-white divide-y divide-gray-200">
               {companies.map((company) => (
                 <tr key={company.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    {company.id}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-3 rtl:space-x-reverse">
                       <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-xs">
@@ -1262,6 +943,153 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     </div>
   );
 
+  // Reviews View
+  const ReviewsView = () => (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-dark-500 mb-2">
+          {text[language].reviews}
+        </h1>
+        <div className="w-16 h-1 bg-red-500 rounded-full"></div>
+      </div>
+
+      {/* Status Filter */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+        <div className="flex items-center space-x-4 rtl:space-x-reverse">
+          <label className="text-sm font-medium text-gray-700">
+            {text[language].filterByStatus}:
+          </label>
+          <select
+            value={reviewStatusFilter}
+            onChange={(e) => setReviewStatusFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+          >
+            <option value="all">{text[language].allStatuses}</option>
+            <option value="published">{text[language].published}</option>
+            <option value="hidden">{text[language].hidden}</option>
+            <option value="removed">{text[language].removed}</option>
+            <option value="deleted">{text[language].deleted}</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Reviews Table */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].reviewTitle}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].author}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].company}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].rating}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].status}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].dateCreated}
+                </th>
+                <th className="px-6 py-3 text-right rtl:text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  {text[language].actions}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {reviews.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                    {text[language].noReviews}
+                  </td>
+                </tr>
+              ) : (
+                reviews.map((review) => (
+                  <tr key={review.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs">
+                      <div className="truncate">
+                        {review.title || 'No title'}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {review.is_anonymous 
+                        ? text[language].anonymous
+                        : review.profiles 
+                          ? `${review.profiles.first_name || ''} ${review.profiles.last_name || ''}`.trim() || text[language].anonymous
+                          : text[language].anonymous
+                      }
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {review.companies?.name || 'Unknown Company'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-1 rtl:space-x-reverse">
+                        {renderStars(review.overall_rating)}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(review.status)}`}>
+                        {getStatusText(review.status)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {formatDate(review.created_at)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                        {/* Hide/Unhide Button */}
+                        {review.status === 'published' && (
+                          <button
+                            onClick={() => handleToggleReviewStatus(review.id, review.status)}
+                            className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm font-medium transition-colors duration-200"
+                          >
+                            <EyeOff className="h-4 w-4" />
+                            <span>{text[language].hide}</span>
+                          </button>
+                        )}
+                        
+                        {review.status === 'hidden' && (
+                          <button
+                            onClick={() => handleToggleReviewStatus(review.id, review.status)}
+                            className="inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-medium transition-colors duration-200"
+                          >
+                            <Eye className="h-4 w-4" />
+                            <span>{text[language].unhide}</span>
+                          </button>
+                        )}
+
+                        {/* Delete Button */}
+                        <button
+                          onClick={() => handleDeleteReview(review.id, review.has_company_reply)}
+                          disabled={review.has_company_reply}
+                          className={`inline-flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                            review.has_company_reply
+                              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                              : 'bg-red-500 hover:bg-red-600 text-white'
+                          }`}
+                          title={review.has_company_reply ? text[language].cannotDeleteWithReply : ''}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          <span>{text[language].delete}</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className={`min-h-screen bg-gray-50 ${language === 'ar' ? 'rtl' : 'ltr'}`} dir={language === 'ar' ? 'rtl' : 'ltr'}>
       <Header language={language} onLanguageChange={onLanguageChange} onNavigate={onNavigate} />
@@ -1282,18 +1110,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                 >
                   <Shield className="h-5 w-5" />
                   <span className="font-medium">{text[language].overview}</span>
-                </button>
-                
-                <button
-                  onClick={() => setActiveTab('users')}
-                  className={`w-full flex items-center space-x-3 rtl:space-x-reverse px-4 py-3 rounded-lg text-right transition-all duration-200 ${
-                    activeTab === 'users'
-                      ? 'bg-red-50 text-red-600 border-r-4 border-red-500 rtl:border-l-4 rtl:border-r-0'
-                      : 'text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <Users className="h-5 w-5" />
-                  <span className="font-medium">{text[language].users}</span>
                 </button>
                 
                 <button
@@ -1326,88 +1142,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
           {/* Main Content Area */}
           <div className="lg:col-span-3">
             {activeTab === 'overview' && <OverviewView />}
-            {activeTab === 'users' && <UsersView />}
             {activeTab === 'companies' && <CompaniesView />}
             {activeTab === 'reviews' && <ReviewsView />}
           </div>
         </div>
       </div>
-
-      {/* Edit User Modal */}
-      {editUserModalOpen && selectedUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-dark-500">
-                {text[language].editUser}
-              </h3>
-              <button
-                onClick={() => setEditUserModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-dark-500 mb-2">
-                  {text[language].firstName}
-                </label>
-                <input
-                  type="text"
-                  value={editUserForm.firstName}
-                  onChange={(e) => setEditUserForm(prev => ({ ...prev, firstName: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  dir={language === 'ar' ? 'rtl' : 'ltr'}
-                  disabled={isSaving}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-dark-500 mb-2">
-                  {text[language].lastName}
-                </label>
-                <input
-                  type="text"
-                  value={editUserForm.lastName}
-                  onChange={(e) => setEditUserForm(prev => ({ ...prev, lastName: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  dir={language === 'ar' ? 'rtl' : 'ltr'}
-                  disabled={isSaving}
-                />
-              </div>
-
-              <div className="flex space-x-3 rtl:space-x-reverse pt-4">
-                <button
-                  onClick={() => setEditUserModalOpen(false)}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                  disabled={isSaving}
-                >
-                  {text[language].cancel}
-                </button>
-                <button
-                  onClick={handleSaveUser}
-                  disabled={isSaving}
-                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 rtl:space-x-reverse"
-                >
-                  {isSaving ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      <span>{text[language].saving}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Edit className="h-4 w-4" />
-                      <span>{text[language].saveChanges}</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Assign Representative Modal */}
       {assignModalOpen && selectedCompany && (
