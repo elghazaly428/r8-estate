@@ -19,7 +19,9 @@ import {
   Eye,
   EyeOff,
   Check,
-  AlertTriangle
+  AlertTriangle,
+  Plus,
+  Tag
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import Header from './Header';
@@ -52,6 +54,15 @@ interface Company {
   location: string | null;
   is_claimed: boolean | null;
   created_at: string;
+}
+
+interface Category {
+  id: number;
+  name: string | null;
+  description: string | null;
+  icon_name: string | null;
+  created_at: string;
+  company_count?: number;
 }
 
 interface ReviewData {
@@ -92,13 +103,14 @@ interface ReportData {
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageChange, onNavigate }) => {
   const { user, loading: authLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<'users' | 'companies' | 'reviews' | 'reports'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'companies' | 'categories' | 'reviews' | 'reports'>('users');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
   // Data states
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [reviews, setReviews] = useState<ReviewData[]>([]);
   const [reports, setReports] = useState<ReportData[]>([]);
   
@@ -119,11 +131,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     lastName: ''
   });
 
+  // Category modal states
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [categoryForm, setCategoryForm] = useState({
+    name: '',
+    description: '',
+    icon_name: ''
+  });
+
+  // Delete confirmation modal states
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+
   const text = {
     ar: {
       adminDashboard: 'لوحة تحكم الأدمن',
       users: 'المستخدمين',
       companies: 'الشركات',
+      categories: 'الفئات',
       reviews: 'التقييمات',
       reports: 'البلاغات',
       search: 'البحث...',
@@ -187,12 +214,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       confirmDismissReport: 'هل أنت متأكد من رفض هذا البلاغ؟',
       confirmUpholdReport: 'هل أنت متأكد من قبول هذا البلاغ وإخفاء المحتوى؟',
       reportDismissed: 'تم رفض البلاغ بنجاح',
-      reportUpheld: 'تم قبول البلاغ وإخفاء المحتوى بنجاح'
+      reportUpheld: 'تم قبول البلاغ وإخفاء المحتوى بنجاح',
+      // Category-specific translations
+      addNewCategory: 'إضافة فئة جديدة',
+      editCategory: 'تعديل الفئة',
+      categoryName: 'اسم الفئة',
+      categoryDescription: 'وصف الفئة',
+      iconName: 'اسم الأيقونة',
+      companyCount: 'عدد الشركات',
+      searchForCategory: 'البحث عن فئة...',
+      categoryAdded: 'تم إضافة الفئة بنجاح',
+      categoryUpdated: 'تم تحديث الفئة بنجاح',
+      categoryDeleted: 'تم حذف الفئة بنجاح',
+      cannotDeleteCategoryInUse: 'لا يمكن حذف فئة قيد الاستخدام',
+      confirmDeleteCategory: 'هل أنت متأكد من حذف هذه الفئة؟ هذا الإجراء لا يمكن التراجع عنه.',
+      description: 'الوصف'
     },
     en: {
       adminDashboard: 'Admin Dashboard',
       users: 'Users',
       companies: 'Companies',
+      categories: 'Categories',
       reviews: 'Reviews',
       reports: 'Reports',
       search: 'Search...',
@@ -256,7 +298,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       confirmDismissReport: 'Are you sure you want to dismiss this report?',
       confirmUpholdReport: 'Are you sure you want to uphold this report and hide the content?',
       reportDismissed: 'Report dismissed successfully',
-      reportUpheld: 'Report upheld and content hidden successfully'
+      reportUpheld: 'Report upheld and content hidden successfully',
+      // Category-specific translations
+      addNewCategory: 'Add New Category',
+      editCategory: 'Edit Category',
+      categoryName: 'Category Name',
+      categoryDescription: 'Category Description',
+      iconName: 'Icon Name',
+      companyCount: 'Company Count',
+      searchForCategory: 'Search for a category...',
+      categoryAdded: 'Category added successfully',
+      categoryUpdated: 'Category updated successfully',
+      categoryDeleted: 'Category deleted successfully',
+      cannotDeleteCategoryInUse: 'Cannot delete a category that is currently in use',
+      confirmDeleteCategory: 'Are you sure you want to delete this category? This action cannot be undone.',
+      description: 'Description'
     }
   };
 
@@ -289,6 +345,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
         await Promise.all([
           fetchUsers(),
           fetchCompanies(),
+          fetchCategories(),
           fetchReviews(),
           fetchReports()
         ]);
@@ -328,6 +385,38 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       setCompanies(data || []);
     } catch (error: any) {
       console.error('Error fetching companies:', error);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+
+      // Get company count for each category
+      const categoriesWithCount = await Promise.all(
+        (data || []).map(async (category) => {
+          const { count, error: countError } = await supabase
+            .from('companies')
+            .select('*', { count: 'exact', head: true })
+            .eq('category_id', category.id);
+
+          if (countError) {
+            console.error('Error fetching company count for category:', countError);
+            return { ...category, company_count: 0 };
+          }
+
+          return { ...category, company_count: count || 0 };
+        })
+      );
+
+      setCategories(categoriesWithCount);
+    } catch (error: any) {
+      console.error('Error fetching categories:', error);
     }
   };
 
@@ -432,6 +521,123 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
       toast.success(suspend ? text[language].userSuspended : text[language].userUnsuspended);
     } catch (error: any) {
       console.error('Error updating user suspension:', error);
+      toast.error(text[language].errorOccurred);
+    }
+  };
+
+  // Category management functions
+  const handleAddCategory = () => {
+    setEditingCategory(null);
+    setCategoryForm({
+      name: '',
+      description: '',
+      icon_name: ''
+    });
+    setShowCategoryModal(true);
+  };
+
+  const handleEditCategory = (category: Category) => {
+    setEditingCategory(category);
+    setCategoryForm({
+      name: category.name || '',
+      description: category.description || '',
+      icon_name: category.icon_name || ''
+    });
+    setShowCategoryModal(true);
+  };
+
+  const handleSaveCategory = async () => {
+    if (!categoryForm.name.trim()) {
+      toast.error(text[language].errorOccurred);
+      return;
+    }
+
+    try {
+      if (editingCategory) {
+        // Update existing category
+        const { error } = await supabase
+          .from('categories')
+          .update({
+            name: categoryForm.name.trim(),
+            description: categoryForm.description.trim() || null,
+            icon_name: categoryForm.icon_name.trim() || null
+          })
+          .eq('id', editingCategory.id);
+
+        if (error) throw error;
+
+        // Update local state
+        setCategories(prev => prev.map(cat => 
+          cat.id === editingCategory.id 
+            ? { 
+                ...cat, 
+                name: categoryForm.name.trim(),
+                description: categoryForm.description.trim() || null,
+                icon_name: categoryForm.icon_name.trim() || null
+              }
+            : cat
+        ));
+
+        toast.success(text[language].categoryUpdated);
+      } else {
+        // Add new category
+        const { data, error } = await supabase
+          .from('categories')
+          .insert([{
+            name: categoryForm.name.trim(),
+            description: categoryForm.description.trim() || null,
+            icon_name: categoryForm.icon_name.trim() || null
+          }])
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        // Add to local state with company_count = 0
+        setCategories(prev => [...prev, { ...data, company_count: 0 }]);
+
+        toast.success(text[language].categoryAdded);
+      }
+
+      setShowCategoryModal(false);
+      setEditingCategory(null);
+    } catch (error: any) {
+      console.error('Error saving category:', error);
+      toast.error(text[language].errorOccurred);
+    }
+  };
+
+  const handleDeleteCategory = (category: Category) => {
+    if ((category.company_count || 0) > 0) {
+      toast.error(text[language].cannotDeleteCategoryInUse);
+      return;
+    }
+
+    setDeletingCategory(category);
+    setDeleteConfirmText('');
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDeleteCategory = async () => {
+    if (!deletingCategory || deleteConfirmText !== 'DELETE') return;
+
+    try {
+      const { error } = await supabase
+        .from('categories')
+        .delete()
+        .eq('id', deletingCategory.id);
+
+      if (error) throw error;
+
+      // Remove from local state
+      setCategories(prev => prev.filter(cat => cat.id !== deletingCategory.id));
+
+      setShowDeleteModal(false);
+      setDeletingCategory(null);
+      setDeleteConfirmText('');
+      toast.success(text[language].categoryDeleted);
+    } catch (error: any) {
+      console.error('Error deleting category:', error);
       toast.error(text[language].errorOccurred);
     }
   };
@@ -664,6 +870,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
     return matchesSearch && matchesFilter;
   });
 
+  const filteredCategories = categories.filter(category => {
+    const matchesSearch = !searchQuery || 
+      category.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      category.description?.toLowerCase().includes(searchQuery.toLowerCase());
+
+    return matchesSearch;
+  });
+
   const filteredReviews = reviews.filter(review => {
     const matchesSearch = !searchQuery || 
       review.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -755,6 +969,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
             {[
               { key: 'users', label: text[language].users, icon: Users },
               { key: 'companies', label: text[language].companies, icon: Building2 },
+              { key: 'categories', label: text[language].categories, icon: Tag },
               { key: 'reviews', label: text[language].reviews, icon: MessageSquare },
               { key: 'reports', label: text[language].reports, icon: Flag }
             ].map(({ key, label, icon: Icon }) => (
@@ -785,60 +1000,77 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={text[language].search}
+                  placeholder={
+                    activeTab === 'categories' 
+                      ? text[language].searchForCategory 
+                      : text[language].search
+                  }
                   className="w-full px-4 py-2 pr-10 rtl:pl-10 rtl:pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
                   dir={language === 'ar' ? 'rtl' : 'ltr'}
                 />
               </div>
 
-              {/* Filter Dropdown */}
-              <div className="relative">
-                <select
-                  value={
-                    activeTab === 'users' ? userFilter :
-                    activeTab === 'companies' ? companyFilter :
-                    activeTab === 'reviews' ? reviewFilter :
-                    reportFilter
-                  }
-                  onChange={(e) => {
-                    if (activeTab === 'users') setUserFilter(e.target.value as any);
-                    else if (activeTab === 'companies') setCompanyFilter(e.target.value as any);
-                    else if (activeTab === 'reviews') setReviewFilter(e.target.value as any);
-                    else setReportFilter(e.target.value as any);
-                  }}
-                  className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 rtl:pl-8 rtl:pr-4 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
+              {/* Add New Category Button - Only show on categories tab */}
+              {activeTab === 'categories' && (
+                <button
+                  onClick={handleAddCategory}
+                  className="flex items-center space-x-2 rtl:space-x-reverse bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200"
                 >
-                  <option value="all">{text[language].all}</option>
-                  {activeTab === 'users' && (
-                    <>
-                      <option value="admin">{text[language].admin}</option>
-                      <option value="suspended">{text[language].suspended}</option>
-                      <option value="regular">{text[language].regular}</option>
-                    </>
-                  )}
-                  {activeTab === 'companies' && (
-                    <>
-                      <option value="claimed">{text[language].claimed}</option>
-                      <option value="unclaimed">{text[language].unclaimed}</option>
-                    </>
-                  )}
-                  {activeTab === 'reviews' && (
-                    <>
-                      <option value="published">{text[language].published}</option>
-                      <option value="hidden">{text[language].hidden}</option>
-                      <option value="deleted">{text[language].deleted}</option>
-                    </>
-                  )}
-                  {activeTab === 'reports' && (
-                    <>
-                      <option value="pending">{text[language].pending}</option>
-                      <option value="reviewed">{text[language].reviewed}</option>
-                      <option value="resolved">{text[language].resolved}</option>
-                    </>
-                  )}
-                </select>
-                <ChevronDown className="absolute right-2 rtl:left-2 rtl:right-auto top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-              </div>
+                  <Plus className="h-4 w-4" />
+                  <span>{text[language].addNewCategory}</span>
+                </button>
+              )}
+
+              {/* Filter Dropdown - Hide on categories tab */}
+              {activeTab !== 'categories' && (
+                <div className="relative">
+                  <select
+                    value={
+                      activeTab === 'users' ? userFilter :
+                      activeTab === 'companies' ? companyFilter :
+                      activeTab === 'reviews' ? reviewFilter :
+                      reportFilter
+                    }
+                    onChange={(e) => {
+                      if (activeTab === 'users') setUserFilter(e.target.value as any);
+                      else if (activeTab === 'companies') setCompanyFilter(e.target.value as any);
+                      else if (activeTab === 'reviews') setReviewFilter(e.target.value as any);
+                      else setReportFilter(e.target.value as any);
+                    }}
+                    className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 rtl:pl-8 rtl:pr-4 focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200"
+                  >
+                    <option value="all">{text[language].all}</option>
+                    {activeTab === 'users' && (
+                      <>
+                        <option value="admin">{text[language].admin}</option>
+                        <option value="suspended">{text[language].suspended}</option>
+                        <option value="regular">{text[language].regular}</option>
+                      </>
+                    )}
+                    {activeTab === 'companies' && (
+                      <>
+                        <option value="claimed">{text[language].claimed}</option>
+                        <option value="unclaimed">{text[language].unclaimed}</option>
+                      </>
+                    )}
+                    {activeTab === 'reviews' && (
+                      <>
+                        <option value="published">{text[language].published}</option>
+                        <option value="hidden">{text[language].hidden}</option>
+                        <option value="deleted">{text[language].deleted}</option>
+                      </>
+                    )}
+                    {activeTab === 'reports' && (
+                      <>
+                        <option value="pending">{text[language].pending}</option>
+                        <option value="reviewed">{text[language].reviewed}</option>
+                        <option value="resolved">{text[language].resolved}</option>
+                      </>
+                    )}
+                  </select>
+                  <ChevronDown className="absolute right-2 rtl:left-2 rtl:right-auto top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                </div>
+              )}
             </div>
           </div>
 
@@ -979,6 +1211,75 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                   </tbody>
                 </table>
                 {filteredCompanies.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    {text[language].noData}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Categories Tab */}
+            {activeTab === 'categories' && (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].categoryName}</th>
+                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].description}</th>
+                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].companyCount}</th>
+                      <th className="text-right rtl:text-left py-3 px-4 font-semibold text-gray-700">{text[language].actions}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredCategories.map((category) => (
+                      <tr key={category.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="py-4 px-4">
+                          <div className="flex items-center space-x-3 rtl:space-x-reverse">
+                            <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-blue-600">
+                              <Building2 className="h-5 w-5" />
+                            </div>
+                            <span className="font-medium text-gray-900">{category.name || 'No Name'}</span>
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 text-gray-600">
+                          <div className="max-w-xs truncate" title={category.description || ''}>
+                            {category.description || '-'}
+                          </div>
+                        </td>
+                        <td className="py-4 px-4">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {category.company_count || 0}
+                          </span>
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="flex items-center space-x-2 rtl:space-x-reverse">
+                            <button
+                              onClick={() => handleEditCategory(category)}
+                              className="flex items-center space-x-1 rtl:space-x-reverse bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm transition-colors duration-200"
+                            >
+                              <Edit className="h-3 w-3" />
+                              <span>{text[language].edit}</span>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCategory(category)}
+                              disabled={(category.company_count || 0) > 0}
+                              className={`flex items-center space-x-1 rtl:space-x-reverse px-3 py-1 rounded text-sm transition-colors duration-200 ${
+                                (category.company_count || 0) > 0
+                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                  : 'bg-red-500 hover:bg-red-600 text-white'
+                              }`}
+                              title={(category.company_count || 0) > 0 ? text[language].cannotDeleteCategoryInUse : ''}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              <span>{text[language].delete}</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {filteredCategories.length === 0 && (
                   <div className="text-center py-8 text-gray-500">
                     {text[language].noData}
                   </div>
@@ -1192,6 +1493,147 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ language, onLanguageCha
                 >
                   <Save className="h-4 w-4" />
                   <span>{text[language].saveChanges}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Category Modal */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-dark-500">
+                {editingCategory ? text[language].editCategory : text[language].addNewCategory}
+              </h3>
+              <button
+                onClick={() => setShowCategoryModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-dark-500 mb-2">
+                  {text[language].categoryName}
+                </label>
+                <input
+                  type="text"
+                  value={categoryForm.name}
+                  onChange={(e) => setCategoryForm(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  dir={language === 'ar' ? 'rtl' : 'ltr'}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-dark-500 mb-2">
+                  {text[language].categoryDescription}
+                </label>
+                <textarea
+                  value={categoryForm.description}
+                  onChange={(e) => setCategoryForm(prev => ({ ...prev, description: e.target.value }))}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  dir={language === 'ar' ? 'rtl' : 'ltr'}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-dark-500 mb-2">
+                  {text[language].iconName}
+                </label>
+                <input
+                  type="text"
+                  value={categoryForm.icon_name}
+                  onChange={(e) => setCategoryForm(prev => ({ ...prev, icon_name: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  placeholder="building2, home, users, etc."
+                  dir="ltr"
+                />
+              </div>
+
+              <div className="flex space-x-3 rtl:space-x-reverse pt-4">
+                <button
+                  onClick={() => setShowCategoryModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                >
+                  {text[language].cancel}
+                </button>
+                <button
+                  onClick={handleSaveCategory}
+                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors duration-200 flex items-center justify-center space-x-2 rtl:space-x-reverse"
+                >
+                  <Save className="h-4 w-4" />
+                  <span>{text[language].saveChanges}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && deletingCategory && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-red-600">
+                {text[language].confirmDelete}
+              </h3>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <p className="text-gray-700">
+                {text[language].confirmDeleteCategory}
+              </p>
+              
+              <p className="text-sm text-gray-600">
+                {language === 'ar' 
+                  ? `الفئة: ${deletingCategory.name}`
+                  : `Category: ${deletingCategory.name}`
+                }
+              </p>
+
+              <div>
+                <label className="block text-sm font-semibold text-dark-500 mb-2">
+                  {text[language].typeDeleteToConfirm}
+                </label>
+                <input
+                  type="text"
+                  value={deleteConfirmText}
+                  onChange={(e) => setDeleteConfirmText(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  placeholder="DELETE"
+                  dir="ltr"
+                />
+              </div>
+
+              <div className="flex space-x-3 rtl:space-x-reverse pt-4">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
+                >
+                  {text[language].cancel}
+                </button>
+                <button
+                  onClick={handleConfirmDeleteCategory}
+                  disabled={deleteConfirmText !== 'DELETE'}
+                  className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2 rtl:space-x-reverse"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span>{text[language].delete}</span>
                 </button>
               </div>
             </div>
