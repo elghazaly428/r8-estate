@@ -67,7 +67,7 @@ const Footer: React.FC<FooterProps> = ({ language, onNavigate }) => {
               <img 
                 src="/R8ESTATE_logo2-removebg-preview.png" 
                 alt="R8 ESTATE" 
-                className="h-10 w-auto brightness-0 invert"
+                className="h-10 w-auto"
               />
             </div>
             <p className="text-gray-300 mb-6 leading-relaxed text-sm">
